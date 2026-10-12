@@ -12,7 +12,6 @@ from PyQt6.QtWidgets import (
     QApplication,
     QMainWindow,
     QMenu,
-    QWidget,
 )
 
 from chemvas.shell.theme import MAIN_WINDOW_STYLESHEET
@@ -29,8 +28,7 @@ class _HarnessCanvas:
         self.redo = mock.Mock()
         self.flip_horizontal = mock.Mock()
         self.flip_vertical = mock.Mock()
-        self.begin_smiles_insert = mock.Mock()
-        self.insert_controller = SimpleNamespace(begin_smiles_insert=mock.Mock())
+        self.insert_controller = SimpleNamespace()
         self.scene_transform_controller = SimpleNamespace(
             flip_selected_items=mock.Mock(),
             align_selected_items=mock.Mock(),
@@ -56,13 +54,10 @@ class _HarnessWindow(QMainWindow):
     def __init__(self) -> None:
         super().__init__()
         self.canvas = _HarnessCanvas()
-        self.preview_3d = QWidget()
         self.save_canvas = mock.Mock()
         self.save_canvas_as = mock.Mock()
         self.load_canvas = mock.Mock()
-        self.export_xyz = mock.Mock()
         self.export_figure = mock.Mock()
-        self.open_preview_window = mock.Mock()
         self.set_bond_length = mock.Mock()
         self.setup_sheet = mock.Mock()
         self.apply_color_preset = mock.Mock()

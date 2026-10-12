@@ -43,7 +43,8 @@ approved the following policies.
    original attachment and Redo restores the merged state.
 5. **One Bold rule.** Click and drag over an existing bond use the same rendering
    policy. Preserve its order and double-bond alignment; non-double Bold bonds
-   retain the existing inward/outward toggle. Keep the refusal to replace
+   originally retained the inward/outward toggle; ADR 0046 supersedes that toggle
+   with one centered convention and an idempotent Bold action. Keep the refusal to replace
    `double_either` with a display-only style. Real changes remain one undoable
    document edit, while no-op edits create no history entry.
 

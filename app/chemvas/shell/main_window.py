@@ -15,7 +15,7 @@ if TYPE_CHECKING:
 
 # The shell cannot name the ``ui`` classes bootstrap supplies. Each runtime
 # object it touches is described by the members the shell itself relies on;
-# the state and tab references it only carries are bounded by ``object``.
+# the state, UI and tab references it only carries are bounded by ``object``.
 # ``chemvas.ui.window.main_window_like`` holds the ``ui`` side of the contract.
 
 
@@ -29,31 +29,11 @@ class _WindowServices(Protocol):
     def document_action_service(self) -> _DocumentActionService: ...
 
 
-class _PreviewWindow(Protocol):
-    def hide(self) -> None: ...
-
-
-class _Preview3D(Protocol):
-    # A class-level ``pyqtSignal`` seen through an instance. mypy checks a
-    # type-variable bound against the declared descriptor, not its ``__get__``
-    # result, so ``pyqtBoundSignal`` fails the bound and ``pyqtSignal`` has no
-    # ``connect``; ``Any`` is the one spelling that admits ``Preview3D`` here.
-    shutdown_finished: Any
-
-    def begin_shutdown(self) -> bool: ...
-
-
-class _UiReferences(Protocol):
-    @property
-    def preview_window(self) -> _PreviewWindow | None: ...
-
-
 class MainWindowRuntime[
     ServicesT: _WindowServices,
     StateT,
     TabsT,
-    UiRefsT: _UiReferences,
-    PreviewT: _Preview3D,
+    UiRefsT,
 ](Protocol):
     @property
     def state(self) -> StateT: ...
@@ -67,9 +47,6 @@ class MainWindowRuntime[
     @property
     def services(self) -> ServicesT: ...
 
-    @property
-    def preview_3d(self) -> PreviewT: ...
-
 
 WindowFinalizer = Callable[[object], None]
 
@@ -78,15 +55,14 @@ class MainWindow[
     ServicesT: _WindowServices,
     StateT,
     TabsT,
-    UiRefsT: _UiReferences,
-    PreviewT: _Preview3D,
+    UiRefsT,
 ](QMainWindow):
     """Thin Qt shell whose concrete runtime is supplied by bootstrap.
 
     The type parameters are the runtime's concrete classes, which live in
     ``ui`` where the shell cannot name them: the shell relies only on the
-    bounds above (and merely carries the state and tab references), bootstrap
-    instantiates the window with the classes it builds, and
+    bounds above (and merely carries the state, UI and tab references),
+    bootstrap instantiates the window with the classes it builds, and
     ``chemvas.ui.window.main_window_like`` spells the resulting type once for
     ``ui`` code.
     """
@@ -95,10 +71,10 @@ class MainWindow[
         self,
         *,
         build_runtime: Callable[
-            [object], MainWindowRuntime[ServicesT, StateT, TabsT, UiRefsT, PreviewT]
+            [object], MainWindowRuntime[ServicesT, StateT, TabsT, UiRefsT]
         ],
         bootstrap_window: Callable[
-            [object, MainWindowRuntime[ServicesT, StateT, TabsT, UiRefsT, PreviewT]],
+            [object, MainWindowRuntime[ServicesT, StateT, TabsT, UiRefsT]],
             None,
         ],
         forget_window: WindowFinalizer,
@@ -112,10 +88,6 @@ class MainWindow[
         self._ui_refs = runtime.ui_refs
         self._tab_refs = runtime.tab_refs
         self._services = runtime.services
-        self._preview_3d = runtime.preview_3d
-        self._preview_3d.shutdown_finished.connect(
-            self._resume_close_after_preview_shutdown
-        )
         bootstrap_window(self, runtime)
 
     @property
@@ -133,10 +105,6 @@ class MainWindow[
     @property
     def services(self) -> ServicesT:
         return self._services
-
-    @property
-    def preview_3d(self) -> PreviewT:
-        return self._preview_3d
 
     @property
     def is_closing(self) -> bool:
@@ -164,11 +132,6 @@ class MainWindow[
         # Quit, recovery and a click on a background window's close button
         # close windows that are not active; report a failure in this one.
         with failures_reported_in(self):
-            if self._close_state == "waiting":
-                return
-            if self._close_state == "ready":
-                self._finalize_close(event)
-                return
             if self._close_state not in {"open", "confirmed"}:
                 return
             if (
@@ -178,31 +141,9 @@ class MainWindow[
                 )
             ):
                 return
-            preview_window = self._ui_refs.preview_window
-            if preview_window is not None:
-                preview_window.hide()
-            # Change state only after the shutdown request returns, so a failure
-            # leaves the close retryable. shutdown_finished arrives through the
-            # event loop, never from inside begin_shutdown.
-            if not self._preview_3d.begin_shutdown():
-                # Confirmation has completed, so freeze editing until the pending
-                # worker drains. Keep the window visible: hiding an ignored primary
-                # close prevents Qt from emitting lastWindowClosed on the retry.
-                self._close_state = "waiting"
-                self.setEnabled(False)
-                return
-            self._close_state = "ready"
             self._finalize_close(event)
 
-    def _resume_close_after_preview_shutdown(self) -> None:
-        if self._close_state != "waiting":
-            return
-        self._close_state = "ready"
-        QTimer.singleShot(0, self.close)
-
     def _finalize_close(self, event: QCloseEvent) -> None:
-        if self._close_state != "ready":
-            return
         self._close_state = "finalizing"
         self._forget_window(self)
         # Defer a session refresh: it runs only if the app keeps running (a

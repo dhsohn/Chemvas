@@ -34,7 +34,10 @@ class BondGraphicsBuildService:
 
     def _item_for_primitive(self, primitive):
         if isinstance(primitive, BondLinePrimitive):
-            return self.renderer.graphics.line(*primitive.segment)
+            item = self.renderer.graphics.line(*primitive.segment)
+            if primitive.outline is not None:
+                item.set_stroke_polygon(primitive.outline)
+            return item
         if isinstance(primitive, BondPathPrimitive):
             return self.renderer.graphics.path_fill(primitive.path)
         if isinstance(primitive, BondPolygonPrimitive):

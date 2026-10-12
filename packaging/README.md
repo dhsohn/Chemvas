@@ -21,7 +21,7 @@ QT_QPA_PLATFORM=offscreen python scripts/generate_icons.py
 Build a standalone desktop executable using [`chemvas.spec`](chemvas.spec):
 
 ```bash
-python -m pip install -e ".[rdkit]" pyinstaller   # rdkit optional
+python -m pip install -e . pyinstaller
 pyinstaller packaging/chemvas.spec
 ```
 

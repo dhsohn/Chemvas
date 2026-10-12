@@ -73,15 +73,13 @@ class BondGraphicsDrawService:
     def bold_strip_polygon(
         self, x1, y1, x2, y2, nx, ny, base_width, bold_width, a_id, b_id
     ):
-        # A bold bond is a one-sided trapezoid on the atom centreline. On its own
-        # its ends are cut square, so neighbouring bold strips leave spikes/gaps at
-        # a shared vertex. Extend each end edge to meet the neighbour's matching
-        # edge (a true mitre) so the run reads as one continuous outline.
+        # Center Bold on the chemical axis. Adjacent bold strokes retain their
+        # bounded mitres; the in/out spelling never displaces a single bond.
         if a_id is None and b_id is None:
             corners = strip_corners(x1, y1, x2, y2, nx, ny, base_width, bold_width)
             return self.polygon_factory([self.point_factory(x, y) for x, y in corners])
-        outer_off = -base_width / 2.0
-        inner_off = bold_width - base_width / 2.0
+        outer_off = -max(base_width, bold_width) / 2.0
+        inner_off = -outer_off
         dx = x2 - x1
         dy = y2 - y1
         start_nb = self._bold_neighbor(a_id, b_id, dx, dy)
@@ -90,10 +88,10 @@ class BondGraphicsDrawService:
             x1, y1, nx, ny, outer_off, dx, dy, a_id, start_nb, bold_width
         )
         outer_end = self._miter_corner(
-            x2, y2, nx, ny, outer_off, dx, dy, b_id, end_nb, bold_width
+            x2, y2, nx, ny, outer_off, -dx, -dy, b_id, end_nb, bold_width
         )
         inner_end = self._miter_corner(
-            x2, y2, nx, ny, inner_off, dx, dy, b_id, end_nb, bold_width
+            x2, y2, nx, ny, inner_off, -dx, -dy, b_id, end_nb, bold_width
         )
         inner_start = self._miter_corner(
             x1, y1, nx, ny, inner_off, dx, dy, a_id, start_nb, bold_width
@@ -187,6 +185,10 @@ class BondGraphicsDrawService:
         far = self.context.model.atoms.get(far_id)
         if far is None:
             return base
+        # Match the same boundary of two centered strips independently of B/E
+        # direction or the legacy bold_in/out token.
+        if (dx * ny - dy * nx) * ((far.x - vx) * nbny - (far.y - vy) * nbnx) > 0:
+            nbnx, nbny = -nbnx, -nbny
         point = line_intersection(
             vx + nx * off,
             vy + ny * off,

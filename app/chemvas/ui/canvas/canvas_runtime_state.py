@@ -3,9 +3,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 from functools import partial
 from typing import TYPE_CHECKING
-from weakref import ref
-
-from PyQt6.QtCore import QObject, QTimer, pyqtSlot
 
 from chemvas.domain.document import AnnotationCollection
 from chemvas.features.graph import CanvasGraphState
@@ -31,7 +28,6 @@ from chemvas.ui.canvas.spatial_index_state import CanvasSpatialIndexState
 from chemvas.ui.molecule.atom_coords_access import CanvasAtomCoords3DState
 from chemvas.ui.scene.scene_clipboard_state import SceneClipboardState
 from chemvas.ui.scene.scene_render_context import SceneRenderState
-from chemvas.ui.selection.selection_info_access import maybe_warm_rdkit_for
 from chemvas.ui.selection.selection_info_state import SelectionInfoState
 from chemvas.ui.selection.selection_state import SelectionState
 from chemvas.ui.selection.selection_update_batch import batch_selection_updates
@@ -39,29 +35,6 @@ from chemvas.ui.tools.handle_state import CanvasHandleState
 
 if TYPE_CHECKING:
     from chemvas.ui.canvas.canvas_view import CanvasView
-
-
-class RdkitIdleWarmupBridge(QObject):
-    def __init__(self, canvas: CanvasView) -> None:
-        super().__init__(canvas)
-        self._canvas_ref = ref(canvas)
-        self.timer: QTimer | None = None
-
-    @pyqtSlot()
-    def warm_when_idle(self) -> None:
-        canvas = self._canvas_ref()
-        if canvas is None:
-            return
-        maybe_warm_rdkit_for(canvas)
-        # Stop polling once no warmup is outstanding. The timer is re-armed on
-        # demand when a new selection needs RDKit (see
-        # ``selection_info_access.emit_selection_info_for``), so idle canvases do
-        # not keep firing timers.
-        if (
-            self.timer is not None
-            and not canvas.runtime_state.selection_info_state.rdkit_warmup_pending
-        ):
-            self.timer.stop()
 
 
 @dataclass(slots=True, kw_only=True)
@@ -72,8 +45,6 @@ class CanvasRuntimeState(SceneRenderState):
     document_metadata_state: CanvasDocumentMetadataState
     calculation_plan_state: CanvasCalculationPlanState
     selection_info_state: SelectionInfoState
-    rdkit_idle_timer: QTimer
-    rdkit_idle_warmup_bridge: RdkitIdleWarmupBridge
     group_state: CanvasGroupState
     insert_state: CanvasInsertState
     history_state: CanvasHistoryState
@@ -92,19 +63,11 @@ class CanvasRuntimeState(SceneRenderState):
         from chemvas.ui.history.history_operations import CanvasHistoryOperations
 
         history_state = CanvasHistoryState()
-        rdkit_idle_warmup_bridge = RdkitIdleWarmupBridge(canvas)
-        rdkit_idle_timer = QTimer(rdkit_idle_warmup_bridge)
-        rdkit_idle_timer.setInterval(250)
-        rdkit_idle_timer.timeout.connect(rdkit_idle_warmup_bridge.warm_when_idle)
-        rdkit_idle_warmup_bridge.timer = rdkit_idle_timer
-        # Armed on demand instead of running continuously for every canvas.
         return cls(
             document_metadata_state=CanvasDocumentMetadataState(),
             calculation_plan_state=CanvasCalculationPlanState(),
             sheet_setup_state=SheetSetupState(),
-            selection_info_state=SelectionInfoState.create(),
-            rdkit_idle_timer=rdkit_idle_timer,
-            rdkit_idle_warmup_bridge=rdkit_idle_warmup_bridge,
+            selection_info_state=SelectionInfoState(),
             graph_state=CanvasGraphState(),
             group_state=CanvasGroupState(),
             insert_state=CanvasInsertState(),

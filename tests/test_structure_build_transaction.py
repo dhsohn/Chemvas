@@ -10,13 +10,9 @@ from PyQt6.QtWidgets import QApplication
 
 from chemvas.domain.transactions import RestoreOutcome
 from chemvas.features.insertion import (
-    SmilesAtomPlacement,
-    SmilesCommitPlan,
-    SmilesMarkPlacement,
     TemplateInsertRequest,
     plan_template_commit,
 )
-from chemvas.ui.insert.insert_smiles_commit_service import apply_smiles_commit_plan
 from chemvas.ui.insert.insert_template_commit_service import (
     apply_template_commit_resolution,
 )
@@ -172,28 +168,6 @@ def _insert_ring_template(canvas):
     assert apply_template_commit_resolution(canvas, request, plan, resolution)
 
 
-def _insert_marked_smiles(canvas):
-    plan = SmilesCommitPlan(
-        offset=(0.0, 0.0),
-        atoms=[
-            SmilesAtomPlacement(
-                source_atom_id=0,
-                element="N",
-                x=240.0,
-                y=160.0,
-                color="#000000",
-                explicit_label=True,
-            )
-        ],
-        bonds=[],
-        marks=[
-            SmilesMarkPlacement(0, "plus", 250.0, 150.0),
-            SmilesMarkPlacement(0, "radical", 230.0, 170.0),
-        ],
-    )
-    assert apply_smiles_commit_plan(canvas, plan)
-
-
 def _draw_free_bond(canvas):
     assert canvas.services.structure_build_service.add_bond_between_points(
         QPointF(300.0, 300.0), QPointF(340.0, 300.0), "single", 1
@@ -205,7 +179,6 @@ def _draw_free_bond(canvas):
     [
         (_sprout_ring, "push"),
         (_insert_ring_template, "push"),
-        (_insert_marked_smiles, "second mark"),
         (_draw_free_bond, "recording"),
     ],
 )
@@ -224,23 +197,7 @@ def test_failed_recorded_build_is_restored_by_its_savepoint(
     history_before = tuple(history_list)
     redo_before = tuple(redo_list)
     failure = RuntimeError(f"build {failure_point} failure")
-    if failure_point == "second mark":
-        mark_service = canvas.services.canvas_mark_scene_service
-        materialize_mark = mark_service.materialize_mark_for_atom
-        marks = []
-
-        def fail_on_second_mark(*args, **kwargs):
-            if marks:
-                raise failure
-            marks.append(materialize_mark(*args, **kwargs))
-            return marks[-1]
-
-        failing = mock.patch.object(
-            mark_service,
-            "materialize_mark_for_atom",
-            side_effect=fail_on_second_mark,
-        )
-    elif failure_point == "recording":
+    if failure_point == "recording":
         failing = mock.patch.object(
             canvas.services.canvas_history_recording_service,
             "record_additions",

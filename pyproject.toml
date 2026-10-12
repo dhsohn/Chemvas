@@ -39,15 +39,11 @@ dependencies = [
 [project.optional-dependencies]
 dev = [
     "coverage>=7.15.2,<8",
-    "jsonschema>=4.23,<5",
     "mypy>=2.3,<3",
     "pytest>=8",
     "ruff>=0.16.2,<0.17",
     # Lets the packaging tests exercise setup.py's build hook directly.
     "setuptools>=77",
-]
-rdkit = [
-    "rdkit>=2024.9",
 ]
 
 [project.scripts]
@@ -81,7 +77,6 @@ testpaths = ["tests"]
 python_files = ["test_*.py"]
 pythonpath = ["app"]
 addopts = "-ra"
-markers = ["latency: wall-clock budget checked serially without coverage instrumentation"]
 
 [tool.coverage.run]
 branch = true
@@ -101,7 +96,6 @@ target-version = "py312"
 # first-party classification (and therefore I001 ordering) a property of this
 # file rather than of ruff's directory inference.
 src = ["app"]
-extend-exclude = ["contracts/machine-observation/scripts"]
 
 [tool.ruff.lint]
 select = [
@@ -147,22 +141,15 @@ max-branches = 28
 max-statements = 100
 
 [tool.ruff.lint.pep8-naming]
-# Qt method names are camelCase, so an override must match them exactly, and
-# RDKit's module bindings keep their upstream capitalization. Neither is a
-# naming deviation this project can decide differently.
+# Qt method names are camelCase, so overrides must match them exactly.
 extend-ignore-names = [
     "*Event",
-    "AllChem",
-    "Chem",
     "assignId",
     "atomProperties",
     "blockSignals",
     "boundingRect",
-    "cleanIt",
     "drawBackground",
     "eventFilter",
-    "maxIters",
-    "maxMatches",
     "scrollContentsBy",
     "setFont",
     "setPlainText",
@@ -193,10 +180,6 @@ disallow_subclassing_any = true
 extra_checks = true
 implicit_reexport = false
 strict_equality = true
-
-[[tool.mypy.overrides]]
-module = ["rdkit", "rdkit.*"]
-ignore_missing_imports = true
 
 # New architectural owners are held to mypy's full strict profile. Legacy
 # ``chemvas.core`` / ``chemvas.ui`` modules join it one at a time, as the work
@@ -243,16 +226,3 @@ disallow_untyped_calls = true
 disallow_untyped_decorators = true
 disallow_untyped_defs = true
 warn_return_any = true
-
-# chemvas.core.rdkit_adapter carries a type: ignore for rdkit-stubs' missing
-# RDLogger.DisableLog. Without rdkit installed (CI) the module is Any and the
-# ignore would be flagged as unused, so skip that warning for this module only.
-#
-# That same asymmetry is why the three ``chemvas.core.rdkit_*`` modules are not
-# in the strict list. Promoting them needs 33 annotations, most of them on RDKit
-# objects. Naming those objects honestly only type-checks where RDKit is
-# installed; in the CI job that gates this repository they silently degrade to
-# ``Any``, so the gate would not be enforcing what the annotations claim.
-[[tool.mypy.overrides]]
-module = ["chemvas.core.rdkit_adapter"]
-warn_unused_ignores = false

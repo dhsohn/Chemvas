@@ -1,13 +1,12 @@
-"""Consistency rules between a Calculation Plan and the drawing it describes.
+"""Consistency rules between a retained Calculation Plan and its drawing.
 
-A plan is part of the document, so whether it still agrees with the drawing
-is a document question: every included state must declare the charge its
-components carry, and every mapped pair of atoms must share an element label.
-General editing (the desktop's save prompt, the headless Graph Patch) asks
-this before publishing a document; the calculation feature asks it too, and
-then goes on to decide what it can compute. Structural validity — that the
-plan references existing atoms and bonds — is checked earlier by document
-validation and again here through ``calculation_plan_from_state``.
+Chemvas no longer creates, edits or runs calculation plans. A document saved by
+an earlier release may still carry one, and Chemvas keeps it unchanged as
+document data. These rules exist only to preserve that data: an edit or save
+must never drop or rewrite the plan, so a caller that learns the drawing no
+longer matches the plan's references refuses to write instead. Structural
+validity — that the plan references existing atoms and complete components —
+is checked by document validation through ``calculation_plan_from_state``.
 """
 
 from __future__ import annotations
@@ -25,7 +24,6 @@ if TYPE_CHECKING:
     from collections.abc import Mapping
 
     from .calculation_plan import CalculationPlan
-    from .inspection import ComponentInventory
     from .model import MoleculeModel
 
 
@@ -33,18 +31,10 @@ def validate_calculation_plan(
     document_state: Mapping[str, object],
     plan_state: object,
 ) -> CalculationPlan:
-    """Parse ``plan_state`` and check it agrees with ``document_state``."""
-    plan, _inventory = validated_plan_and_inventory(document_state, plan_state)
-    return plan
+    """Parse ``plan_state`` and check it agrees with ``document_state``.
 
-
-def validated_plan_and_inventory(
-    document_state: Mapping[str, object], plan_state: object
-) -> tuple[CalculationPlan, ComponentInventory]:
-    """Validate the plan and hand back the inventory it was checked against.
-
-    Callers that go on to inspect components reuse that inventory instead of
-    computing it a second time.
+    Every included state must declare the charge its components carry, and
+    every mapped pair of atoms must share an element label.
     """
     model = document_model(document_state)
     plan = calculation_plan_from_state(
@@ -77,7 +67,7 @@ def validated_plan_and_inventory(
                     f"{entry.reactant_atom_id} to {product_label} atom "
                     f"{entry.product_atom_id}; mapped atom labels must match."
                 )
-    return plan, inventory
+    return plan
 
 
 CALCULATION_PLAN_GRAPH_MISMATCH_WARNING = (
@@ -90,7 +80,11 @@ CALCULATION_PLAN_GRAPH_MISMATCH_WARNING = (
 def calculation_plan_save_warning(
     model: MoleculeModel, plan_state: object
 ) -> str | None:
-    """Why a document snapshot must leave out its plan, or None to keep it."""
+    """Why a document snapshot cannot carry its plan, or None when it can.
+
+    A snapshot that cannot carry the plan must not be written over a document:
+    the caller refuses the save or edit instead of dropping the plan.
+    """
     if plan_state is None:
         return None
     try:
@@ -103,9 +97,9 @@ def calculation_plan_save_warning(
         return CALCULATION_PLAN_GRAPH_MISMATCH_WARNING
     except ValueError as exc:
         return (
-            f"The calculation plan was not saved because it is invalid: {exc} "
-            "Reopen a previously saved copy, or attach a repaired plan using "
-            "chemvas attach-plan."
+            f"The calculation plan was not saved because it no longer matches "
+            f"the drawing: {exc} Undo the graph edit to recover its "
+            "references, or reopen a previously saved copy."
         )
     return None
 
@@ -114,5 +108,4 @@ __all__ = [
     "CALCULATION_PLAN_GRAPH_MISMATCH_WARNING",
     "calculation_plan_save_warning",
     "validate_calculation_plan",
-    "validated_plan_and_inventory",
 ]

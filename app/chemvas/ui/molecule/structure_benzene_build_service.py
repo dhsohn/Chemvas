@@ -127,6 +127,11 @@ class StructureBenzeneBuildService:
         if result is None:
             return None
         points, merge = result
+        if attach_bond_id is not None:
+            closure_merge = self._shared_edge_closure_merge(points, merge)
+            if closure_merge is None:
+                return None
+            merge = closure_merge
         atom_ids = self.committer.planned_ring_atom_ids(points, merge)
         orders = [order for _, _, order in alternating_ring_bond_specs(atom_ids)]
         orders = self.committer.resolved_ring_bond_orders(atom_ids, orders)
@@ -140,6 +145,48 @@ class StructureBenzeneBuildService:
             if bond is not None:
                 orders[index] = int(bond.order)
         return BenzenePlacement(points, merge, orders)
+
+    def _shared_edge_closure_merge(
+        self, points: list[QPointF], merge: list[tuple[int, float, float]]
+    ) -> list[tuple[int, float, float]] | None:
+        # Continue the clicked shared edge through coincident existing vertices.
+        # An unrelated atom at the same position is not a fusion connection.
+        anchor_ids = {atom_id for atom_id, _, _ in merge}
+        merge = list(merge)
+        for _ in points:
+            previous_count = len(merge)
+            for index, point in enumerate(points):
+                merged_id = self.committer.match_ring_atom(point, merge)
+                if merged_id in anchor_ids:
+                    continue
+                neighbors = {
+                    atom_id
+                    for adjacent in (
+                        points[index - 1],
+                        points[(index + 1) % len(points)],
+                    )
+                    if (atom_id := self.committer.match_ring_atom(adjacent, merge))
+                    is not None
+                }
+                matches = [
+                    (atom_id, atom.x, atom.y)
+                    for atom_id, atom in self.canvas.model.atoms.items()
+                    if abs(point.x() - atom.x) < 1e-6
+                    and abs(point.y() - atom.y) < 1e-6
+                    and any(
+                        self.committer.bond_id_between(atom_id, neighbor) is not None
+                        for neighbor in neighbors
+                    )
+                ]
+                if len(matches) > 1:
+                    return None
+                # The opposite path can expose ambiguity after this vertex was
+                # first reused, so recheck it until no more vertices connect.
+                if merged_id is None:
+                    merge.extend(matches)
+            if len(merge) == previous_count:
+                break
+        return merge
 
     def build_benzene_ring(
         self,

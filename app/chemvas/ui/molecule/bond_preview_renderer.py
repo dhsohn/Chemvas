@@ -13,14 +13,11 @@ from PyQt6.QtWidgets import (
     QGraphicsScene,
 )
 
+from chemvas.domain.document import Atom, Bond
 from chemvas.features.rendering import (
     BOLD_BOND_STYLES,
-    PLAIN_DOUBLE_STYLES,
     LineSegment,
-    double_position_for_style,
-    normal_away_from_parallel_segment,
-    normalized_plain_double_style,
-    plain_double_preview_segments,
+    is_plain_double_bond_style,
 )
 from chemvas.ui.canvas.graphics_items import NoSelectLineItem
 
@@ -39,83 +36,19 @@ def _set_line_segments(items: Sequence, segments: Sequence[LineSegment]) -> bool
     return True
 
 
-def _apply_plain_double_preview_variant(items: list, style: str) -> list:
-    if len(items) != 2 or not all(
-        isinstance(item, QGraphicsLineItem) for item in items
-    ):
-        return items
-    segments = tuple(
-        (line.x1(), line.y1(), line.x2(), line.y2())
-        for line in (item.line() for item in items)
+def _planned_preview(start, end, style, order, a_id, b_id, bond_renderer):
+    # A preview uses the same geometry owner as a committed bond. Temporary
+    # endpoint identities cannot accidentally acquire an existing atom's label.
+    temporary = min(bond_renderer.context.model.atoms, default=0) - 1
+    bond = Bond(
+        a_id if a_id is not None else temporary,
+        b_id if b_id is not None else temporary - 1,
+        order,
+        style,
     )
-    for item, segment in zip(
-        items, plain_double_preview_segments(segments, style), strict=False
-    ):
-        item.setLine(*segment)
-    return items
-
-
-def _bold_normal(
-    bond_renderer, segment: LineSegment, bold_outward: bool
-) -> tuple[float, float]:
-    nx, ny = bond_renderer.line_normal(
-        segment[0], segment[1], segment[2], segment[3], None
+    return bond_renderer.geometry_planner.primitives_for_bond(
+        bond, Atom("C", start.x(), start.y()), Atom("C", end.x(), end.y())
     )
-    if bold_outward:
-        return -nx, -ny
-    return nx, ny
-
-
-def _bold_strip_item(
-    segment: LineSegment,
-    *,
-    canvas_renderer,
-    bond_renderer,
-    bold_outward: bool,
-    normal: tuple[float, float] | None = None,
-):
-    nx, ny = normal or _bold_normal(bond_renderer, segment, bold_outward)
-    return bond_renderer.one_sided_bond_strip(
-        segment[0],
-        segment[1],
-        segment[2],
-        segment[3],
-        nx,
-        ny,
-        canvas_renderer.style.bond_line_width,
-        canvas_renderer.style.bold_bond_width,
-    )
-
-
-def _update_bold_first_item(
-    first,
-    segment: LineSegment,
-    *,
-    canvas_renderer,
-    bond_renderer,
-    bold_outward: bool,
-    normal: tuple[float, float] | None = None,
-) -> bool:
-    x1, y1, x2, y2 = segment
-    nx, ny = normal or _bold_normal(bond_renderer, segment, bold_outward)
-    if isinstance(first, QGraphicsPolygonItem):
-        first.setPolygon(
-            bond_renderer.strip_polygon(
-                x1,
-                y1,
-                x2,
-                y2,
-                nx,
-                ny,
-                canvas_renderer.style.bond_line_width,
-                canvas_renderer.style.bold_bond_width,
-            )
-        )
-        return True
-    if isinstance(first, QGraphicsLineItem):
-        first.setLine(x1, y1, x2, y2)
-        return True
-    return False
 
 
 def build_bond_preview_items(
@@ -141,74 +74,17 @@ def build_bond_preview_items(
         return bond_renderer.draw_dotted_bond(
             start.x(), start.y(), end.x(), end.y(), a_id, b_id
         )
-    if style in BOLD_BOND_STYLES:
-        bold_outward = style == "bold_out"
-        if order == 2:
-            items = bond_renderer.draw_parallel_bonds(
-                start.x(), start.y(), end.x(), end.y(), order, a_id, b_id
-            )
-            items = _apply_plain_double_preview_variant(
-                items, double_position_for_style(style, order)
-            )
-            if len(items) == 2 and all(
-                isinstance(item, QGraphicsLineItem) for item in items
-            ):
-                first_line = items[0].line()
-                second_line = items[1].line()
-                first_segment = (
-                    first_line.x1(),
-                    first_line.y1(),
-                    first_line.x2(),
-                    first_line.y2(),
-                )
-                second_segment = (
-                    second_line.x1(),
-                    second_line.y1(),
-                    second_line.x2(),
-                    second_line.y2(),
-                )
-                base_normal = bond_renderer.line_normal(*first_segment, None)
-                normal = normal_away_from_parallel_segment(
-                    first_segment, second_segment, *base_normal
-                )
-                items[0] = _bold_strip_item(
-                    first_segment,
-                    canvas_renderer=canvas_renderer,
-                    bond_renderer=bond_renderer,
-                    bold_outward=False,
-                    normal=normal,
-                )
-            return items
-        if order >= 2:
-            items = bond_renderer.draw_parallel_bonds(
-                start.x(), start.y(), end.x(), end.y(), order, a_id, b_id
-            )
-            if items and isinstance(items[0], QGraphicsLineItem):
-                line = items[0].line()
-                items[0] = _bold_strip_item(
-                    (line.x1(), line.y1(), line.x2(), line.y2()),
-                    canvas_renderer=canvas_renderer,
-                    bond_renderer=bond_renderer,
-                    bold_outward=bold_outward,
-                )
-            return items
-        segment = start.x(), start.y(), end.x(), end.y()
+    if (
+        style in BOLD_BOND_STYLES
+        or is_plain_double_bond_style(style, order)
+        or (style == "single" and order == 1)
+    ):
+        primitives = _planned_preview(
+            start, end, style, order, a_id, b_id, bond_renderer
+        )
         return [
-            _bold_strip_item(
-                segment,
-                canvas_renderer=canvas_renderer,
-                bond_renderer=bond_renderer,
-                bold_outward=bold_outward,
-            )
+            bond_renderer.graphics_builder._item_for_primitive(p) for p in primitives
         ]
-    if order == 2 and style in PLAIN_DOUBLE_STYLES:
-        items = bond_renderer.draw_parallel_bonds(
-            start.x(), start.y(), end.x(), end.y(), order, a_id, b_id
-        )
-        return _apply_plain_double_preview_variant(
-            items,
-            normalized_plain_double_style(style, order),
-        )
     if order >= 2:
         return bond_renderer.draw_parallel_bonds(
             start.x(), start.y(), end.x(), end.y(), order, a_id, b_id
@@ -259,78 +135,22 @@ def update_bond_preview_items(
             )
         )
         return True
-    if style in BOLD_BOND_STYLES:
-        bold_outward = style == "bold_out"
-        if order == 2:
-            segments = tuple(
-                bond_renderer.parallel_bond_segments(
-                    start.x(),
-                    start.y(),
-                    end.x(),
-                    end.y(),
-                    order,
-                    a_id,
-                    b_id,
-                )
-            )
-            updated_segments = plain_double_preview_segments(
-                segments,
-                double_position_for_style(style, order),
-            )
-            if len(updated_segments) != 2 or len(items) != 2:
-                return False
-            base_normal = bond_renderer.line_normal(*updated_segments[0], None)
-            normal = normal_away_from_parallel_segment(
-                updated_segments[0],
-                updated_segments[1],
-                *base_normal,
-            )
-            if not _update_bold_first_item(
-                items[0],
-                updated_segments[0],
-                canvas_renderer=canvas_renderer,
-                bond_renderer=bond_renderer,
-                bold_outward=False,
-                normal=normal,
-            ):
-                return False
-            return _set_line_segments(items[1:], updated_segments[1:])
-        if order >= 2:
-            segments = tuple(
-                bond_renderer.parallel_bond_segments(
-                    start.x(), start.y(), end.x(), end.y(), order, a_id, b_id
-                )
-            )
-            if not segments or len(items) != len(segments):
-                return False
-            if not _update_bold_first_item(
-                items[0],
-                segments[0],
-                canvas_renderer=canvas_renderer,
-                bond_renderer=bond_renderer,
-                bold_outward=bold_outward,
-            ):
-                return False
-            return _set_line_segments(items[1:], segments[1:])
-        segment = start.x(), start.y(), end.x(), end.y()
-        return _update_bold_first_item(
-            items[0],
-            segment,
-            canvas_renderer=canvas_renderer,
-            bond_renderer=bond_renderer,
-            bold_outward=bold_outward,
+    if (
+        style in BOLD_BOND_STYLES
+        or is_plain_double_bond_style(style, order)
+        or (style == "single" and order == 1)
+    ):
+        primitives = _planned_preview(
+            start, end, style, order, a_id, b_id, bond_renderer
         )
-    if order == 2 and style in PLAIN_DOUBLE_STYLES:
-        segments = tuple(
-            bond_renderer.parallel_bond_segments(
-                start.x(), start.y(), end.x(), end.y(), order, a_id, b_id
-            )
-        )
-        updated_segments = plain_double_preview_segments(
-            segments,
-            normalized_plain_double_style(style, order),
-        )
-        return _set_line_segments(items, updated_segments)
+        updater = bond_renderer.geometry_updater
+        try:
+            updater._validate_topology(items, primitives)
+        except (ValueError, TypeError):
+            return False
+        for item, primitive in zip(items, primitives, strict=True):
+            updater._apply_primitive(item, primitive)
+        return True
     if order >= 2:
         segments = tuple(
             bond_renderer.parallel_bond_segments(

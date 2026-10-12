@@ -566,7 +566,7 @@ def test_remove_bond_keeps_a_marked_endpoint() -> None:
 
 
 def test_remove_bond_rejects_a_plan_that_still_references_the_removed_atom() -> None:
-    from chemvas.features.calculation_bundle import validate_calculation_plan
+    from chemvas.domain.document import validate_calculation_plan
 
     state = _two_atom_state(Atom("C", 20, 0))
     state["model"]["atoms"][3] = {

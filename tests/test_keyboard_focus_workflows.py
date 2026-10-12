@@ -3,7 +3,7 @@
 import pytest
 from PyQt6.QtCore import QPointF, Qt, QTimer
 from PyQt6.QtTest import QTest
-from PyQt6.QtWidgets import QApplication, QDialog, QLineEdit, QSpinBox, QToolButton
+from PyQt6.QtWidgets import QApplication, QDialog, QSpinBox, QToolButton
 
 from chemvas.ui.window.main_window_ports import (
     active_tool_name_for_window,
@@ -190,25 +190,6 @@ def test_zoom_dialog_accepts_enter_from_its_text_field(fresh_window):
     QTest.keyClick(button, Qt.Key.Key_Return)
     assert seen == [142]
     assert current_zoom_percent_for_window(window) == 142
-    assert canvas.services.canvas_document_session_service.snapshot_state() == before
-
-
-def test_smiles_field_tab_preserves_text_and_returns_through_widget_chain(fresh_window):
-    window, canvas = fresh_window
-    _tool(window, "benzene")
-    field = window.findChild(QLineEdit, "contextSmilesInput")
-    button = window.findChild(QToolButton, "smiles_render_button")
-    assert field.isVisible() and button.isVisible()
-    field.setFocus()
-    QTest.keyClicks(field, "CCO")
-    before = canvas.services.canvas_document_session_service.snapshot_state()
-    QTest.keyClick(field, Qt.Key.Key_Tab)
-    assert QApplication.focusWidget() is button
-    QTest.keyClick(button, Qt.Key.Key_Tab, Qt.KeyboardModifier.ShiftModifier)
-    assert QApplication.focusWidget() is field
-    assert field.text() == "CCO"
-    _tab_cycle(window, canvas, backwards=False)
-    assert field.text() == "CCO"
     assert canvas.services.canvas_document_session_service.snapshot_state() == before
 
 

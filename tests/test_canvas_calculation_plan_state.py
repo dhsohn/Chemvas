@@ -65,6 +65,5 @@ def test_snapshot_omits_unsavable_plan_with_a_warning_for_its_cause(
         assert "Undo the graph edit" in warning
     else:
         assert "State R01 multiplicity must be positive." in warning
-        assert "graph" not in warning
-        assert "Undo" not in warning
+        assert "reopen a previously saved copy" in warning
     canvas.deleteLater()

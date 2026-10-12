@@ -17,7 +17,7 @@ from PIL import Image
 from PyQt6.QtCore import QBuffer, QByteArray, QIODevice, QPoint, QPointF, Qt, QTimer
 from PyQt6.QtGui import QAction, QColor, QFont, QImage, QPainter
 from PyQt6.QtTest import QTest
-from PyQt6.QtWidgets import QApplication, QDialog, QToolButton, QWidget
+from PyQt6.QtWidgets import QApplication, QDialog, QToolButton
 
 from chemvas.bootstrap.main_window import build_main_window
 from chemvas.ui.window.main_window_ports import (
@@ -50,9 +50,6 @@ class Walkthrough:
         set_zoom_percent_for_window(self.window, zoom_percent)
         self.canvas.centerOn(0.0, 0.0)
         self.cursor: QPoint | None = None
-        # Extra top-level windows (the Molecule Info window) drawn over the
-        # main window at a fixed spot in every frame while they are visible.
-        self.extra_windows: list[tuple[QWidget, QPoint]] = []
         QTest.qWait(150)
 
     # -- frames --------------------------------------------------------------
@@ -76,9 +73,6 @@ class Walkthrough:
         painter.setPen(QColor("#c5e9df"))
         painter.drawText(26, 58, detail)
         painter.drawPixmap(0, HEADER, self.window.grab())
-        for widget, corner in self.extra_windows:
-            if widget.isVisible():
-                painter.drawPixmap(corner + QPoint(0, HEADER), widget.grab())
         dialog = self.app.activeModalWidget()
         if dialog is not None:
             point = dialog.mapToGlobal(QPoint(0, 0))
@@ -124,15 +118,13 @@ class Walkthrough:
 
     def hover(self, x: float, y: float) -> QPoint:
         """Move the pointer and refresh what the view shows under it: an
-        insertion preview while a template or SMILES is pending, otherwise the
+        insertion preview while a template is pending, otherwise the
         hover highlight."""
         point = self.move(x, y)
         services = self.canvas.services
         state = self.canvas.runtime_state.insert_state
         if state.template_active:
-            services.structure.insert_controller.render_template_preview(QPointF(x, y))
-        elif state.smiles_active:
-            services.structure.insert_controller.render_smiles_preview(QPointF(x, y))
+            services.insert_controller.render_template_preview(QPointF(x, y))
         else:
             services.hover.update_hover_highlight(QPointF(x, y))
         self.app.processEvents()

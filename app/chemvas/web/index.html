@@ -45,14 +45,13 @@
     <div data-context="mark" class="context" hidden><span class="caption"></span><div id="mark-options" class="segments"></div></div>
     <div data-context="ring_fill" class="context" hidden><span class="caption"></span><div id="ring-fill-options" class="context"></div><button id="ring-more-colors" data-editable title="Ring Fill: choose a custom color">More colors…</button><input id="custom-ring-color" type="color" hidden></div>
     <div data-context="color" class="context" hidden><span class="caption"></span><div id="color-options" class="context"></div><button id="more-colors" data-editable title="Color: choose a custom color">More colors…</button><input id="custom-color" type="color" hidden></div>
-    <span class="spacer"></span><label class="smiles"><span id="smiles-label">SMILES</span> <input id="smiles-input" aria-label="SMILES" data-editable disabled autocomplete="off" spellcheck="false"><button id="smiles-insert" class="primary" data-editable disabled>Insert</button></label>
   </section>
   <div id="notice" role="status" hidden></div>
   <main class="workspace" aria-label="Drawing workspace">
     <svg id="canvas" xmlns="http://www.w3.org/2000/svg" tabindex="0" role="application" aria-label="Chemical drawing canvas">
       <rect id="paper" x="-421" y="-297.5" width="842" height="595" fill="white" stroke="#d5d5d1" stroke-width="0.8"/>
       <g id="grid" pointer-events="none"></g>
-      <g id="drawing"></g><g id="bond-hover" pointer-events="none"></g><g id="insert-preview" pointer-events="none"></g><g id="smiles-preview" pointer-events="none"></g>
+      <g id="drawing"></g><g id="bond-hover" pointer-events="none"></g><g id="insert-preview" pointer-events="none"></g>
       <g id="mark-candidate" pointer-events="none"></g><g id="valence-feedback" pointer-events="none"></g>
     </svg>
   </main>

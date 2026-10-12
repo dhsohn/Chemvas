@@ -1,44 +1,21 @@
 from unittest import mock
 
-import pytest
-from PyQt6.QtCore import QPoint, QPointF, QRectF, Qt
-from PyQt6.QtGui import QAction, QColor, QIcon, QImage, QPainter, QWheelEvent
+from PyQt6.QtCore import QPointF, QRectF, Qt
+from PyQt6.QtGui import QAction, QColor, QIcon, QImage, QPainter
 from PyQt6.QtTest import QTest
-from PyQt6.QtWidgets import QApplication, QDockWidget, QLineEdit, QToolButton
+from PyQt6.QtWidgets import QApplication, QToolButton
 
 from chemvas.shell.icon_factory import MainWindowIconFactory
 from chemvas.shell.palette import PALETTE
 from chemvas.ui.canvas.canvas_document_state import snapshot_canvas_document_state
 from chemvas.ui.canvas.canvas_feedback_renderer import draw_canvas_feedback_for
 from chemvas.ui.molecule.structure_mutation_access import add_bond_between_points_for
-from chemvas.ui.preview3d.preview_3d_state import preview_info_items
 from chemvas.ui.window.main_window_ports import (
-    insert_controller_for_window,
-    select_all_for_window,
     set_grid_snap_for_window,
 )
-from tests.gui_workflow_support import _click, _tool
+from tests.gui_workflow_support import _tool
 from tests.gui_workflow_support import app as app
 from tests.gui_workflow_support import drawing as drawing
-
-
-@pytest.mark.parametrize(
-    "tool", ["bond", "benzene", "arrow", "select", "note", "delete"]
-)
-def test_quick_smiles_survives_tool_changes_in_compact_window(drawing, tool):
-    window, _canvas = drawing
-    window.resize(1000, 700)
-    field = window.findChild(QLineEdit, "contextSmilesInput")
-    field.setText("CCO")
-    _tool(window, tool)
-    QApplication.processEvents()
-    assert field.isVisibleTo(window)
-    assert field.text() == "CCO"
-    controller = insert_controller_for_window(window)
-    with mock.patch.object(controller, "begin_smiles_insert") as insert:
-        field.setFocus()
-        QTest.keyClick(field, Qt.Key.Key_Return)
-        insert.assert_called_once_with("CCO")
 
 
 def test_checked_icon_uses_teal_without_changing_its_shape(app):
@@ -53,28 +30,6 @@ def test_checked_icon_uses_teal_without_changing_its_shape(app):
                 if on.pixelColor(x, y).alpha() == 255:
                     colors.add(on.pixelColor(x, y).name())
         assert colors == {PALETTE["checked_text"]}
-
-
-def test_inspector_toggle_float_and_close_keep_one_preview(drawing):
-    window, _canvas = drawing
-    dock = window.findChild(QDockWidget, "inspectorDock")
-    button = window.findChild(QToolButton, "inspectorToggleButton")
-    preview = window.preview_3d
-    assert not dock.isVisible()
-    button.click()
-    QApplication.processEvents()
-    assert dock.isVisible() and button.isChecked()
-    assert not preview._updates_paused
-    dock.setFloating(True)
-    QApplication.processEvents()
-    assert dock.isFloating()
-    assert preview.isVisible()
-    dock.close()
-    QApplication.processEvents()
-    assert not button.isChecked() and preview._updates_paused
-    button.click()
-    dock.setFloating(False)
-    assert window.findChildren(type(preview)) == [preview]
 
 
 def test_grid_controls_cycle_and_preserve_the_document(drawing):
@@ -94,20 +49,6 @@ def test_grid_controls_cycle_and_preserve_the_document(drawing):
     assert settings.grid_opacity == 0.15
     assert snapshot_canvas_document_state(canvas) == before
     assert not canvas.services.history_service.can_undo()
-
-
-def test_long_export_status_does_not_expand_the_inspector(drawing):
-    window, _canvas = drawing
-    window.findChild(QToolButton, "inspectorToggleButton").click()
-    QApplication.processEvents()
-    dock = window.findChild(QDockWidget, "inspectorDock")
-    width = dock.width()
-    dock.show_export_status(
-        "Exported XYZ: /Users/researcher/projects/reaction-study-2026/"
-        "exports/calculations/candidate-structure-final.xyz"
-    )
-    QApplication.processEvents()
-    assert dock.width() == width
 
 
 def test_grid_and_valence_controls_follow_the_active_canvas(drawing):
@@ -216,76 +157,3 @@ def test_bond_angle_guide_clears_on_release_and_escape(drawing):
             QTest.keyClick(canvas, Qt.Key.Key_Escape)
             QTest.mouseRelease(canvas.viewport(), Qt.MouseButton.LeftButton, pos=end)
         assert tool.angle_guide is None
-
-
-def test_smiles_enter_places_and_inspects_real_molecule_then_exports_xyz(
-    drawing, tmp_path, monkeypatch
-):
-    pytest.importorskip("rdkit")
-    window, canvas = drawing
-    _tool(window, "arrow")
-    field = window.findChild(QLineEdit, "contextSmilesInput")
-    field.setText("CC(=O)Oc1ccccc1C(=O)O")
-    field.setFocus()
-    QTest.keyClick(field, Qt.Key.Key_Return)
-    assert not canvas.model.atoms
-    _click(canvas, QPointF(0, 0))
-    assert len(canvas.model.atoms) == 13
-    select_all_for_window(window)
-    window.findChild(QToolButton, "inspectorToggleButton").click()
-    preview = window.preview_3d
-    for _ in range(300):
-        QTest.qWait(50)
-        if preview._scene is not None:
-            break
-    assert preview._scene is not None, preview._message
-    assert preview_info_items(
-        preview._formula_text, preview._mw_text, preview._scene
-    ) == [
-        ("FORMULA", "C9H8O4"),
-        ("MW", "180.16"),
-        ("ATOMS (incl. H)", "21"),
-        ("INDEP. RINGS", "1"),
-        ("STYLE", "ACS 1996"),
-    ]
-    before = preview.grab().toImage()
-    orientation = (preview._rotation_x, preview._rotation_y)
-    point = preview.rect().center()
-    QTest.mousePress(preview, Qt.MouseButton.LeftButton, pos=point)
-    QTest.mouseMove(preview, point + QPoint(24, 16))
-    QTest.mouseRelease(preview, Qt.MouseButton.LeftButton, pos=point + QPoint(24, 16))
-    assert (preview._rotation_x, preview._rotation_y) != orientation
-    QApplication.sendEvent(
-        preview,
-        QWheelEvent(
-            QPointF(point),
-            QPointF(preview.mapToGlobal(point)),
-            QPoint(),
-            QPoint(0, 120),
-            Qt.MouseButton.NoButton,
-            Qt.KeyboardModifier.NoModifier,
-            Qt.ScrollPhase.NoScrollPhase,
-            False,
-        ),
-    )
-    assert preview._zoom == pytest.approx(1.1)
-    assert preview.grab().toImage() != before
-    path = tmp_path / "aspirin.xyz"
-    monkeypatch.setattr(
-        "chemvas.ui.window.main_window_document_action_service.QFileDialog.getSaveFileName",
-        lambda *_args: (str(path), "XYZ (*.xyz)"),
-    )
-    errors = []
-    monkeypatch.setattr(
-        "chemvas.ui.window.main_window_document_action_service.QMessageBox.warning",
-        lambda *_args: errors.append(_args),
-    )
-    preview.export_xyz_button.click()
-    for _ in range(300):
-        QTest.qWait(50)
-        if path.exists() or errors:
-            break
-    assert not errors
-    lines = path.read_text().splitlines()
-    assert lines[0].strip() == "21"
-    assert len(lines[2:]) == 21

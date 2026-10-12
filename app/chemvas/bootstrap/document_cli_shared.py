@@ -189,42 +189,13 @@ def offscreen_document_scene(
     command: str,
     pin_locale: bool = False,
 ) -> Iterator[SceneRenderContext]:
-    with offscreen_application(command=command, pin_locale=pin_locale) as application:
-        from PyQt6.QtCore import QEvent
-        from PyQt6.QtWidgets import QGraphicsScene
+    from chemvas.ui.canvas.document_scene import detached_document_scene
 
-        from chemvas.adapters.qt.renderer import Renderer
-        from chemvas.domain.document import deserialize_model_state
-        from chemvas.features.graph import build_bond_adjacency_index
-        from chemvas.ui.canvas.document_scene import populate_document_scene
-        from chemvas.ui.canvas.sheet_setup_state import sheet_rects
-        from chemvas.ui.scene.scene_render_context import SceneRenderState
-        from chemvas.ui.scene.scene_rendering import build_scene_render_context
-
-        scene = QGraphicsScene()
-        try:
-            model = deserialize_model_state(state["model"])
-            drawing_state = SceneRenderState()
-            graph = drawing_state.graph_state
-            graph.atom_neighbors, graph.atom_bond_ids = build_bond_adjacency_index(
-                model.atoms, model.bonds
-            )
-            context = build_scene_render_context(
-                scene_provider=lambda: scene,
-                model_provider=lambda: model,
-                renderer=Renderer(),
-                state=drawing_state,
-            )
-            populate_document_scene(context, state)
-            sheet = drawing_state.sheet_setup_state
-            sheet.rect, scene_rect = sheet_rects(
-                sheet.size_name, sheet.orientation, sheet.custom_size_mm
-            )
-            scene.setSceneRect(scene_rect)
-            yield context
-        finally:
-            scene.deleteLater()
-            application.sendPostedEvents(scene, QEvent.Type.DeferredDelete)
+    with (
+        offscreen_application(command=command, pin_locale=pin_locale),
+        detached_document_scene(state) as context,
+    ):
+        yield context
 
 
 __all__ = [

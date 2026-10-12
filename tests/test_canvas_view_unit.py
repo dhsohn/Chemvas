@@ -61,7 +61,7 @@ from chemvas.ui.molecule.structure_geometry_access import (
     template_points_for_bond_for,
 )
 from chemvas.ui.molecule.structure_payload_access import (
-    build_3d_conversion_payload_for,
+    build_mol_export_payload_for,
     build_structure_payload_for,
 )
 from chemvas.ui.scene.note_item_access import committed_note_text_for
@@ -218,9 +218,6 @@ class CanvasViewUnitTest(unittest.TestCase):
             canvas.runtime_state.insert_state.template_active = True
             canvas.runtime_state.insert_state.template_ring_size = 5
             canvas.runtime_state.insert_state.template_ring_style = "regular"
-            canvas.runtime_state.insert_state.smiles_active = True
-            canvas.runtime_state.insert_state.smiles_preview_smiles = "CC"
-            canvas.runtime_state.insert_state.smiles_preview_center = QPointF(1.0, 2.0)
 
         prime_insert_modes()
 
@@ -231,9 +228,6 @@ class CanvasViewUnitTest(unittest.TestCase):
         self.assertEqual(
             canvas.runtime_state.insert_state.template_ring_style, "benzene"
         )
-        self.assertFalse(canvas.runtime_state.insert_state.smiles_active)
-        self.assertIsNone(canvas.runtime_state.insert_state.smiles_preview_smiles)
-        self.assertIsNone(canvas.runtime_state.insert_state.smiles_preview_center)
         self.assertEqual(canvas.services.tool_controller.active.name, "benzene")
 
         canvas.runtime_state.insert_state.template_active = True
@@ -253,7 +247,6 @@ class CanvasViewUnitTest(unittest.TestCase):
         canvas.services.tool_mode_controller.set_bond_style("double", 2)
 
         self.assertFalse(canvas.runtime_state.insert_state.template_active)
-        self.assertFalse(canvas.runtime_state.insert_state.smiles_active)
         self.assertEqual(
             canvas.runtime_state.tool_settings_state.active_bond_style, "double"
         )
@@ -265,7 +258,6 @@ class CanvasViewUnitTest(unittest.TestCase):
         canvas.services.tool_mode_controller.set_arrow_type("curved_double")
 
         self.assertFalse(canvas.runtime_state.insert_state.template_active)
-        self.assertFalse(canvas.runtime_state.insert_state.smiles_active)
         self.assertEqual(
             canvas.runtime_state.tool_settings_state.active_arrow_type, "curved_double"
         )
@@ -276,7 +268,6 @@ class CanvasViewUnitTest(unittest.TestCase):
         canvas.services.tool_mode_controller.set_orbital_type("p")
 
         self.assertFalse(canvas.runtime_state.insert_state.template_active)
-        self.assertFalse(canvas.runtime_state.insert_state.smiles_active)
         self.assertEqual(
             canvas.runtime_state.tool_settings_state.active_orbital_type, "p"
         )
@@ -437,7 +428,7 @@ class CanvasViewUnitTest(unittest.TestCase):
             runtime_state=canvas_runtime_state(mark_registry=CanvasMarkRegistry())
         )
         with mock.patch(
-            "chemvas.ui.molecule.structure_payload_access.build_3d_conversion_payload_state",
+            "chemvas.ui.molecule.structure_payload_access.build_mol_export_payload_state",
             return_value=("export", {"a": 1}),
         ) as build_3d:
             payload_view.model = "model"
@@ -446,7 +437,7 @@ class CanvasViewUnitTest(unittest.TestCase):
             )
             payload_view.scene = lambda: payload_scene
             self.assertEqual(
-                build_3d_conversion_payload_for(payload_view), ("export", {"a": 1})
+                build_mol_export_payload_for(payload_view), ("export", {"a": 1})
             )
         build_3d.assert_called_once()
         self.assertEqual(build_3d.call_args.args, ("model", {1}, {2}, {}))

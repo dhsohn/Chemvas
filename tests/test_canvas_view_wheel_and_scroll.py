@@ -52,7 +52,6 @@ class CanvasViewWheelAndScrollTest(unittest.TestCase):
             3.0, 4.0
         )
         view.setTransform(QTransform().scale(2.0, 2.0))
-        view.runtime_state.selection_info_state.last_interaction_time = 0.0
         hbar = SimpleNamespace(value=mock.Mock(return_value=120), setValue=mock.Mock())
         vbar = SimpleNamespace(value=mock.Mock(return_value=240), setValue=mock.Mock())
         view.horizontalScrollBar = lambda: hbar
@@ -68,9 +67,6 @@ class CanvasViewWheelAndScrollTest(unittest.TestCase):
 
             CanvasView.wheelEvent(view, event)
 
-            self.assertGreater(
-                view.runtime_state.selection_info_state.last_interaction_time, 0.0
-            )
             self.assertTrue(
                 view.runtime_state.input_view_state.base_transform.isIdentity()
             )
@@ -91,9 +87,6 @@ class CanvasViewWheelAndScrollTest(unittest.TestCase):
 
             CanvasView.wheelEvent(view, event)
 
-            self.assertGreater(
-                view.runtime_state.selection_info_state.last_interaction_time, 0.0
-            )
             self.assertTrue(
                 view.runtime_state.input_view_state.base_transform.isIdentity()
             )
@@ -112,9 +105,6 @@ class CanvasViewWheelAndScrollTest(unittest.TestCase):
 
             CanvasView.wheelEvent(view, event)
 
-            self.assertGreater(
-                view.runtime_state.selection_info_state.last_interaction_time, 0.0
-            )
             self.assertTrue(
                 view.runtime_state.input_view_state.base_transform.isIdentity()
             )

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Capture a real Chemvas walkthrough and save its editable drawing and exports.
 
-Run with the development environment (including RDKit) and an empty output
+Run with the development environment and an empty output
 directory. Qt's offscreen plugin is the default; QT_QPA_PLATFORM=wayland also
 exercises an exposed desktop window. Only synthetic drawing data is used.
 """
@@ -25,39 +25,53 @@ from PyQt6.QtWidgets import (
     QDialog,
     QLineEdit,
     QPushButton,
-    QToolButton,
 )
 from walkthrough_capture import LEFT_BUTTON, NO_MODIFIER, Walkthrough, run_with_profile
 
 from chemvas.ui.annotations.state import arrow_state_dict_for
 from chemvas.ui.canvas.canvas_atom_graphics_state import visible_atom_item_for
+from chemvas.ui.molecule.structure_mutation_access import add_bond_for
 from chemvas.ui.window.main_window_document_dialogs import prompt_export_options
 from chemvas.ui.window.main_window_ports import document_session_service_for_window
 
 
 class FirstScheme(Walkthrough):
-    def insert(self, smiles: str, x: float, y: float, title: str) -> None:
+    def insert(self, *, carbonyl: bool, x: float, y: float, title: str) -> None:
+        """Prepare explicit atoms and bonds with native drawing owners."""
         previous_ids = set(self.canvas.model.atoms)
-        # Use the shared entry without changing the active drawing tool.
-        field = self.window.findChild(QLineEdit, "contextSmilesInput")
-        button = self.window.findChild(QToolButton, "smiles_render_button")
-        if field is None or button is None or not field.isVisible():
-            raise RuntimeError("Shared SMILES controls are unavailable")
-        field.setFocus()
-        field.selectAll()
-        QTest.keyClicks(field, smiles)
-        self.capture(
-            title,
-            f"Enter {smiles} in the SMILES field, click Insert.",
-            1200,
-        )
-        QTest.mouseClick(button, LEFT_BUTTON)
-        self.canvas.setFocus()
-        point = self.move(x, y)
-        self.capture(title, "Preview the structure, then click to place it.", 1000)
-        QTest.mouseClick(self.canvas.viewport(), LEFT_BUTTON, NO_MODIFIER, point)
+        atom_service = self.canvas.services.canvas_atom_mutation_service
+        points = [
+            (-60, 0),
+            (-40, 0),
+            (-20, 0),
+            (-10, 17.32),
+            (10, 17.32),
+            (20, 0),
+            (10, -17.32),
+            (-10, -17.32),
+        ]
+
+        def build():
+            ids = [
+                atom_service.add_atom("O" if i == 0 else "C", x + dx, y + dy)
+                for i, (dx, dy) in enumerate(points)
+            ]
+            add_bond_for(self.canvas, ids[0], ids[1], 2 if carbonyl else 1)
+            add_bond_for(self.canvas, ids[1], ids[2])
+            for i in range(6):
+                add_bond_for(
+                    self.canvas,
+                    ids[2 + i],
+                    ids[2 + (i + 1) % 6],
+                    2 if i % 2 == 0 else 1,
+                )
+            return []
+
+        self.canvas.services.structure_build_service.run_recorded_build(build)
         self.app.processEvents()
-        self.capture(title, "The structure remains editable on the canvas.", 1200)
+        self.capture(
+            title, "Explicit atoms and bonds remain editable on the canvas.", 1200
+        )
         self.canvas.scene().clearSelection()
         for atom_id in set(self.canvas.model.atoms) - previous_ids:
             item = visible_atom_item_for(self.canvas, atom_id)
@@ -192,9 +206,9 @@ class FirstScheme(Walkthrough):
             "Draw interactively. Automate safely. Export exactly.",
             1200,
         )
-        self.insert("OCc1ccccc1", -118, -22, "01 / Insert a structure")
+        self.insert(carbonyl=False, x=-118, y=-22, title="01 / Draw a structure")
         self.label_hydroxyl()
-        self.insert("O=Cc1ccccc1", 118, 22, "01 / Add the product")
+        self.insert(carbonyl=True, x=118, y=22, title="01 / Add the product")
         assert len(self.canvas.model.atoms) == 16
         assert len(self.canvas.model.bonds) == 16
 

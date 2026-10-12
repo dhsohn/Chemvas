@@ -13,16 +13,15 @@ from chemvas.core.svg_roundtrip import (
     extract_chemvas_document_from_svg as default_read_editable_svg,
 )
 from chemvas.domain.document import (
-    CalculationPlanGraphMismatchError,
     MoleculeModel,
     serialize_model_state,
-    validate_calculation_plan,
 )
 from chemvas.features.export import (
     default_export_path,
     export_error_message,
     file_filter_for_format,
     normalize_export_path,
+    read_cdxml_label_bindings,
 )
 from chemvas.features.insertion import (
     annotation_mark_direction,
@@ -31,10 +30,16 @@ from chemvas.features.insertion import (
 )
 from chemvas.features.session import request_snapshot
 from chemvas.shell.window_registry import open_windows
-from chemvas.ui.canvas.canvas_calculation_plan_state import calculation_plan_for
+from chemvas.ui.canvas.canvas_document_metadata_state import document_is_dirty_for
+from chemvas.ui.canvas.canvas_document_state import (
+    require_preserved_calculation_plan_for,
+)
 from chemvas.ui.canvas.canvas_view import CanvasView
-from chemvas.ui.preview3d.rdkit_export_job_state import rdkit_export_jobs_for
-from chemvas.ui.selection.selection_queries import selected_structure_ids_for
+from chemvas.ui.export.reviewed_cdxml_snapshot import ReviewedCdxmlSnapshot
+from chemvas.ui.selection.selection_queries import (
+    selected_structure_ids_for,
+    selection_items_for_copy_for,
+)
 from chemvas.ui.session.open_document_lookup import (
     document_path_has_multiple_links,
     find_open_document,
@@ -105,26 +110,11 @@ def _drop_status(message: str) -> None:
 
 
 class MainWindowDocumentActionService:
-    @staticmethod
-    def normalize_xyz_export_path(dialog_path: str | None) -> str | None:
-        if not dialog_path:
-            return None
-        path = Path(dialog_path)
-        if path.suffix:
-            return str(path)
-        return str(path.with_suffix(".xyz"))
-
     def current_file_path(
         self, window: MainWindowLike, *, canvas: CanvasView | None = None
     ) -> str | None:
         target = active_canvas_for_window(window) if canvas is None else canvas
         return window.services.canvas_document_service.file_path(target)
-
-    def default_xyz_export_path(self, window: MainWindowLike) -> str:
-        current_path = self.current_file_path(window)
-        if current_path:
-            return str(Path(current_path).with_suffix(".xyz"))
-        return ""
 
     @staticmethod
     def normalize_mol_export_path(dialog_path: str | None) -> str | None:
@@ -145,56 +135,6 @@ class MainWindowDocumentActionService:
         self, window: MainWindowLike, *, canvas: CanvasView | None = None
     ) -> str:
         return self.current_file_path(window, canvas=canvas) or ""
-
-    def _confirm_calculation_plan_draft(
-        self,
-        window: MainWindowLike,
-        canvas: CanvasView,
-        *,
-        message_box,
-        exporting: bool = False,
-    ) -> bool:
-        """Share the draft-consent policy for whole-document Save and SVG export."""
-        plan = calculation_plan_for(canvas)
-        if plan is None:
-            return True
-        state = canvas.services.canvas_document_session_service.snapshot_state()
-        action = "Exporting" if exporting else "Saving"
-        try:
-            validate_calculation_plan(state, plan)
-        except CalculationPlanGraphMismatchError as exc:
-            problem = f"The calculation plan no longer matches this drawing:\n{exc}"
-            consequence = (
-                f"{action} will omit the stale calculation plan from this file. "
-                "Choose No and undo the graph edit to recover its references, "
-                "or use Save As to keep the previously saved plan separately."
-            )
-        except ValueError as exc:
-            if "calculation_plan" in state:
-                problem = f"The calculation plan no longer matches this drawing:\n{exc}"
-                consequence = (
-                    f"{action} will keep the calculation plan as an invalid draft. "
-                    "Repair it using the Reaction Mapping toolbar icon before export."
-                )
-            else:
-                problem = f"The calculation plan is invalid:\n{exc}"
-                consequence = (
-                    f"{action} will omit the invalid calculation plan from this "
-                    "file. Use Save As to keep the previously saved plan "
-                    "separately, or attach a repaired plan afterwards using "
-                    "chemvas attach-plan."
-                )
-        else:
-            return True
-        verb = "Export" if exporting else "Save"
-        answer = message_box.question(
-            window,
-            "Calculation Plan Needs Attention",
-            f"{problem}\n\n{consequence}\n{verb} anyway?",
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-            QMessageBox.StandardButton.No,
-        )
-        return answer == QMessageBox.StandardButton.Yes
 
     def save_canvas_to_path(
         self,
@@ -238,10 +178,8 @@ class MainWindowDocumentActionService:
         # keep ``path`` as the user-facing document path and recent-file entry.
         write_path = resolved_document_path(path)
         try:
-            if not self._confirm_calculation_plan_draft(
-                window, target, message_box=message_box
-            ):
-                return False
+            # Refuse before the overwrite prompt: this save cannot succeed.
+            require_preserved_calculation_plan_for(target)
             current_path = self.current_file_path(window, canvas=target)
             if current_path and paths_refer_to_same_document(current_path, write_path):
                 expected = target.runtime_state.document_metadata_state.source_sha256
@@ -370,59 +308,6 @@ class MainWindowDocumentActionService:
             return False
         return self.save_canvas_to_path(window, path, canvas=canvas)
 
-    def export_xyz(
-        self,
-        window: MainWindowLike,
-        *,
-        file_dialog=None,
-        message_box=None,
-        selected_only: bool = False,
-        dialog_parent=None,
-        status_sink=None,
-    ) -> None:
-        file_dialog = QFileDialog if file_dialog is None else file_dialog
-        message_box = QMessageBox if message_box is None else message_box
-        dialog_parent = window if dialog_parent is None else dialog_parent
-        dialog_path, _ = file_dialog.getSaveFileName(
-            dialog_parent,
-            "Export 3D XYZ",
-            self.default_xyz_export_path(window),
-            "XYZ (*.xyz);;All Files (*)",
-        )
-        path = self.normalize_xyz_export_path(dialog_path)
-        if path is None:
-            return
-        if not self._confirm_normalized_overwrite(
-            dialog_parent, dialog_path, path, message_box
-        ):
-            return
-        previous_status = status_bar_for(window).currentMessage()
-
-        report = _drop_status if status_sink is None else status_sink
-
-        def on_success(export_path: str) -> None:
-            status_bar_for(window).showMessage(f"Exported XYZ: {export_path}", 4000)
-            report(f"Exported XYZ: {export_path}")
-
-        def handle_error(message: str) -> None:
-            message_box.warning(
-                dialog_parent,
-                "Export Error",
-                f"Failed to export XYZ:\n{message}",
-            )
-            status_bar_for(window).showMessage(previous_status)
-            report(f"Export failed: {message}")
-
-        status_bar_for(window).showMessage(f"Exporting XYZ: {path}")
-        report(f"Exporting XYZ: {path}")
-        export_kwargs = {"selected_only": True} if selected_only else {}
-        document_session_service_for_window(window).export_xyz_async(
-            path,
-            on_success=on_success,
-            on_error=handle_error,
-            **export_kwargs,
-        )
-
     def export_mol(
         self,
         window: MainWindowLike,
@@ -501,18 +386,15 @@ class MainWindowDocumentActionService:
         ):
             return
         try:
-            if (
-                fmt == "svg"
-                and options.editable_svg
-                and options.scope == "sheet"
-                and not self._confirm_calculation_plan_draft(
-                    window,
-                    active_canvas_for_window(window),
-                    message_box=message_box,
-                    exporting=True,
+            binding_options = {}
+            if options.cdxml_label_bindings_path:
+                if fmt != "cdxml":
+                    raise ValueError("Label meanings apply only to CDXML export.")
+                binding_options["reviewed_cdxml_snapshot"] = (
+                    self._reviewed_cdxml_snapshot(
+                        window, options.cdxml_label_bindings_path, scope=options.scope
+                    )
                 )
-            ):
-                return
             document_session_service_for_window(window).export_figure(
                 path,
                 fmt=fmt,
@@ -524,6 +406,7 @@ class MainWindowDocumentActionService:
                 target_width_mm=options.target_width_mm,
                 max_height_mm=options.max_height_mm,
                 min_font_pt=options.min_font_pt,
+                **binding_options,
             )
         except Exception as exc:
             message_box.warning(
@@ -533,6 +416,47 @@ class MainWindowDocumentActionService:
             )
             return
         status_bar_for(window).showMessage(f"Exported: {path}", 4000)
+
+    def _reviewed_cdxml_snapshot(
+        self, window: MainWindowLike, path: str, *, scope: str
+    ) -> ReviewedCdxmlSnapshot:
+        canvas = active_canvas_for_window(window)
+        metadata = canvas.runtime_state.document_metadata_state
+        source_path = self.current_file_path(window)
+        if (
+            source_path is None
+            or not is_canonical_saved_document_path(source_path)
+            or metadata.source_sha256 is None
+            or metadata.clean_digest is None
+        ):
+            raise ValueError(
+                "Save the drawing before selecting reviewed label meanings."
+            )
+        state, warnings = document_session_service_for_window(
+            window
+        ).snapshot_state_with_warnings()
+        if warnings or document_is_dirty_for(canvas, state):
+            raise ValueError(
+                "The drawing has unsaved changes. Save it and review the label "
+                "bindings for that saved version before exporting."
+            )
+        assert source_path is not None
+        saved = default_read_document(source_path)
+        if saved.source_sha256 != metadata.source_sha256:
+            raise ValueError(
+                "The saved drawing changed outside Chemvas. Reopen it and review "
+                "the label bindings before exporting."
+            )
+        bindings = read_cdxml_label_bindings(Path(path), metadata.source_sha256)
+        return ReviewedCdxmlSnapshot.capture(
+            canvas.render_context,
+            saved.state,
+            bindings,
+            scope=scope,
+            selection=selection_items_for_copy_for(canvas)
+            if scope == "selection"
+            else None,
+        )
 
     def load_canvas(
         self,
@@ -741,14 +665,6 @@ class MainWindowDocumentActionService:
     ) -> bool:
         message_box = QMessageBox if message_box is None else message_box
         documents = window.services.canvas_document_service
-        if rdkit_export_jobs_for(canvas):
-            name = documents.display_name(canvas)
-            message_box.warning(
-                window,
-                "XYZ Export in Progress",
-                f"Wait for the 3D XYZ export from {name} to finish before closing it.",
-            )
-            return False
         if not documents.is_dirty(canvas):
             return True
         name = documents.display_name(canvas)

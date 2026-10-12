@@ -210,7 +210,9 @@ def _bond_item_states(canvas, bond_id: int) -> list[tuple]:
         line_state = (
             (line.x1(), line.y1(), line.x2(), line.y2()) if line is not None else None
         )
-        states.append(((pos.x(), pos.y()), line_state))
+        polygon = item.stroke_polygon() if hasattr(item, "stroke_polygon") else None
+        outline = None if polygon is None else tuple((p.x(), p.y()) for p in polygon)
+        states.append(((pos.x(), pos.y()), (line_state, outline)))
     return states
 
 
@@ -230,9 +232,9 @@ def test_failed_drag_does_not_rewrite_unscoped_bond_graphics(canvas) -> None:
     _add_bond_with_graphics(canvas, b1, b2)
 
     tool = MoveTool(canvas, context=canvas.services.tool_controller.context)
-    # Drag 1 (succeeds): bond a1-a2 is interior, bond a2-a3 is a boundary
-    # bond. The interior bond's items now carry a nonzero pos.
-    assert tool._begin_selection_drag({a1, a2}, [], QPointF())
+    # Drag 1 (succeeds): the entire component is rigidly translated. An
+    # internal edge at a changed boundary angle must now redraw instead.
+    assert tool._begin_selection_drag({a1, a2, a3}, [], QPointF())
     tool._apply_drag_delta(QPointF(11.0, 9.0))
     tool._commit_selection_drag()
 

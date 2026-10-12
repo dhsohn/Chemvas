@@ -2,11 +2,9 @@
 """Capture the short reference-guide walkthroughs from the real application.
 
 Each topic drives the main window offscreen with synthetic input and writes
-one GIF: drawing, arrows, editing, chemistry and images. Run with the
-development environment and an empty output directory; the editing and chemistry
-topics insert structures from SMILES and therefore need the
-optional RDKit backend. Only synthetic drawing data is used and no user
-document is opened.
+one GIF: drawing, arrows, editing, MOL files and images. Run with the
+development environment and an empty output directory. Only synthetic drawing
+data is used and no user document is opened.
 """
 
 from __future__ import annotations
@@ -22,12 +20,13 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from PyQt6.QtCore import QPoint, QPointF, Qt
+from PyQt6.QtCore import QPointF, Qt
 from PyQt6.QtTest import QTest
 from PyQt6.QtWidgets import QApplication, QDialog, QLineEdit, QPushButton
-from walkthrough_capture import WIDTH, Walkthrough, run_with_profile
+from walkthrough_capture import Walkthrough, run_with_profile
 
 from chemvas.core.molfile import write_molfile
+from chemvas.domain.document import MoleculeModel
 from chemvas.ui.annotations.state import arrow_state_dict_for
 from chemvas.ui.scene.image_actions import insert_image_bytes
 from chemvas.ui.window.main_window_ports import document_session_service_for_window
@@ -42,20 +41,17 @@ def _bond_midpoint(canvas, index: int) -> tuple[float, float]:
     return ((a.x + b.x) / 2.0, (a.y + b.y) / 2.0)
 
 
-def _place_smiles(w: Walkthrough, smiles: str, x: float, y: float) -> list[int]:
-    """Insert a structure the way the Ring bar's Insert button does, off camera."""
+def _place_chain(w: Walkthrough, x: float, y: float) -> list[int]:
+    """Prepare a small native drawing off camera without a structure parser."""
     previous = set(w.canvas.model.atoms)
-    controller = w.canvas.services.insert_controller
-    controller.begin_smiles_insert(smiles)
-    controller.render_smiles_preview(QPointF(x, y))
-    controller.commit_smiles_insert(QPointF(x, y))
+    builder = w.canvas.services.structure_build_service
+    for start, end in (((x - 20, y), (x, y - 12)), ((x, y - 12), (x + 20, y))):
+        assert builder.add_bond_between_points(
+            QPointF(*start), QPointF(*end), "single", 1
+        )
     w.app.processEvents()
     added = sorted(set(w.canvas.model.atoms) - previous)
-    if not added:
-        raise RuntimeError(
-            f"{smiles!r} was not inserted; the editing and chemistry "
-            "topics need the optional RDKit backend"
-        )
+    assert len(added) == 3
     return added
 
 
@@ -210,9 +206,9 @@ def arrows(w: Walkthrough) -> None:
 
 def editing(w: Walkthrough) -> None:
     title = "Select, move, rotate, align"
-    _place_smiles(w, "c1ccccc1", -100.0, -5.0)
-    ethanol = _place_smiles(w, "CCO", 10.0, 28.0)
-    _place_smiles(w, "CC(=O)O", 105.0, -12.0)
+    w.canvas.services.structure_build_service.add_benzene_ring(QPointF(-100.0, -5.0))
+    chain = _place_chain(w, 10.0, 28.0)
+    _place_chain(w, 105.0, -12.0)
     w.set_tool("select")
     w.canvas.scene().clearSelection()
     w.move(0.0, 60.0)
@@ -221,7 +217,7 @@ def editing(w: Walkthrough) -> None:
         "Select tool: press on an unselected atom and drag to reshape the structure.",
         1400,
     )
-    handle = w.canvas.model.atoms[ethanol[1]]
+    handle = w.canvas.model.atoms[chain[1]]
     w.drag(
         (handle.x, handle.y),
         (handle.x + 10.0, handle.y - 30.0),
@@ -265,66 +261,30 @@ def editing(w: Walkthrough) -> None:
 
 
 def chemistry(w: Walkthrough) -> None:
-    title = "Chemistry I/O (RDKit)"
-    model = w.canvas.rdkit.smiles_to_2d(
-        "CC(=O)Oc1ccccc1C(=O)O", scale=w.canvas.renderer.style.bond_length_px
-    )
-    if model is None:
-        raise RuntimeError("RDKit could not convert the aspirin SMILES")
-    mol_path = w.output / "aspirin.mol"
+    title = "MOL import and export"
+    model = MoleculeModel()
+    atom_ids = [
+        model.add_atom(element, 30.0 * i, 0.0) for i, element in enumerate("CCO")
+    ]
+    for first, second in pairwise(atom_ids):
+        model.add_bond(first, second)
+    mol_path = w.output / "synthetic.mol"
     mol_path.write_text(write_molfile(model), encoding="utf-8")
-    w.capture(
-        title,
-        "SMILES insertion lives on the Ring bar; this covers files and identifiers.",
-        1200,
-    )
     w.window.services.document_action_service.load_canvas_from_path(
         w.window, str(mol_path)
     )
     w.app.processEvents()
-    if len(w.canvas.model.atoms) != 13:
-        raise RuntimeError(
-            f"expected 13 atoms from the molfile, got {len(w.canvas.model.atoms)}"
-        )
-    # The status bar echoes the absolute path; the frame shows the file name.
+    assert len(w.canvas.model.atoms) == 3
     w.window.statusBar().showMessage(f"Imported MOL: {mol_path.name}")
     w.move(0.0, 70.0)
     w.capture(title, "File ▸ Open reads an MDL molfile (.mol) as a new drawing.", 1800)
-
     w.key(Qt.Key.Key_A, Qt.KeyboardModifier.ControlModifier)
-    w.canvas.centerOn(150.0, 0.0)
-    preview_window = w.window.ui_references.preview_window
-    preview_window.resize(520, 470)
-    w.extra_windows.append((preview_window, QPoint(WIDTH - 536, 96)))
-    w.action("Molecule Info").trigger()
-    preview = preview_window._preview_widget
-    for _ in range(100):
-        w.app.processEvents()
-        QTest.qWait(100)
-        if getattr(preview, "_scene", None) is not None:
-            break
-    else:
-        raise RuntimeError("the 3D preview did not finish")
-    w.cursor = None
-    w.capture(
-        title,
-        "View ▸ Molecule Info: 3D preview, formula, weight, SMILES, InChI and InChIKey.",
-        2600,
-    )
-
     session = document_session_service_for_window(w.window)
-    session.export_mol(str(w.output / "aspirin-export.mol"), selected_only=True)
-    w.window.statusBar().showMessage("Exported aspirin-export.mol")
+    session.export_mol(str(w.output / "synthetic-export.mol"), selected_only=True)
+    w.window.statusBar().showMessage("Exported synthetic-export.mol")
     w.capture(
-        title, "File ▸ Export MOL… writes the selection as a V2000 molfile.", 1800
+        title, "File ▸ Export MOL… writes selected explicit atoms as V2000.", 1800
     )
-    session.export_xyz(str(w.output / "aspirin.xyz"), selected_only=True)
-    preview_window.show_export_status("Exported aspirin.xyz")
-    w.capture(
-        title, "Export 3D XYZ in Molecule Info writes RDKit 3D coordinates.", 2200
-    )
-    preview_window.close()
-    w.extra_windows.clear()
 
 
 # --- images -----------------------------------------------------------------

@@ -222,13 +222,7 @@ def _install_scene_runtime_state(canvas: _Canvas) -> None:
     canvas.runtime_state.handle_state = SimpleNamespace(active_handles=[], target=None)
     canvas.runtime_state.selection_state = SimpleNamespace()
     canvas.runtime_state.selection_state = SimpleNamespace(outlines=[])
-    canvas.runtime_state.selection_info_state = SimpleNamespace(
-        signature=(frozenset({1}), frozenset()),
-        pending_signature=None,
-        cache=("before", "selection"),
-        rdkit_warmup_pending=False,
-        last_interaction_time=1.0,
-    )
+    canvas.runtime_state.selection_info_state = SimpleNamespace()
 
 
 def _restore_scene_item(canvas: _Canvas, item: _SceneItem) -> None:
@@ -779,9 +773,7 @@ def test_exact_runtime_visibility_failure_is_non_authoritative() -> None:
     assert item.isVisible() is False
 
 
-def test_exact_runtime_collector_reports_list_mark_and_selection_info_failures() -> (
-    None
-):
+def test_exact_runtime_collector_reports_list_and_mark_failures() -> None:
     class ListState:
         def __init__(self) -> None:
             self._note_items = ["before"]
@@ -812,41 +804,22 @@ def test_exact_runtime_collector_reports_list_mark_and_selection_info_failures()
                 raise RuntimeError("mark registry restore failed")
             self._by_atom = value
 
-    class SelectionInfo:
-        def __init__(self) -> None:
-            self.fail = False
-            self.signature = "before"
-            self.pending_signature = None
-            self.cache = ("before", "selection")
-            self.rdkit_warmup_pending = False
-            self.last_interaction_time = 1.0
-
-        def __setattr__(self, name, value) -> None:
-            if name == "signature" and getattr(self, "fail", False):
-                raise RuntimeError("selection info restore failed")
-            object.__setattr__(self, name, value)
-
     canvas = _Canvas()
     list_state = ListState()
     registry = MarkRegistry()
-    selection_info = SelectionInfo()
     canvas.runtime_state.scene_items_state = list_state
     canvas.runtime_state.mark_registry = registry
-    canvas.runtime_state.selection_info_state = selection_info
     snapshot = capture_scene_runtime(canvas)
 
     list_state.note_items.append("mutated")
     registry.by_atom[7].append("mutated")
-    selection_info.signature = "mutated"
     list_state.fail = True
     registry.fail = True
-    selection_info.fail = True
     errors = restore_scene_runtime(snapshot, collect_errors=True)
 
-    assert len(errors) >= 3
+    assert len(errors) == 2
     assert any("list owner restore failed" in str(error) for error in errors)
     assert any("mark registry restore failed" in str(error) for error in errors)
-    assert any("selection info restore failed" in str(error) for error in errors)
     assert list_state.note_items == ["before"]
     assert registry.by_atom == {7: ["before"]}
 
@@ -1349,8 +1322,6 @@ def test_note_remove_failure_restores_collections_selection_and_container_identi
         selected_notes.remove(item)
         item.setSelected(False)
         canvas.runtime_state.selection_state.outlines = []
-        canvas.runtime_state.selection_info_state.signature = None
-        canvas.runtime_state.selection_info_state.cache = ("mutated", "selection")
         raise RuntimeError("note remove failed before detach")
 
     command = DeleteSceneItemsCommand(

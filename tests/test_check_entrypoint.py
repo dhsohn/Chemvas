@@ -55,11 +55,6 @@ def _run_probe_gate(tmp_path, platform, failing=None, *, arguments=()):
     workflow = tmp_path / ".github" / "workflows" / "ci.yml"
     workflow.parent.mkdir(parents=True)
     workflow.write_text("jobs: {}\n", encoding="utf-8")
-    validator = (
-        tmp_path / "contracts" / "machine-observation" / "scripts" / "validate.py"
-    )
-    validator.parent.mkdir(parents=True)
-    validator.touch()
     for name in _PROBE_TESTS:
         path = tmp_path / name
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -225,7 +220,7 @@ if args[:1] == ["-c"]:
         sys.exit(0 if os.environ.get("STUB_VENV") else 1)
     elif "sys.prefix" in args[1]:
         print("/stub/base/prefix")
-    elif "import jsonschema, mypy" in args[1]:
+    elif "import setuptools, mypy" in args[1]:
         installed = pathlib.Path.cwd() / ".venv" / "installed"
         sys.exit(0 if os.environ.get("STUB_VENV") and installed.exists() else 1)
 elif args[:2] == ["-m", "venv"]:
@@ -293,9 +288,6 @@ def _bootstrap_tree(tmp_path: Path, versions: dict[str, str]):
     workflow.write_text("jobs: {}\n", encoding="utf-8")
     (tree / "tests").mkdir()
     (tree / "tests" / "test_probe.py").touch()
-    validator = tree / "contracts" / "machine-observation" / "scripts" / "validate.py"
-    validator.parent.mkdir(parents=True)
-    validator.touch()
     probe = tmp_path / "python_probe.py"
     probe.write_text(_STUB, encoding="utf-8")
     log = tmp_path / "calls.jsonl"
@@ -534,15 +526,3 @@ def test_gate_gives_the_recovery_hint_when_installing_fails(tmp_path):
         "If .venv is damaged, remove it so the gate can recreate it, "
         "or set PYTHON_BIN." in result.stderr
     )
-
-
-def test_gate_fails_when_local_contract_validator_is_absent(tmp_path):
-    tree, _, run = _bootstrap_tree(tmp_path, dict.fromkeys(_NAMES, "3.13"))
-    validator = tree / "contracts" / "machine-observation" / "scripts" / "validate.py"
-    validator.unlink()
-
-    result, calls = run()
-    assert result.returncode == 1
-    assert "contract validator not found" in result.stderr
-    assert "project-local contract assets are missing" in result.stderr
-    assert not [call for call in calls if call["args"][:2] == ["-m", "pytest"]]

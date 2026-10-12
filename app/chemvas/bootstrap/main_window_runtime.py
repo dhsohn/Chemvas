@@ -6,7 +6,6 @@ from typing import TYPE_CHECKING, Any
 from chemvas.bootstrap.main_window_services import build_main_window_services
 from chemvas.shell.icon_factory import MainWindowIconFactory
 from chemvas.shell.main_window import MainWindowRuntime
-from chemvas.ui.preview3d.preview_3d import Preview3D
 from chemvas.ui.window.main_window_state import MainWindowState
 from chemvas.ui.window.main_window_tab_references import MainWindowTabReferences
 from chemvas.ui.window.main_window_tab_setup import build_canvas_tab_assembly
@@ -23,7 +22,6 @@ type AppMainWindowRuntime = MainWindowRuntime[
     MainWindowState,
     MainWindowTabReferences,
     MainWindowUiReferences,
-    Preview3D,
 ]
 
 
@@ -33,7 +31,6 @@ class MainWindowBootstrapRuntime:
     ui_refs: MainWindowUiReferences
     tab_refs: MainWindowTabReferences
     services: MainWindowServices
-    preview_3d: Preview3D
 
 
 def build_main_window_runtime(
@@ -41,7 +38,6 @@ def build_main_window_runtime(
     *,
     build_tabs: Callable[..., Any] = build_canvas_tab_assembly,
     build_services: Callable[[], MainWindowServices] = build_main_window_services,
-    preview_factory: Callable[[], Preview3D] = Preview3D,
     icon_factory: Callable[[object], MainWindowIconFactory] = MainWindowIconFactory,
 ) -> MainWindowBootstrapRuntime:
     window.setWindowTitle("Chemvas")
@@ -63,7 +59,6 @@ def build_main_window_runtime(
         on_canvas_tab_close_requested=on_canvas_tab_close_requested,
     )
     tab_refs = MainWindowTabReferences.from_assembly(tab_assembly)
-    preview_3d = preview_factory()
     window.setCentralWidget(tab_refs.canvas_tabs)
     ui_refs.icon_factory = icon_factory(window)
     return MainWindowBootstrapRuntime(
@@ -71,7 +66,6 @@ def build_main_window_runtime(
         ui_refs=ui_refs,
         tab_refs=tab_refs,
         services=services,
-        preview_3d=preview_3d,
     )
 
 
@@ -87,9 +81,6 @@ def bootstrap_main_window(window: Any, runtime: AppMainWindowRuntime) -> None:
     runtime.ui_refs.apply_menu_bar_assembly(menu_bar_assembly)
     runtime.services.action_availability_service.update_action_availability(window)
     runtime.services.context_bar_service.init_context_bar(window)
-    runtime.services.panel_service.init_panels(
-        window, panel_bar=toolbar_assembly.panel_bar
-    )
     runtime.services.ui_assembly_service.apply_theme(window)
     runtime.services.active_canvas_ui_service.bind_active_canvas(window)
     runtime.services.status_service.init_status_bar(window)

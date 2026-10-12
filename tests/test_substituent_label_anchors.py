@@ -4,7 +4,7 @@ import math
 
 import pytest
 from PyQt6.QtCore import QEvent, QPointF
-from PyQt6.QtGui import QTextLayout
+from PyQt6.QtGui import QFont, QTextLayout
 from PyQt6.QtWidgets import QApplication
 
 from chemvas.adapters.qt.renderer import Renderer
@@ -12,6 +12,7 @@ from chemvas.bootstrap.document_cli_shared import offscreen_document_scene
 from chemvas.core.document_io import read_exact_document, write_document
 from chemvas.domain.document import CANVAS_FILE_VERSION
 from chemvas.ui.canvas.canvas_view import CanvasView
+from chemvas.ui.canvas.graphics_items import AtomLabelItem
 from tests.test_abbreviation_attachment import _draw
 
 
@@ -53,7 +54,9 @@ def _assert_attachment(canvas, raw, angle):
     assert canvas.model.atoms[1].element == raw
 
 
-@pytest.mark.parametrize("raw", ["OR", "RO", "tBu", "i-Pr"])
+@pytest.mark.parametrize(
+    "raw", ["OR", "RO", "tBu", "i-Pr", "Me", "Ar", "Cl", "Ta", "Te", "Tc", "Ts"]
+)
 @pytest.mark.parametrize("angle", [30, 60, 80, 100, 120, 150, 240, 300])
 @pytest.mark.parametrize("style", ["single", "wedge", "hash"])
 def test_diagonal_attachment_uses_facing_glyph(canvas, raw, angle, style):
@@ -61,7 +64,9 @@ def test_diagonal_attachment_uses_facing_glyph(canvas, raw, angle, style):
     _assert_attachment(canvas, raw, angle)
 
 
-@pytest.mark.parametrize("raw", ["OR", "RO", "tBu", "t-Bu", "i-Pr"])
+@pytest.mark.parametrize(
+    "raw", ["OR", "RO", "tBu", "t-Bu", "i-Pr", "Me", "Ar", "Cl", "Ta", "Te", "Tc", "Ts"]
+)
 def test_relayout_save_and_headless_keep_attachment_and_raw_label(
     canvas, raw, tmp_path
 ):
@@ -83,9 +88,34 @@ def test_relayout_save_and_headless_keep_attachment_and_raw_label(
         assert item.pos() == live.pos()
 
 
-@pytest.mark.parametrize("raw", ["OR", "RO", "tBu", "t-Bu", "i-Pr"])
+@pytest.mark.parametrize(
+    "raw", ["OR", "RO", "tBu", "t-Bu", "i-Pr", "Me", "Ar", "Cl", "Ta", "Te", "Tc", "Ts"]
+)
 def test_isolated_substituent_stays_as_typed(canvas, raw):
     _draw(canvas, raw, 60, isolated=True)
     item = canvas.runtime_state.atom_graphics_state.atom_items[1]
     assert item.toPlainText() == raw
     assert item.anchor_scene_rect() is None
+
+
+@pytest.mark.parametrize("raw", ["Ta", "Te", "Tc", "Ts"])
+@pytest.mark.parametrize("at_end", [False, True])
+def test_anchor_uses_painted_cell_when_font_kerning_is_enabled(app, raw, at_end):
+    item = AtomLabelItem()
+    font = QFont("Arial", 16)
+    font.setKerning(True)
+    item.setFont(font)
+    item.setPlainText(raw)
+    item.set_anchor(raw[-1 if at_end else 0], at_end=at_end)
+    layout = QTextLayout(raw, font)
+    layout.beginLayout()
+    line = layout.createLine()
+    layout.endLayout()
+    # Read the actual glyph origins, independently of the cursor-cell helper.
+    positions = layout.glyphRuns()[0].positions()
+    assert len(positions) == 2
+    left = positions[1].x() if at_end else positions[0].x()
+    right = line.naturalTextWidth() if at_end else positions[1].x()
+    assert item.anchor_center().x() == pytest.approx(
+        item.document().documentMargin() + (left + right) / 2, abs=1e-9
+    )

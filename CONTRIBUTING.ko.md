@@ -19,11 +19,9 @@ git clone https://github.com/dhsohn/Chemvas.git
 cd Chemvas
 python -m venv .venv && source .venv/bin/activate   # optional but recommended
 python -m pip install -e ".[dev]"                    # dev tooling
-python -m pip install -e ".[dev,rdkit]"              # also enable RDKit features
 ```
 
-`machine.json` 계약 검증기는 `contracts/machine-observation/`에 프로젝트 로컬
-스냅샷으로 포함되어 있으므로 별도 클론이나 설정이 필요 없습니다.
+Chemvas는 화학 extra나 `machine.json` 검증기를 포함하지 않습니다.
 
 소스 코드에서 앱을 실행하려면:
 
@@ -33,7 +31,7 @@ python app/main.py
 
 ## 검사 실행
 
-PR을 제출하기 전 다음 단일 명령어로 기본 로컬 게이트(린트, 포맷, mypy, 전체 테스트, 계약 검증)를 실행합니다:
+PR을 제출하기 전 다음 단일 명령어로 기본 로컬 게이트(린트, 포맷, mypy, 전체 테스트)를 실행합니다:
 
 ```bash
 make check
@@ -46,18 +44,20 @@ make check
 RDKit 설치 여부를 표시합니다. 기존 제외 규칙을 유지하고 실행되지 않은 제품 모듈도
 분모에 넣습니다. 선별 검사 수치는 전체 테스트 기준선이 아닙니다.
 
-CI의 공통·RDKit 잡은 각각 요약과 보고서 artifact를 게시하고 14일간 보관합니다.
-두 잡의 백분율은 서로 다른 검사 범위를 나타냅니다. 변경 검증 결과에는 줄·분기 수치,
-플랫폼, 실행 범위, RDKit 포함 여부를 적습니다. 보고서를 생성했어도 테스트가 실패하면
-게이트는 실패합니다. ring-correspondence 파일은 다른 파일이 끝난 뒤 단독 실행합니다.
-그 안의 `latency` 검사는 계측하지 않는 별도 프로세스에서 기존 시간 제한을 그대로
-판정하며, 커버리지 데이터에는 합산하지 않습니다.
+Linux `test` 잡은 Python 3.12와 3.13에서 공통 스위트를 실행합니다. 각 실행은
+커버리지 요약과 `coverage-common-*` artifact를 게시하고 14일간 보관합니다.
+`windows-native`와 `package-smoke` 잡은 그 보고서를 올리지 않습니다. 변경 검증
+결과에는 줄·분기 수치, 플랫폼, 실행 범위, RDKit 포함 여부를 적습니다. 보고서를
+생성했어도 테스트가 실패하면 게이트는 실패합니다. `scripts/run_test_files.sh`는
+각 `test_*.py`를 자기 pytest 프로세스에서, 여러 파일을 동시에 실행합니다.
+`scripts/check.sh`는 자기 목록의 호스트 네이티브 파일을 네이티브 Qt 백엔드에서
+한 번에 하나씩 실행합니다.
 
 macOS에서는 pytest가 테스트 수집 전에 프로세스 내부의 휘발성 설정으로 AppKit 창 복원을
 끕니다. Python 테스트가 비정상 종료해도 다음 테스트가 창 복원 대화상자에서 멈추지 않게
 하며, 사용자 환경설정이나 저장된 복구 파일은 변경하지 않습니다.
 
-게이트는 사전 준비가 필요 없으므로 새로 클론한 저장소나 `git worktree`에서도 그대로 실행됩니다. `PYTHON_BIN`이나 활성화된 가상 환경(`VIRTUAL_ENV`)이 인터프리터를 지정하지 않으면 체크아웃 자체의 `.venv`를 사용합니다. `.venv`가 없으면 처음 발견한 Python 3.12 이상(`PATH`, 그다음 `/usr/local/bin`, `/opt/homebrew/bin`, `~/.local/bin`, conda의 `bin` 같은 일반 설치 위치)으로 만들고 `dev` extras를 설치하며, `pyproject.toml`이 바뀌면 다시 설치합니다. 더 낮은 버전의 Python으로 대신 실행하지는 않습니다. 조건에 맞는 인터프리터가 없거나 기존 `.venv`가 그런 Python으로 만들어졌다면, 시도한 인터프리터를 알리고 중단합니다. 다른 체크아웃의 환경에 설치하지 않도록 심볼릭 링크인 `.venv`도 거부합니다. `uv venv`로 만든 환경처럼 pip이 없는 `.venv`도 거부하므로, `.venv`를 지워 게이트가 다시 만들게 하거나 `PYTHON_BIN`을 지정합니다. RDKit은 설치하지 않으므로 RDKit 테스트는 로컬에서 skip되고 CI의 RDKit 잡에서 실행됩니다.
+게이트는 사전 준비가 필요 없으므로 새로 클론한 저장소나 `git worktree`에서도 그대로 실행됩니다. `PYTHON_BIN`이나 활성화된 가상 환경(`VIRTUAL_ENV`)이 인터프리터를 지정하지 않으면 체크아웃 자체의 `.venv`를 사용합니다. `.venv`가 없으면 처음 발견한 Python 3.12 이상(`PATH`, 그다음 `/usr/local/bin`, `/opt/homebrew/bin`, `~/.local/bin`, conda의 `bin` 같은 일반 설치 위치)으로 만들고 `dev` extras를 설치하며, `pyproject.toml`이 바뀌면 다시 설치합니다. 더 낮은 버전의 Python으로 대신 실행하지는 않습니다. 조건에 맞는 인터프리터가 없거나 기존 `.venv`가 그런 Python으로 만들어졌다면, 시도한 인터프리터를 알리고 중단합니다. 다른 체크아웃의 환경에 설치하지 않도록 심볼릭 링크인 `.venv`도 거부합니다. `uv venv`로 만든 환경처럼 pip이 없는 `.venv`도 거부하므로, `.venv`를 지워 게이트가 다시 만들게 하거나 `PYTHON_BIN`을 지정합니다.
 
 개별 검사 도구는 다음과 같이 수동 실행할 수 있습니다:
 
@@ -110,7 +110,7 @@ Linux/WSL에서는 offscreen으로 대신 통과시키지 않고 실행을 거�
 - 캔버스 범위의 협력 객체는 직접 주입하여 메서드를 호출합니다. 컨트롤러와 도구는 자신이 소유한 공개 상태와 Qt API를 직접 사용할 수 있습니다. 접근자나 프로토콜은 활성 문서 확인, 표현 변환, 히스토리 연산 제한 등 실질적인 경계 처리에만 사용하며, 단순 위임(forwarding) 목적의 래퍼는 생성하지 않습니다.
 - 상태와 변경 규칙은 단일 소유자(single owner)가 관리합니다. 다른 모듈은 해당 소유자의 공개 인터페이스를 통해 작업하며, 중복 상태 유지, 비공개 멤버 접근, 트랜잭션·무효화·수명 주기 우회를 금지합니다.
 - 동적으로 변경되는 의존성(예: 활성 문서, 교체 가능한 모델)은 사용 시점에 조회하며, 수명 주기 이후까지 참조를 유지하지 않습니다.
-- 문서 데이터 모델, 검증, 화학 도메인 규칙은 `domain` 및 `core`에서 Qt와 완전 분리하여 유지합니다. 데스크톱 UI 및 렌더링 구현(`ui`, `shell`, `adapters`, 데스크톱 기능 모듈)은 Qt 및 어댑터를 직접 사용할 수 있습니다. 헤드리스 기능 API의 비-GUI 계약과 RDKit 선택적 사용은 유지합니다.
+- 문서 데이터 모델, 검증, 화학 도메인 규칙은 `domain` 및 `core`에서 Qt와 완전 분리하여 유지합니다. 데스크톱 UI 및 렌더링 구현(`ui`, `shell`, `adapters`, 데스크톱 기능 모듈)은 Qt 및 어댑터를 직접 사용할 수 있습니다. 헤드리스 기능 API의 비-GUI 계약은 유지합니다. 선택적 화학 백엔드는 없습니다.
 - 패키지 간 호출은 공개 API를 사용하며, 즉시 실행(eager) import 순환을 금지합니다.
 
 ### 경계 검토와 테스트
@@ -131,4 +131,4 @@ Linux/WSL에서는 offscreen으로 대신 통과시키지 않고 실행을 거�
 
 ## 버그 제보 및 기능 제안
 
-GitHub 이슈 템플릿을 사용하여 등록합니다. 버그 제보 시 OS, Python 버전, RDKit 설치 여부 및 재현 단계를 포함합니다.
+GitHub 이슈 템플릿을 사용하여 등록합니다. 버그 제보 시 OS, Python 버전 및 재현 단계를 포함합니다.

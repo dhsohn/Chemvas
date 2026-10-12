@@ -1,6 +1,6 @@
 # ADR 0031: Standalone contract validation
 
-- Status: Accepted
+- Status: Superseded by [ADR 0055](0055-retire-rdkit-chemistry-provider.md)
 - Date: 2026-10-03
 
 ## Problem

@@ -233,20 +233,8 @@ def test_browser_mol_export_takes_a_selected_ring_fill_as_its_ring_atoms():
     assert molfile.splitlines()[3].startswith("  6  6")
 
 
-def test_browser_mol_export_shares_the_desktop_rdkit_fallback_and_limits(monkeypatch):
-    import chemvas.bootstrap.web_adapter as web_adapter
+def test_browser_mol_export_shares_the_desktop_abbreviation_refusal_and_limits():
 
-    calls = []
-
-    class Backend:
-        block = None
-        last_error = "RDKit is not available in this environment."
-
-        def model_to_mol_block(self, model, atom_annotations=None):
-            calls.append((len(model.atoms), atom_annotations))
-            return Backend.block
-
-    monkeypatch.setattr(web_adapter, "RDKitAdapter", Backend)
     abbreviated = MoleculeModel()
     carbon = abbreviated.add_atom("C", 40.0, 60.0)
     abbreviated.add_bond(carbon, abbreviated.add_atom("Ph", 60.0, 60.0), 1)
@@ -263,21 +251,10 @@ def test_browser_mol_export_shares_the_desktop_rdkit_fallback_and_limits(monkeyp
         finally:
             assert unchanged(session) == before
 
-    with pytest.raises(
-        ValueError, match="Install RDKit to expand these abbreviations automatically."
-    ):
+    with pytest.raises(ValueError, match="Cannot export these atom labels"):
         export(abbreviated)
-    Backend.block = "expanded\n\n\n  0  0  0  0  0  0  0  0999 V2000\nM  END\n"
-    assert export(abbreviated) == Backend.block
     with pytest.raises(ValueError, match="999 atoms"):
         export(oversized)
-    assert calls == [(2, {}), (2, {})]
-    Backend.block = None
-    Backend.last_error = "Dotted contacts cannot be represented as covalent bonds."
-    with pytest.raises(ValueError) as error:
-        export(abbreviated)
-    assert str(error.value) == Backend.last_error
-    assert calls == [(2, {}), (2, {}), (2, {})]
 
 
 def test_browser_mol_export_runs_without_qt_or_site_packages():

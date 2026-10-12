@@ -91,30 +91,6 @@ class Answer(QObject):
         return False
 answer = Answer(app)
 app.installEventFilter(answer)
-if mode == "file-open-worker":
-    preview = windows[0].preview_3d
-    def delayed_shutdown():
-        QTimer.singleShot(10, incoming_event)
-        QTimer.singleShot(100, preview.shutdown_finished.emit)
-        QTimer.singleShot(20, app.quit)
-        return False
-    preview.begin_shutdown = delayed_shutdown
-if mode == "failed-shutdown":
-    reported = []
-    # The desktop exception boundary contains handler errors the same way.
-    sys.excepthook = lambda _type, error, _tb: reported.append(str(error))
-    preview = windows[2].preview_3d
-    def fail_shutdown_once():
-        del preview.begin_shutdown
-        raise RuntimeError("injected shutdown failure")
-    preview.begin_shutdown = fail_shutdown_once
-    def retry_quit():
-        assert reported == ["injected shutdown failure"], reported
-        assert open_windows() == (windows[2],)
-        assert windows[2].isVisible() and not windows[2].isEnabled()
-        assert is_quitting()
-        app.quit()
-
 cancelled_modes = {"failed-save", "failed-prompt", "failed-snapshot", "save-as-cancel", "file-open-cancel"}
 if mode in cancelled_modes:
     if mode == "failed-save":
@@ -153,8 +129,6 @@ def request_quit():
         # Quit runs nested modal loops. Observe cancellation only after the
         # request returns, not from a timer that can fire inside those loops.
         QTimer.singleShot(0, check_cancel)
-    if mode == "failed-shutdown":
-        QTimer.singleShot(0, retry_quit)
 QTimer.singleShot(0, request_quit)
 QTimer.singleShot(4000, lambda: os._exit(91))
 assert app.exec() == 0
@@ -183,14 +157,12 @@ print("quit preserved all documents", flush=True)
         ("save-as", 30),
         ("failed-save", 30),
         ("failed-prompt", 30),
-        ("failed-shutdown", 30),
         ("failed-snapshot", 30),
         ("clean", 30),
         ("save-as-cancel", 30),
         ("keep-alive", 30),
         ("nested-quit", 30),
         ("file-open-modal", 30),
-        ("file-open-worker", 30),
         ("file-open-cancel", 30),
         pytest.param("file-open-cancel", 700, id="slow-file-open-cancel"),
     ],
@@ -223,7 +195,7 @@ from PyQt6.QtWidgets import QApplication, QMessageBox
 from chemvas.bootstrap.window_registry import open_new_window
 from chemvas.shell.window_registry import open_windows
 from chemvas.core.document_io import read_document
-from chemvas.features.calculation_bundle import validate_calculation_plan
+from chemvas.domain.document import validate_calculation_plan
 from chemvas.features.session import is_quit_pending, is_quitting
 from chemvas.ui.session.app_data_paths import sessions_dir
 from chemvas.ui.canvas.canvas_calculation_plan_state import calculation_plan_for
@@ -284,15 +256,13 @@ class Answer(QObject):
             title = "Save Changes"
             first_prompt = not answers
             choice = QMessageBox.StandardButton.Save
-            if first_prompt and mode not in {"save", "save-decline"}:
+            if first_prompt and mode != "save":
                 choice = QMessageBox.StandardButton.Discard
             if not first_prompt and mode == "discard-cancel":
                 choice = QMessageBox.StandardButton.Cancel
-        elif buttons == (QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No):
-            title = "Calculation Plan Needs Attention"
-            choice = QMessageBox.StandardButton.No if mode == "save-decline" else QMessageBox.StandardButton.Yes
         elif buttons == QMessageBox.StandardButton.Ok:
-            title = "Save Adjusted Document"
+            title = "Save Error"
+            assert "Undo the structure edits" in obj.text()
             choice = QMessageBox.StandardButton.Ok
         else:
             raise AssertionError((buttons, obj.text()))
@@ -302,7 +272,7 @@ class Answer(QObject):
         return False
 answer = Answer(app)
 app.installEventFilter(answer)
-cancelled = mode in {"discard-cancel", "save-decline", "failed-final-write"}
+cancelled = mode in {"discard-cancel", "save", "failed-final-write"}
 if mode == "failed-final-write":
     def fail_write(docs):
         raise OSError("injected final manifest failure")
@@ -337,11 +307,7 @@ expected = {"b.chemvas", "c.chemvas"} if mode == "untitled-discard" else {"a.che
 assert {Path(entry["file_path"]).name for entry in manifest["docs"]} == expected
 assert all(not entry["dirty"] and entry["snapshot"] is None for entry in manifest["docs"])
 assert len(read_document(root / "c.chemvas").state["model"]["bonds"]) == 2
-if mode == "save":
-    saved = read_document(root / "a.chemvas").state
-    assert len(saved["model"]["bonds"]) == 3 and "calculation_plan" not in saved
-else:
-    assert (root / "a.chemvas").read_bytes() == original_file
+assert (root / "a.chemvas").read_bytes() == original_file
 restored = new_session_store(sessions_dir()).consume_previous_sessions()
 assert restored.docs == []
 assert restored.recovered_unsaved == 0
@@ -357,7 +323,6 @@ print(json.dumps({"mode": mode, "reopened_paths": sorted(expected), "answers": a
         ("untitled-discard", 30),
         ("discard-cancel", 30),
         ("save", 30),
-        ("save-decline", 30),
         ("failed-final-write", 30),
         pytest.param("discard-cancel", 700, id="slow-discard-cancel"),
     ],

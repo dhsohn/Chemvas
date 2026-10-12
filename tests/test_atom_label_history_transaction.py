@@ -114,7 +114,7 @@ def test_failed_label_replay_restores_exact_scene_and_history_then_retries(
 
     def fail_after_label_layout(*args, **kwargs):
         # This callback is reached after the real model and Qt label/dot change,
-        # before the command has updated its SMILES-input metadata.
+        # before the command has finished updating document state.
         failures.append(canvas.model.atoms[atom_id].explicit_label)
         if len(failures) == 1:
             raise RuntimeError("synthetic post-layout interaction failure")

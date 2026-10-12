@@ -13,9 +13,7 @@ if TYPE_CHECKING:
 
 # Transient overlays that must never appear in an exported figure. Mirrors the
 # exclusion set used by the clipboard copy path (``_selection_items_for_copy``).
-EXPORT_EXCLUDED_KINDS = frozenset(
-    {"handle", "note_select", "selection_outline", "calculation_atom_id_label"}
-)
+EXPORT_EXCLUDED_KINDS = frozenset({"handle", "note_select", "selection_outline"})
 
 
 def collect_export_items(scene: QGraphicsScene) -> list[QGraphicsItem]:

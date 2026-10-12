@@ -12,7 +12,6 @@ from PyQt6.QtCore import QEvent, QPointF, QRectF
 from PyQt6.QtGui import QBrush, QColor
 from PyQt6.QtWidgets import QGraphicsPathItem
 
-from chemvas.domain.document import MoleculeModel
 from chemvas.ui.annotations.records import (
     clear_shape_records_for,
     shape_id_for_item,
@@ -232,13 +231,9 @@ def test_a_shape_item_without_a_record_cannot_join_the_document(canvas) -> None:
 
 
 def _insert_two_carbons(canvas) -> None:
-    model = MoleculeModel()
-    model.add_atom("C", 0.0, 0.0)
-    model.add_atom("C", 40.0, 0.0)
-    controller = canvas.services.insert_controller
-    with mock.patch.object(canvas.rdkit, "smiles_to_2d", return_value=model):
-        controller.begin_smiles_insert("CC")
-    controller.commit_smiles_insert(QPointF(50.0, 60.0))
+    assert canvas.services.structure_build_service.add_bond_between_points(
+        QPointF(30.0, 60.0), QPointF(70.0, 60.0), "single", 1
+    )
 
 
 def test_a_shape_deleted_before_a_structure_insertion_still_comes_back_on_undo(

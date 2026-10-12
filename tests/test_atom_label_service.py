@@ -9,7 +9,8 @@ from tests.scene_render_context import attach_scene_render_context
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from PyQt6.QtGui import QFont
+from PyQt6.QtCore import QPointF
+from PyQt6.QtGui import QFont, QPainterPath, QRawFont
 from PyQt6.QtWidgets import QApplication, QGraphicsItem, QGraphicsScene
 
 from chemvas.adapters.qt.renderer import Renderer
@@ -42,6 +43,18 @@ from chemvas.ui.molecule.atom_coords_access import (
 from chemvas.ui.molecule.atom_label_service import AtomLabelService
 from chemvas.ui.selection.selection_controller import SelectionController
 from chemvas.ui.transactions.document import document_transaction
+
+
+def _painted_atom_y(item: AtomLabelItem, normal_text: str) -> float:
+    """Measure a normal glyph's painted baseline independently of placement."""
+    outline = QPainterPath()
+    outline.addText(QPointF(), item.font(), normal_text)
+    baseline = (
+        item.mapToScene(item.glyph_path()).boundingRect().top()
+        - outline.boundingRect().top()
+    )
+    raw = QRawFont.fromFont(item.font())
+    return baseline - (raw.pixelSize() - raw.descent()) / 2
 
 
 class _FakeScene(QGraphicsScene):
@@ -501,8 +514,7 @@ class AtomLabelServiceTest(unittest.TestCase):
             10.0,
         )
         self.assertAlmostEqual(
-            label_item.pos().y()
-            + label_item.boundingRect().center().y()
+            _painted_atom_y(label_item, "NH")
             + canvas.renderer.style.atom_label_offset_px,
             12.0,
         )
@@ -707,7 +719,7 @@ class AtomLabelServiceTest(unittest.TestCase):
         # on the atom coordinates, up to the small global label offset.
         offset = 2.0  # _FakeCanvas atom_label_offset_px
         self.assertAlmostEqual(anchor.center().x(), 0.0 + offset, delta=0.6)
-        self.assertAlmostEqual(anchor.center().y(), 0.0 - offset, delta=0.6)
+        self.assertAlmostEqual(_painted_atom_y(item, "CF"), 0.0 - offset)
 
     def test_ph3p_with_a_right_bond_anchors_on_the_trailing_phosphorus(self) -> None:
         # Ph3P-R: the P glyph sits on the atom, Ph3 trails into the open left
@@ -851,12 +863,12 @@ class AtomLabelServiceTest(unittest.TestCase):
         right_id = atom_mutation.add_atom("C", 20.0, 0.0)
         left_bond_id = bond_mutation.add_bond(label_id, left_id)
         canvas.bond_renderer.add_bond_graphics(left_bond_id)
-        left_item = canvas.runtime_state.bond_graphics_state.bond_items.get(
-            left_bond_id, []
-        )[0]
 
         def left_segment() -> tuple[float, float, float, float]:
-            line = left_item.line()
+            # A dependency redraw may replace the item; inspect the live owner.
+            line = canvas.runtime_state.bond_graphics_state.bond_items[left_bond_id][
+                0
+            ].line()
             return line.x1(), line.y1(), line.x2(), line.y2()
 
         def expected_left_segment() -> tuple[float, float, float, float]:
@@ -896,15 +908,15 @@ class AtomLabelServiceTest(unittest.TestCase):
 
         with patch.object(
             canvas.bond_renderer,
-            "update_bond_geometry",
-            wraps=canvas.bond_renderer.update_bond_geometry,
-        ) as update_geometry:
+            "redraw_bond",
+            wraps=canvas.bond_renderer.redraw_bond,
+        ) as redraw:
             move_controller.move_atoms({right_id}, -20.0, -20.0)
         moved_segment = left_segment()
 
-        self.assertEqual(
-            [entry.args[0] for entry in update_geometry.call_args_list],
-            [left_bond_id],
+        self.assertCountEqual(
+            [entry.args[0] for entry in redraw.call_args_list],
+            [left_bond_id, right_bond_id],
         )
         self.assertNotEqual(moved_segment, two_bond_segment)
         self.assertEqual(moved_segment, expected_left_segment())
@@ -1075,7 +1087,7 @@ class AtomLabelServiceTest(unittest.TestCase):
         anchor = item.anchor_scene_rect()
         self.assertIsNotNone(anchor)
         self.assertAlmostEqual(anchor.center().x(), 2.0, delta=0.6)
-        self.assertAlmostEqual(anchor.center().y(), -2.0, delta=0.6)
+        self.assertAlmostEqual(_painted_atom_y(item, "CF"), -2.0)
 
     def test_record_label_change_builds_composite_single_and_noop_commands(
         self,

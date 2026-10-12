@@ -98,13 +98,13 @@ if sys.platform != 'win32' or struct.calcsize('P') != 8 or platform.machine().lo
     raise SystemExit('A native Windows x64 Python is required.')
 if sys.version_info < (3, 12):
     raise SystemExit('Python 3.12 or newer is required.')
-import PyInstaller, PIL, rdkit
+import PyInstaller, PIL
 from PyQt6.QtCore import PYQT_VERSION_STR, QT_VERSION_STR
 if PyInstaller.__version__ != '6.22.2':
     raise SystemExit('Use PyInstaller 6.22.2 from requirements-build.txt.')
 sys.path.insert(0, sys.argv[1])
 import chemvas
-print(json.dumps(dict(version=chemvas.__version__, source=chemvas.__file__, python=sys.executable, python_version=platform.python_version(), pyinstaller=PyInstaller.__version__, pyqt=PYQT_VERSION_STR, qt=QT_VERSION_STR, pillow=PIL.__version__, rdkit=rdkit.__version__)))
+print(json.dumps(dict(version=chemvas.__version__, source=chemvas.__file__, python=sys.executable, python_version=platform.python_version(), pyinstaller=PyInstaller.__version__, pyqt=PYQT_VERSION_STR, qt=QT_VERSION_STR, pillow=PIL.__version__)))
 '@
 $ProbePath = Join-Path $WorkDir 'environment-probe.py'
 [IO.File]::WriteAllText($ProbePath, $Probe)

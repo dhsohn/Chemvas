@@ -27,6 +27,7 @@ from chemvas.domain.document import (
 )
 from chemvas.features.export import points_for_mm
 from chemvas.ui.export.export_cdxml import (
+    CdxmlLabelBinding,
     CdxmlUnsupportedObjectError,
     preflight_cdxml,
     serialize_cdxml,
@@ -37,6 +38,15 @@ pytestmark = pytest.mark.usefixtures("qt_application")
 
 
 # ── Helpers ────────────────────────────────────────────────────────────
+
+
+def _line_endpoints(line):
+    assert line.tag == "arrow"
+    assert line.get("ArrowheadHead", "None") == "None"
+    assert line.get("ArrowheadTail", "None") == "None"
+    tail, head = line.get("Tail3D").split(), line.get("Head3D").split()
+    assert tail[2] == head[2] == "0"
+    return " ".join((*tail[:2], *head[:2]))
 
 
 def _settings(**overrides):
@@ -125,6 +135,7 @@ _ALLOWED_ELEMENTS = frozenset(
         "t",
         "s",
         "graphic",
+        "arrow",
         "group",
     }
 )
@@ -146,10 +157,28 @@ _ALLOWED_ATTRS_BY_ELEMENT = {
     "fonttable": set(),
     "font": {"id", "charset", "name"},
     "page": {"id", "Width", "Height", "BoundingBox", "bgcolor"},
-    "fragment": {"id", "Z"},
-    "n": {"id", "p", "Element", "Charge", "color"},
-    "b": {"id", "B", "E", "Order", "Display", "DoublePosition", "color"},
-    "t": {"id", "p", "Z", "Justification", "InterpretChemically", "CaptionLineHeight"},
+    "fragment": {"id"},
+    "n": {"id", "p", "Z", "Element", "Charge", "color"},
+    "b": {
+        "id",
+        "B",
+        "E",
+        "Z",
+        "Order",
+        "Display",
+        "DoublePosition",
+        "BondSpacing",
+        "color",
+    },
+    "t": {
+        "id",
+        "p",
+        "Z",
+        "Justification",
+        "LabelJustification",
+        "InterpretChemically",
+        "CaptionLineHeight",
+    },
     "s": {"font", "size", "color", "face"},
     "graphic": {
         "id",
@@ -166,8 +195,23 @@ _ALLOWED_ATTRS_BY_ELEMENT = {
         "MajorAxisEnd3D",
         "MinorAxisEnd3D",
     },
-    "group": {"id", "Z"},
+    "arrow": {
+        "id",
+        "Z",
+        "FillType",
+        "ArrowheadType",
+        "LineType",
+        "Head3D",
+        "Tail3D",
+        "LineWidth",
+        "color",
+    },
+    "group": {"id"},
 }
+
+# ZOrder.htm lists Z for Node, Bond, Text and Graphic (not Group, Fragment or
+# Page); every one of these elements carries its own explicit Z.
+_Z_TAGS = ("n", "b", "t", "graphic", "arrow")
 
 
 def test_vocabulary_closure():
@@ -347,9 +391,9 @@ def test_second_width_exact_ratio():
     assert lw_170 / lw_84 == pytest.approx(expected_ratio, rel=1e-9)
 
     def line_bbox_span(root):
-        for g in root.findall(".//graphic"):
-            if g.get("GraphicType") == "Line":
-                vals = [float(v) for v in g.get("BoundingBox").split()]
+        for g in root.findall(".//arrow"):
+            if g.get("LineType") == "Solid":
+                vals = [float(v) for v in _line_endpoints(g).split()]
                 return abs(vals[2] - vals[0])
         return None
 
@@ -366,7 +410,8 @@ def test_second_width_exact_ratio():
     size_170 = first_font_size(root_170)
     size_84 = first_font_size(root_84)
     assert size_170 is not None and size_84 is not None and size_84 > 0
-    assert size_170 / size_84 == pytest.approx(expected_ratio, rel=1e-9)
+    assert abs(size_170 - expected_ratio * size_84) <= 0.025 * (1 + expected_ratio)
+    assert all(abs(v * 20 - round(v * 20)) < 1e-8 for v in (size_170, size_84))
 
 
 def test_font_size_scales_with_width():
@@ -386,9 +431,9 @@ def test_font_size_scales_with_width():
     size_84 = first_font_size(bytes_84)
     assert size_170 is not None, "expected font size at 170 mm"
     assert size_84 is not None and size_84 > 0, "expected positive font size at 84 mm"
-    ratio = size_170 / size_84
     expected = points_for_mm(170.0) / points_for_mm(84.0)
-    assert ratio == pytest.approx(expected, rel=1e-9)
+    assert abs(size_170 - expected * size_84) <= 0.025 * (1 + expected)
+    assert all(abs(v * 20 - round(v * 20)) < 1e-8 for v in (size_170, size_84))
 
 
 # ── Unicode and XML characters ─────────────────────────────────────────
@@ -470,22 +515,136 @@ def test_refuse_alias_label():
         _export_cdxml(state)
 
 
-def test_refuse_bold_bond():
+@pytest.mark.parametrize("bond_length", [20.0, 35.0])
+@pytest.mark.parametrize("target_width", [84.0, 170.0])
+def test_native_bold_bond_keeps_connectivity_and_scaled_width(
+    bond_length, target_width
+):
+    state = _simple_state(
+        atoms={
+            0: Atom("C", 0.0, 0.0),
+            1: Atom("C", 40.0, 20.0),
+            2: Atom("C", 80.0, 20.0),
+        },
+        bonds=[Bond(0, 1, style="bold_in", color="#cc2200"), Bond(1, 2)],
+        settings_overrides={"bond_length_px": bond_length},
+    )
+    xml_bytes, plan = _export_cdxml(state, target_width_mm=target_width)
+    root = ET.fromstring(xml_bytes)
+    nodes = root.findall(".//fragment/n")
+    bold, normal = root.findall(".//fragment/b")
+    assert bold.get("B") == nodes[0].get("id")
+    assert bold.get("E") == normal.get("B") == nodes[1].get("id")
+    assert normal.get("E") == nodes[2].get("id")
+    assert bold.get("Display") == "Bold" and bold.get("Order") == "1"
+    assert normal.get("Display") is None and normal.get("BoldWidth") is None
+    assert bold.get("color") is not None and normal.get("color") is None
+    scale = plan.out_w_pt / plan.source_w
+    assert float(bold.get("BoldWidth")) == pytest.approx(3.3 * bond_length / 20 * scale)
+    assert float(root.get("LineWidth")) == pytest.approx(1.5 * bond_length / 20 * scale)
+    for node, (x, y) in zip(nodes, [(0, 0), (40, 20), (80, 20)], strict=True):
+        assert list(map(float, node.get("p").split())) == pytest.approx(
+            [(x - plan.source_x) * scale, (y - plan.source_y) * scale]
+        )
+    assert root.findall(".//graphic") == []
+
+
+@pytest.mark.parametrize("order", [True, 1.0, 0, 2, 3])
+def test_bold_bond_refuses_non_exact_single_order_atomically(tmp_path, order):
+    state = _simple_state(
+        atoms={0: Atom("C", 0.0, 0.0), 1: Atom("C", 40.0, 0.0)},
+        bonds=[Bond(0, 1, style="bold_in")],
+    )
+    dest = tmp_path / "existing.cdxml"
+    dest.write_bytes(b"preserve existing output")
+    with offscreen_document_scene(state, command="test-cdxml") as context:
+        context.model.bonds[0].order = order
+        with pytest.raises(CdxmlUnsupportedObjectError, match="exact integer"):
+            FigureExportService(context).export_figure(str(dest), fmt="cdxml")
+    assert dest.read_bytes() == b"preserve existing output"
+
+
+@pytest.mark.parametrize("style", ["bold_center"])
+def test_other_bold_variants_remain_refused(style):
     state = _simple_state(
         atoms={0: Atom("C", 0.0, 0.0), 1: Atom("C", 20.0, 0.0)},
-        bonds=[Bond(0, 1, style="bold_in")],
+        bonds=[Bond(0, 1, style=style)],
     )
     with pytest.raises(CdxmlUnsupportedObjectError, match="no proved"):
         _export_cdxml(state)
 
 
-def test_refuse_dotted_bond():
+@pytest.mark.parametrize(
+    "line_width,bold_width,expected",
+    [(2.0, 5.0, 5.0), (4.0, 3.3, 4.0), (3.3, 3.3000005, 3.3)],
+)
+def test_bold_width_tracks_effective_qt_stroke(
+    tmp_path, line_width, bold_width, expected
+):
+    from dataclasses import replace
+
+    from PyQt6.QtWidgets import QGraphicsLineItem, QGraphicsPolygonItem
+
+    state = _simple_state(
+        atoms={0: Atom("C", 0.0, 0.0), 1: Atom("C", 50.0, 0.0)},
+        bonds=[Bond(0, 1, style="bold_in")],
+    )
+    with offscreen_document_scene(state, command="test-cdxml") as context:
+        context.renderer.style = replace(
+            context.renderer.style,
+            bond_line_width=line_width,
+            bold_bond_width=bold_width,
+        )
+        context.bonds.redraw_bond(0)
+        item = context.state.bond_graphics_state.bond_items[0][0]
+        if isinstance(item, QGraphicsPolygonItem):
+            drawn_width = item.polygon().boundingRect().height()
+        else:
+            assert isinstance(item, QGraphicsLineItem)
+            drawn_width = item.pen().widthF()
+        assert drawn_width == pytest.approx(expected)
+        dest = tmp_path / "custom.cdxml"
+        plan = FigureExportService(context).export_figure(str(dest), fmt="cdxml")
+    root = ET.fromstring(dest.read_bytes())
+    assert float(root.find(".//b").get("BoldWidth")) == pytest.approx(
+        expected * plan.out_w_pt / plan.source_w
+    )
+
+
+@pytest.mark.parametrize("reverse", [False, True])
+def test_public_cli_bold_labelled_endpoints_and_source_preserved(tmp_path, reverse):
+    from chemvas.bootstrap import document_render as cli
+
+    state = _simple_state(
+        atoms={0: Atom("O", 0.0, 0.0), 1: Atom("N", 70.0, 30.0)},
+        bonds=[Bond(1, 0, style="bold_in") if reverse else Bond(0, 1, style="bold_in")],
+    )
+    source, dest = tmp_path / "bold.chemvas", tmp_path / "bold.cdxml"
+    write_document(source, state, CANVAS_FILE_VERSION)
+    before = source.read_bytes()
+    cli._render_document(
+        source, output=dest, background="white", dpi=300, width_mm=84.0
+    )
+    assert source.read_bytes() == before
+    root = ET.fromstring(dest.read_bytes())
+    nodes = {n.get("id"): n for n in root.findall(".//n")}
+    bond = root.find(".//b")
+    assert bond.get("Display") == "Bold"
+    assert nodes[bond.get("B")].get("Element") == ("7" if reverse else "8")
+    assert nodes[bond.get("E")].get("Element") == ("8" if reverse else "7")
+    assert sorted(s.text for s in root.findall(".//s")) == ["N", "O"]
+
+
+def test_existing_dotted_bond_exports_chemical_dash():
     state = _simple_state(
         atoms={0: Atom("C", 0.0, 0.0), 1: Atom("C", 20.0, 0.0)},
         bonds=[Bond(0, 1, style="dotted")],
     )
-    with pytest.raises(CdxmlUnsupportedObjectError, match="no proved"):
-        _export_cdxml(state)
+    xml_bytes, _ = _export_cdxml(state)
+    root = ET.fromstring(xml_bytes)
+    bond = root.find(".//fragment/b")
+    assert bond is not None
+    assert bond.get("Order") == "1" and bond.get("Display") == "Dash"
 
 
 def test_refuse_double_either_bond():
@@ -497,15 +656,15 @@ def test_refuse_double_either_bond():
         _export_cdxml(state)
 
 
-def test_refuse_double_outer_bond():
-    # The outer variant shortens the axis line inside rings; one CDXML
-    # DoublePosition cannot say which of the two lines is shortened.
+def test_native_double_outer_retains_axis_and_exports_opposite_side():
     state = _simple_state(
         atoms={0: Atom("C", 0.0, 0.0), 1: Atom("C", 20.0, 0.0)},
         bonds=[Bond(0, 1, order=2, style="double_outer")],
     )
-    with pytest.raises(CdxmlUnsupportedObjectError, match="no proved"):
-        _export_cdxml(state)
+    raw, _ = _export_cdxml(state)
+    bond = _parse_cdxml(raw).find(".//b")
+    assert bond.get("DoublePosition") == "Right"
+    assert float(bond.get("BondSpacing")) > 0
 
 
 def test_refuse_radical():
@@ -627,7 +786,7 @@ def test_refuse_equilibrium():
         _export_cdxml(state)
 
 
-def test_line_exports_as_graphic():
+def test_line_exports_as_native_arrow():
     state = _simple_state(
         arrows=[
             {
@@ -641,10 +800,9 @@ def test_line_exports_as_graphic():
     )
     xml_bytes, _ = _export_cdxml(state)
     root = _parse_cdxml(xml_bytes)
-    graphics = root.findall(".//graphic")
-    line_graphics = [g for g in graphics if g.get("GraphicType") == "Line"]
-    assert len(line_graphics) >= 1
-    assert line_graphics[0].get("ArrowType") == "NoHead"
+    lines = root.findall(".//arrow")
+    assert len(lines) == 1
+    assert len(_line_endpoints(lines[0]).split()) == 4
 
 
 def test_arrow_exports_as_grouped_lines():
@@ -663,7 +821,7 @@ def test_arrow_exports_as_grouped_lines():
     root = _parse_cdxml(xml_bytes)
     groups = root.findall(".//group")
     assert len(groups) >= 1
-    graphics = groups[0].findall("graphic")
+    graphics = groups[0].findall("arrow")
     assert len(graphics) == 3
 
 
@@ -1162,7 +1320,7 @@ def test_note_font_family_from_document():
     exported_size = float(s_el.get("size"))
     s = plan.out_w_pt / plan.source_w
     expected_size = raw_pixel_size * s
-    assert exported_size == pytest.approx(expected_size, rel=1e-9), (
+    assert exported_size == pytest.approx(expected_size, rel=0, abs=0.025), (
         f"font size {exported_size} should be raw pixel size {raw_pixel_size} "
         f"* scale {s} = {expected_size}"
     )
@@ -1228,7 +1386,7 @@ def test_atom_label_origin_matches_scene_layout():
     ox, oy = plan.source_x, plan.source_y
 
     root = _parse_cdxml(xml_bytes)
-    label_ts = [t for t in root.findall(".//t") if t.get("InterpretChemically") == "no"]
+    label_ts = root.findall(".//n/t")
     assert len(label_ts) == len(label_origins), (
         f"expected {len(label_origins)} atom label <t>, got {len(label_ts)}"
     )
@@ -1335,10 +1493,9 @@ def test_negative_slope_line_preserves_endpoint_order():
     )
     xml_bytes, _ = _export_cdxml(state)
     root = _parse_cdxml(xml_bytes)
-    graphics = root.findall(".//graphic")
-    lines = [g for g in graphics if g.get("GraphicType") == "Line"]
+    lines = root.findall(".//arrow")
     assert len(lines) >= 1
-    bbox = [float(v) for v in lines[0].get("BoundingBox").split()]
+    bbox = [float(v) for v in _line_endpoints(lines[0]).split()]
     assert bbox[1] > bbox[3], (
         f"BoundingBox y1={bbox[1]} should be > y2={bbox[3]} for negative slope "
         "(endpoint order preserved, not min/max)"
@@ -1346,6 +1503,8 @@ def test_negative_slope_line_preserves_endpoint_order():
 
 
 # ── Z-order: page children reflect scene ascending order ────────────
+# Each page child takes one contiguous block of Z values on its own n, b, t
+# and graphic elements; containers carry none.
 
 
 def test_z_order_matches_scene_ascending_order():
@@ -1391,15 +1550,20 @@ def test_z_order_matches_scene_ascending_order():
     z_values = []
     cdxml_roles_ordered = []
     for child in page:
-        z = child.get("Z")
-        assert z is not None, f"<{child.tag}> missing Z attribute"
-        z_values.append(int(z))
+        leaves = [el for el in child.iter() if el.tag in _Z_TAGS]
+        assert leaves, f"<{child.tag}> has no element that carries Z"
+        for el in leaves:
+            assert el.get("Z") is not None, f"<{el.tag}> missing Z attribute"
+        if child.tag not in _Z_TAGS:
+            assert child.get("Z") is None, f"<{child.tag}> must not carry Z"
+        z_values.extend(sorted(int(el.get("Z")) for el in leaves))
         if child.tag == "t" and child.get("InterpretChemically") == "no":
             cdxml_roles_ordered.append("note")
-        elif child.tag == "graphic" and child.get("GraphicType") == "Line":
+        elif child.tag == "arrow":
             cdxml_roles_ordered.append("line")
-    assert z_values == sorted(z_values), "Z values must be monotonically increasing"
-    assert len(z_values) == len(set(z_values)), "Z values must be unique"
+    assert z_values == list(range(1, len(z_values) + 1)), (
+        "Z values must be unique, positive and one block per page child"
+    )
     assert len(z_values) >= 3, (
         "expected at least fragment + note + line as page children"
     )
@@ -1416,7 +1580,7 @@ def test_refuse_note_over_bonded_fragment():
     state = _simple_state(
         atoms={0: Atom("C", 0.0, 0.0), 1: Atom("O", 20.0, 0.0)},
         bonds=[Bond(0, 1)],
-        notes=[{"text": "overlapping", "x": 10.0, "y": 0.0}],
+        notes=[{"text": "overlapping", "x": 10.0, "y": -8.0}],
     )
     with pytest.raises(CdxmlUnsupportedObjectError, match="interleave"):
         _export_cdxml(state)
@@ -1457,7 +1621,7 @@ def test_refuse_two_overlapping_bonded_fragments():
 # ── Arrow components: no Head3D/Tail3D ───────────────────────────────
 
 
-def test_arrow_components_no_head3d_tail3d():
+def test_arrow_components_are_unheaded_native_line_primitives():
     state = _simple_state(
         arrows=[
             {
@@ -1473,14 +1637,12 @@ def test_arrow_components_no_head3d_tail3d():
     root = _parse_cdxml(xml_bytes)
     groups = root.findall(".//group")
     assert len(groups) >= 1
-    for g in groups:
-        for graphic in g.findall("graphic"):
-            assert graphic.get("Head3D") is None, (
-                "arrow component should not have Head3D"
-            )
-            assert graphic.get("Tail3D") is None, (
-                "arrow component should not have Tail3D"
-            )
+    lines = [line for group in groups for line in group.findall("arrow")]
+    assert len(lines) == 3
+    for line in lines:
+        assert len(_line_endpoints(line).split()) == 4
+        assert line.get("LineType") == "Solid"
+        assert line.get("FillType") == "None"
 
 
 # ── Ac/Ts alias refusal ─────────────────────────────────────────────
@@ -1504,29 +1666,193 @@ def test_refuse_ts_alias():
         _export_cdxml(state)
 
 
-# ── Formal charge with mark refuses ──────────────────────────────────
+# ── Atom-attached drawing marks ──────────────────────────────────────
 
 
-def test_refuse_formal_charge_with_mark():
-    state = _simple_state(
-        atoms={0: Atom("N", 0.0, 0.0), 1: Atom("O", 20.0, 0.0)},
+def _attached_mark_state(kind="plus", *, owner=0):
+    return _simple_state(
+        atoms={0: Atom("P", 0.0, 0.0), 1: Atom("C", 20.0, 0.0)},
         bonds=[Bond(0, 1)],
-        atom_annotations={0: {"formal_charge": 1}},
+        atom_annotations={0: {"formal_charge": 1 if kind == "plus" else -1}},
         marks=[
-            {
-                "kind": "plus",
-                "atom_id": 0,
-                "text": "+",
-                "x": 2.0,
-                "y": -2.0,
-                "dx": 2.0,
-                "dy": -2.0,
-                "_auto_position": True,
-            }
+            {"kind": kind, "atom_id": owner, "dx": 0.0, "dy": 35.0, "x": 0.0, "y": 35.0}
         ],
     )
-    with pytest.raises(CdxmlUnsupportedObjectError, match="mark"):
-        _export_cdxml(state)
+
+
+@pytest.mark.parametrize(
+    "kind,glyph,charge", [("plus", "+", "1"), ("minus", "-", "-1")]
+)
+def test_attached_mark_preserves_glyph_offset_and_original_charge(kind, glyph, charge):
+    from PyQt6.QtCore import QPointF
+    from PyQt6.QtGui import QFontInfo
+
+    with offscreen_document_scene(
+        _attached_mark_state(kind), command="test-cdxml"
+    ) as context:
+        mark = next(i for i in context.scene.items() if i.data(0) == "mark")
+        mark.boundingRect()
+        document = mark.document()
+        layout = document.begin().layout()
+        line = layout.lineAt(0)
+        baseline = mark.mapToScene(
+            QPointF(
+                layout.position().x() + line.position().x(),
+                layout.position().y() + line.y() + line.ascent(),
+            )
+        )
+        items, plan = FigureExportService(context)._resolve_figure_export(
+            scope="sheet", selection=None, sizing="custom", target_width_mm=170.0
+        )
+        preflight_cdxml(context, items, plan)
+        root = _parse_cdxml(serialize_cdxml(context, items, plan))
+        node = next(
+            n for n in _top_nodes(root) if _chemical_atom(n).get("Element") == "15"
+        )
+        assert _chemical_atom(node).get("Charge") == charge
+        tag = node.find('./objecttag[@Name="chemvasMark"]')
+        assert tag is not None and tag.get("PositioningType") == "offset"
+        assert tag.get("Tracking") is None
+        text = tag.find("t")
+        assert text is not None and text.get("InterpretChemically") == "no"
+        assert "".join(text.itertext()) == glyph
+        scale = plan.out_w_pt / plan.source_w
+        expected = (
+            (baseline.x() - plan.source_x) * scale,
+            (baseline.y() - plan.source_y) * scale,
+        )
+        assert tuple(map(float, text.attrib["p"].split())) == pytest.approx(expected)
+        node_p = tuple(map(float, node.attrib["p"].split()))
+        assert tuple(
+            map(float, tag.attrib["PositioningOffset"].split())
+        ) == pytest.approx((expected[0] - node_p[0], expected[1] - node_p[1]))
+        run = text.find("s")
+        assert run is not None
+        assert float(run.attrib["size"]) == pytest.approx(
+            QFontInfo(mark.font()).pixelSize() * scale, rel=0, abs=0.025
+        )
+        assert len(_top_bonds(root)) == 1
+        assert len(node.findall("./fragment/b")) == 1
+        assert root.findall(".//graphic") == []
+
+
+@pytest.mark.parametrize("boundary", ["preflight", "serialize"])
+@pytest.mark.parametrize(
+    "case", ["standalone", "owner_not_exported", "radical", "wrong_text", "shear"]
+)
+def test_attached_mark_refuses_unsupported_relationship_or_paint(case, boundary):
+    from PyQt6.QtGui import QTransform
+
+    state = _attached_mark_state(
+        "radical" if case == "radical" else "plus",
+        owner=None if case == "standalone" else 0,
+    )
+    with offscreen_document_scene(state, command="test-cdxml") as context:
+        mark = next(i for i in context.scene.items() if i.data(0) == "mark")
+        if case == "wrong_text":
+            mark.setPlainText("different")
+        if case == "shear":
+            mark.setTransform(QTransform().shear(0.5, 0.0))
+        items, plan = FigureExportService(context)._resolve_figure_export(
+            scope="sheet", selection=None, sizing="custom", target_width_mm=170.0
+        )
+        if case == "owner_not_exported":
+            items = [mark]
+        operation = preflight_cdxml if boundary == "preflight" else serialize_cdxml
+        with pytest.raises(CdxmlUnsupportedObjectError):
+            operation(context, items, plan)
+
+
+@pytest.mark.parametrize("boundary", ["preflight", "serialize"])
+@pytest.mark.parametrize("overlap", [False, True])
+def test_attached_mark_ink_interleaving_keeps_geometry_guard(boundary, overlap):
+    from PyQt6.QtCore import Qt
+
+    with offscreen_document_scene(
+        _attached_mark_state(), command="test-cdxml"
+    ) as context:
+        mark = next(i for i in context.scene.items() if i.data(0) == "mark")
+        for item in context.state.bond_graphics_state.bond_items[0]:
+            item.setZValue(0)
+        mark.setZValue(1)
+        for item in context.scene.items():
+            if item.data(0) == "atom":
+                item.setZValue(2)
+        if overlap:
+            mark.setPos(
+                8.0, -mark.document().documentLayout().documentSize().height() / 2
+            )
+        order = context.scene.items(Qt.SortOrder.AscendingOrder)
+        assert min(
+            order.index(i) for i in context.state.bond_graphics_state.bond_items[0]
+        ) < order.index(mark)
+        assert order.index(mark) < min(
+            order.index(i) for i in order if i.data(0) == "atom"
+        )
+        items, plan = FigureExportService(context)._resolve_figure_export(
+            scope="sheet", selection=None, sizing="custom", target_width_mm=170.0
+        )
+        operation = preflight_cdxml if boundary == "preflight" else serialize_cdxml
+        if overlap:
+            with pytest.raises(CdxmlUnsupportedObjectError, match="interleaves"):
+                operation(context, items, plan)
+        else:
+            operation(context, items, plan)
+
+
+@pytest.mark.parametrize("boundary", ["preflight", "serialize"])
+def test_attached_mark_overlap_above_fragment_still_refuses(boundary):
+    from PyQt6.QtCore import Qt
+
+    with offscreen_document_scene(
+        _attached_mark_state(), command="test-cdxml"
+    ) as context:
+        mark = next(i for i in context.scene.items() if i.data(0) == "mark")
+        mark.setZValue(100)
+        mark.setPos(8.0, -mark.document().documentLayout().documentSize().height() / 2)
+        order = context.scene.items(Qt.SortOrder.AscendingOrder)
+        assert order.index(mark) > max(
+            order.index(i) for i in order if i.data(0) in ("atom", "bond")
+        )
+        items, plan = FigureExportService(context)._resolve_figure_export(
+            scope="sheet", selection=None, sizing="custom", target_width_mm=170.0
+        )
+        operation = preflight_cdxml if boundary == "preflight" else serialize_cdxml
+        with pytest.raises(CdxmlUnsupportedObjectError, match="child objecttag"):
+            operation(context, items, plan)
+
+
+def test_attached_mark_text_box_margin_does_not_count_as_ink_contact():
+    from PyQt6.QtCore import Qt
+
+    with offscreen_document_scene(
+        _attached_mark_state(), command="test-cdxml"
+    ) as context:
+        mark = next(i for i in context.scene.items() if i.data(0) == "mark")
+        mark.boundingRect()
+        layout = mark.document().begin().layout()
+        run = layout.lineAt(0).glyphRuns()[0]
+        local_ink = run.rawFont().pathForGlyph(run.glyphIndexes()[0]).boundingRect()
+        offset = layout.position() + run.positions()[0]
+        mark.setPos(
+            8.0 - local_ink.left() - offset.x(), 2.0 - local_ink.top() - offset.y()
+        )
+        mark.setZValue(1)
+        for item in context.state.bond_graphics_state.bond_items[0]:
+            item.setZValue(0)
+            assert mark.sceneBoundingRect().intersects(item.sceneBoundingRect())
+        for item in context.scene.items():
+            if item.data(0) == "atom":
+                item.setZValue(2)
+        order = context.scene.items(Qt.SortOrder.AscendingOrder)
+        assert order.index(mark) < min(
+            order.index(i) for i in order if i.data(0) == "atom"
+        )
+        items, plan = FigureExportService(context)._resolve_figure_export(
+            scope="sheet", selection=None, sizing="custom", target_width_mm=170.0
+        )
+        preflight_cdxml(context, items, plan)
+        assert b"chemvasMark" in serialize_cdxml(context, items, plan)
 
 
 # ── Service: max_height_mm budget and overwrite+after_render ─────────
@@ -1759,22 +2085,30 @@ def test_no_whitespace_inside_text_runs():
     assert found_text, "expected at least one <s> with text content"
 
 
-# ── Rotation refusal ─────────────────────────────────────────────────
+# ── Note rotation ────────────────────────────────────────────────────
 
 
-def test_refuse_rotated_note_no_record():
-    from PyQt6.QtGui import QTransform
+@pytest.mark.parametrize("angle", [-90.0, 45.0, 180.0])
+def test_rotated_note_preserves_baseline_font_and_text(angle):
+    from PyQt6.QtGui import QFontInfo, QTransform
 
-    state = _simple_state(
-        notes=[{"text": "rotated", "x": 0.0, "y": 30.0}],
-    )
+    state = _simple_state(notes=[{"text": "rotated", "x": 1000.0, "y": 1000.0}])
     with offscreen_document_scene(state, command="test-cdxml") as context:
-        note_item = context.state.note_items()[0]
-        angle = 45.0
-        t = QTransform()
-        t.rotate(angle)
-        note_item.setTransform(t)
+        item = context.state.note_items()[0]
+        transform = QTransform().rotate(angle).scale(1.5, 1.5)
+        item.setTransform(transform)
+        item.boundingRect()
+        document = item.document()
+        layout = document.begin().layout()
+        line = layout.lineAt(0)
+        from PyQt6.QtCore import QPointF
 
+        baseline = item.mapToScene(
+            QPointF(
+                layout.position().x() + line.position().x(),
+                layout.position().y() + line.y() + line.ascent(),
+            )
+        )
         service = FigureExportService(context)
         items, plan = service._resolve_figure_export(
             scope="sheet",
@@ -1782,8 +2116,62 @@ def test_refuse_rotated_note_no_record():
             sizing="custom",
             target_width_mm=170.0,
         )
-        with pytest.raises(CdxmlUnsupportedObjectError, match="rotated"):
-            preflight_cdxml(context, items, plan)
+        preflight_cdxml(context, items, plan)
+        root = _parse_cdxml(serialize_cdxml(context, items, plan))
+        note = next(
+            t for t in root.findall(".//page/t") if "".join(t.itertext()) == "rotated"
+        )
+        assert int(note.attrib["RotationAngle"]) == round(angle * 65536)
+        expected = (
+            (baseline.x() - plan.source_x) * (plan.out_w_pt / plan.source_w),
+            (baseline.y() - plan.source_y) * (plan.out_w_pt / plan.source_w),
+        )
+        assert tuple(map(float, note.attrib["p"].split())) == pytest.approx(expected)
+        run = note.find("s")
+        assert run is not None
+        assert float(run.attrib["size"]) == pytest.approx(
+            QFontInfo(
+                document.begin()
+                .begin()
+                .fragment()
+                .charFormat()
+                .font()
+                .resolve(document.defaultFont())
+            ).pixelSize()
+            * 1.5
+            * (plan.out_w_pt / plan.source_w),
+            rel=0,
+            abs=0.025,
+        )
+        assert note.attrib["InterpretChemically"] == "no"
+
+
+@pytest.mark.parametrize(
+    "transform_values",
+    [
+        (1.0, 0.0, 0.5, 1.0, 0.0, 0.0),
+        (2.0, 0.0, 0.0, 1.0, 0.0, 0.0),
+        (-1.0, 0.0, 0.0, 1.0, 0.0, 0.0),
+        (1.0, 0.0, 0.01, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0),
+    ],
+)
+@pytest.mark.parametrize("boundary", ["preflight", "serialize"])
+def test_note_refuses_lossy_transform(transform_values, boundary):
+    from PyQt6.QtGui import QTransform
+
+    state = _simple_state(notes=[{"text": "guarded", "x": 0.0, "y": 30.0}])
+    with offscreen_document_scene(state, command="test-cdxml") as context:
+        context.state.note_items()[0].setTransform(QTransform(*transform_values))
+        service = FigureExportService(context)
+        items, plan = service._resolve_figure_export(
+            scope="sheet",
+            selection=None,
+            sizing="custom",
+            target_width_mm=170.0,
+        )
+        operation = preflight_cdxml if boundary == "preflight" else serialize_cdxml
+        with pytest.raises(CdxmlUnsupportedObjectError, match="transform"):
+            operation(context, items, plan)
 
 
 # ── Bond-only selection refusal ──────────────────────────────────────
@@ -2098,7 +2486,7 @@ def _node_ids_by_atom(root, plan, atoms):
         for atom_id, atom in atoms.items()
     }
     found = {}
-    for node in root.iter("n"):
+    for node in _top_nodes(root):
         x, y = (float(value) for value in node.get("p").split())
         for atom_id, (ex, ey) in expected.items():
             if math.dist((x, y), (ex, ey)) < 1e-6:
@@ -2119,7 +2507,7 @@ def _resolved_export(context):
 
 @pytest.mark.parametrize("ring_color", ["#f4d06f", None])
 @pytest.mark.parametrize(
-    ("reverse", "expected_side"), [(False, "Right"), (True, "Left")]
+    ("reverse", "expected_side"), [(False, "Left"), (True, "Right")]
 )
 def test_ring_tool_benzene_exports_inner_double_bonds(
     ring_color, reverse, expected_side
@@ -2149,14 +2537,14 @@ def test_ring_tool_benzene_exports_inner_double_bonds(
     for bond in doubles:
         bx, by = points[bond.get("B")]
         ex, ey = points[bond.get("E")]
-        # CDX "Right" looks from B to E on the y-down page: normal (-dy, dx).
+        # The saved native witness puts CDXML Left on page normal (-dy, dx).
         inward = -(ey - by) * (cx - (bx + ex) / 2) + (ex - bx) * (cy - (by + ey) / 2)
-        assert bond.get("DoublePosition") == ("Right" if inward > 0 else "Left")
+        assert bond.get("DoublePosition") == ("Left" if inward > 0 else "Right")
         assert bond.get("DoublePosition") == expected_side
 
 
 @pytest.mark.parametrize(
-    ("substituent_y", "expected_side"), [(17.32, "Right"), (-17.32, "Left")]
+    ("substituent_y", "expected_side"), [(17.32, "Left"), (-17.32, "Right")]
 )
 def test_chain_double_bond_side_follows_its_substituent(substituent_y, expected_side):
     state = _simple_state(
@@ -2236,13 +2624,13 @@ def test_charged_heteroatoms_keep_element_and_charge():
     nodes = _node_ids_by_atom(root, plan, atoms)
     by_id = {node.get("id"): node for node in root.iter("n")}
     assert by_id[nodes[0]].get("Element") is None
-    assert by_id[nodes[1]].get("Element") == "7"
-    assert by_id[nodes[1]].get("Charge") == "1"
+    assert _chemical_atom(by_id[nodes[1]]).get("Element") == "7"
+    assert _chemical_atom(by_id[nodes[1]]).get("Charge") == "1"
     assert by_id[nodes[2]].get("Element") == "8"
     assert by_id[nodes[2]].get("Charge") is None
-    assert by_id[nodes[3]].get("Element") == "8"
-    assert by_id[nodes[3]].get("Charge") == "-1"
-    (double,) = [bond for bond in root.iter("b") if bond.get("Order") == "2"]
+    assert _chemical_atom(by_id[nodes[3]]).get("Element") == "8"
+    assert _chemical_atom(by_id[nodes[3]]).get("Charge") == "-1"
+    (double,) = [bond for bond in _top_bonds(root) if bond.get("Order") == "2"]
     assert {double.get("B"), double.get("E")} == {nodes[1], nodes[2]}
     assert double.get("DoublePosition") in {"Right", "Left"}
 
@@ -2310,55 +2698,1063 @@ def test_cli_export_preserves_ring_and_stereo_and_leaves_source_unchanged(tmp_pa
         assert math.hypot(ex - bx, ey - by) == pytest.approx(bond_length, rel=1e-3)
 
 
-# ── Optional RDKit consumer check (molecule level only) ──────────────
-#
-# RDKit's CDXML reader is an independent consumer of the exported graph,
-# charges and wedge directions. It does not verify ChemDraw rendering.
+# Direct XML and native MOL semantics; external editor rendering is not covered.
 
 
-def _rdkit_molecules_from_cdxml(xml_bytes):
-    pytest.importorskip("rdkit")
-    from rdkit import Chem
-
-    reader = getattr(Chem, "MolsFromCDXML", None)
-    if reader is None:
-        pytest.skip("this RDKit build has no CDXML reader")
-    return Chem, [mol for mol in reader(xml_bytes.decode("utf-8")) if mol is not None]
-
-
-def test_rdkit_reads_ring_tool_benzene_as_benzene():
+def test_cdxml_ring_graph_preserves_alternating_bonds():
     xml_bytes, _ = _export_cdxml(_benzene_state())
-    Chem, molecules = _rdkit_molecules_from_cdxml(xml_bytes)
-    assert len(molecules) == 1
-    assert Chem.MolToSmiles(molecules[0]) == Chem.CanonSmiles("c1ccccc1")
+    root = ET.fromstring(xml_bytes)
+    fragments = root.findall(".//fragment")
+    assert len(fragments) == 1
+    nodes = {node.get("id"): node for node in fragments[0].findall("n")}
+    bonds = fragments[0].findall("b")
+    assert len(nodes) == len(bonds) == 6
+    assert all(node.get("Element", "6") == "6" for node in nodes.values())
+    assert sorted(b.get("Order", "1") for b in bonds) == ["1", "1", "1", "2", "2", "2"]
+    neighbors = {key: set() for key in nodes}
+    for bond in bonds:
+        first, second = bond.get("B"), bond.get("E")
+        assert first != second and first in nodes and second in nodes
+        neighbors[first].add(second)
+        neighbors[second].add(first)
+    assert all(len(items) == 2 for items in neighbors.values())
+    reached, pending = set(), [next(iter(nodes))]
+    while pending:
+        atom = pending.pop()
+        if atom not in reached:
+            reached.add(atom)
+            pending.extend(neighbors[atom] - reached)
+    assert reached == set(nodes)
 
 
 @pytest.mark.parametrize(
-    ("style", "expected_smiles", "expected_cip"),
-    [("wedge", "C[C@@H](O)CC", "R"), ("hash", "C[C@H](O)CC", "S")],
+    ("style", "display", "stereo"),
+    [("wedge", "WedgeBegin", 1), ("hash", "WedgedHashBegin", 6)],
 )
-def test_rdkit_reads_the_drawn_absolute_configuration(
-    style, expected_smiles, expected_cip
-):
+def test_cdxml_and_mol_preserve_drawn_stereo_direction(style, display, stereo):
     from chemvas.core.molfile import write_molfile
 
     atoms, bonds = _butan_2_ol(style)
     state = _simple_state(atoms=atoms, bonds=bonds)
     xml_bytes, _ = _export_cdxml(state)
-    Chem, molecules = _rdkit_molecules_from_cdxml(xml_bytes)
-    assert len(molecules) == 1
-    molecule = molecules[0]
-    assert Chem.MolToSmiles(molecule) == Chem.CanonSmiles(expected_smiles)
-    assert Chem.FindMolChiralCenters(molecule) == [(0, expected_cip)]
-    # The MOL writer encodes the same wedge with the same begin atom.
-    via_molfile = Chem.MolFromMolBlock(
-        write_molfile(deserialize_model_state(state["model"]))
-    )
-    assert Chem.MolToSmiles(via_molfile) == Chem.MolToSmiles(molecule)
+    root = ET.fromstring(xml_bytes)
+    nodes = {n.get("id"): n for n in root.findall(".//fragment/n")}
+    (directional,) = [b for b in root.findall(".//fragment/b") if b.get("Display")]
+    assert directional.get("Display") == display
+    assert nodes[directional.get("B")].get("Element", "6") == "6"
+    assert nodes[directional.get("E")].get("Element") == "8"
+    model = deserialize_model_state(state["model"])
+    rows = write_molfile(model).splitlines()[
+        4 + len(model.atoms) : 4 + len(model.atoms) + len(model.bonds)
+    ]
+    (row,) = [r for r in rows if int(r[9:12])]
+    assert int(row[9:12]) == stereo
+    assert model.atoms[int(row[:3]) - 1].element == "C"
+    assert model.atoms[int(row[3:6]) - 1].element == "O"
 
 
-def test_rdkit_reads_charges_and_heteroatoms():
+def test_cdxml_preserves_nitromethane_elements_charges_and_connectivity():
     xml_bytes, _ = _export_cdxml(_nitromethane_state())
-    Chem, molecules = _rdkit_molecules_from_cdxml(xml_bytes)
-    assert len(molecules) == 1
-    assert Chem.MolToSmiles(molecules[0]) == Chem.CanonSmiles("C[N+](=O)[O-]")
+    root = ET.fromstring(xml_bytes)
+    nodes = {n.get("id"): _chemical_atom(n) for n in _top_nodes(root)}
+    assert sorted(
+        (n.get("Element", "6"), int(n.get("Charge", "0"))) for n in nodes.values()
+    ) == [("6", 0), ("7", 1), ("8", -1), ("8", 0)]
+    nitrogen = next(key for key, n in nodes.items() if n.get("Element") == "7")
+    edges = []
+    for bond in _top_bonds(root):
+        first, second = bond.get("B"), bond.get("E")
+        assert nitrogen in (first, second)
+        other = nodes[second if first == nitrogen else first]
+        edges.append(
+            (
+                other.get("Element", "6"),
+                int(other.get("Charge", "0")),
+                bond.get("Order", "1"),
+            )
+        )
+    assert sorted(edges) == [("6", 0, "1"), ("8", -1, "1"), ("8", 0, "2")]
+
+
+# ── Typed atom label semantics (synthetic O-LABEL fixtures) ─────────────
+#
+# Serializer-shape fixtures only: an O bonded to one drawn label. They do not
+# claim a chemically meaningful or stable molecule, and XML checks here are
+# not ChemDraw (or any consumer) visual or roundtrip evidence.
+
+_H_A = "H\u1d43"
+_H_B = "H\u1d47"
+
+# Attributes the typed-label path adds; nothing else is admitted.
+_LABEL_NODE_ATTRS = {"NodeType", "NumHydrogens", "GenericNickname", "BondOrdering"}
+_LABEL_NODE_TYPES = {
+    "Nickname",
+    "Fragment",
+    "GenericNickname",
+    "ExternalConnectionPoint",
+}
+
+# Independent expectations (not read from the exporter): carbons, hydrogens.
+_GROUP_FORMULAS = {"Me": (1, 3), "Ph": (6, 5), "tBu": (4, 9)}
+
+
+def _label_state(label, *, bonds=None, annotations=None, extra_atoms=None):
+    atoms = {
+        0: Atom("O", 0.0, 0.0, explicit_label=True),
+        1: Atom(label, 25.0, 0.0, explicit_label=True),
+    }
+    atoms.update(extra_atoms or {})
+    return _simple_state(
+        atoms=atoms,
+        bonds=[Bond(0, 1)] if bonds is None else bonds,
+        atom_annotations=annotations,
+    )
+
+
+def _export_bound(state, label_bindings):
+    with offscreen_document_scene(state, command="test-cdxml") as context:
+        items, plan = _resolved_export(context)
+        preflight_cdxml(context, items, plan, label_bindings=label_bindings)
+        xml_bytes = serialize_cdxml(context, items, plan, label_bindings=label_bindings)
+        return xml_bytes, plan
+
+
+def _page_fragments(root):
+    return root.find("page").findall("fragment")
+
+
+def _top_nodes(root):
+    return [n for frag in _page_fragments(root) for n in frag.findall("n")]
+
+
+def _chemical_atom(node):
+    if node.get("NodeType") == "Fragment":
+        (atom,) = [
+            n
+            for n in node.findall("./fragment/n")
+            if n.get("NodeType") != "ExternalConnectionPoint"
+        ]
+        return atom
+    return node
+
+
+def _top_bonds(root):
+    return [b for frag in _page_fragments(root) for b in frag.findall("b")]
+
+
+def _label_text(node):
+    (t,) = node.findall("t")
+    return "".join(s.text or "" for s in t.findall("s"))
+
+
+def _label_style(node):
+    (t,) = node.findall("t")
+    (s,) = t.findall("s")
+    return {key: s.get(key) for key in ("font", "size", "color", "face")}
+
+
+def _point(node):
+    return tuple(float(value) for value in node.get("p").split())
+
+
+def _expected_point(plan, atom):
+    s = plan.out_w_pt / plan.source_w
+    return ((atom.x - plan.source_x) * s, (atom.y - plan.source_y) * s)
+
+
+def _assert_label_vocabulary_and_ids(root):
+    ids = [el.get("id") for el in root.iter() if el.get("id") is not None]
+    assert len(ids) == len(set(ids)), f"duplicate IDs: {ids}"
+    for el in root.iter():
+        assert el.tag in _ALLOWED_ELEMENTS, f"unexpected element: {el.tag}"
+        allowed = set(_ALLOWED_ATTRS_BY_ELEMENT.get(el.tag, set()))
+        if el.tag == "n":
+            allowed |= _LABEL_NODE_ATTRS
+        elif el.tag == "fragment":
+            allowed.add("ConnectionOrder")
+        for attr in el.attrib:
+            assert attr in allowed, f"unexpected attribute {attr} on <{el.tag}>"
+        if el.tag == "n" and el.get("NodeType") is not None:
+            assert el.get("NodeType") in _LABEL_NODE_TYPES
+    # IDREF closure: every bond joins two distinct nodes of its own fragment.
+    for frag in root.iter("fragment"):
+        node_ids = {n.get("id") for n in frag.findall("n")}
+        for bond in frag.findall("b"):
+            assert bond.get("B") in node_ids and bond.get("E") in node_ids
+            assert bond.get("B") != bond.get("E")
+
+
+def _nickname_parts(root):
+    nodes = _top_nodes(root)
+    (oxygen,) = [n for n in nodes if n.get("Element") == "8"]
+    (group,) = [n for n in nodes if n.get("NodeType") is not None]
+    return oxygen, group
+
+
+# 1. Explicit hydrogen identity: exact label, Element 1, nothing else implied.
+
+
+def test_hydrogen_identifier_without_binding_is_blocked():
+    with pytest.raises(CdxmlUnsupportedObjectError, match="no typed element-identity"):
+        _export_cdxml(_label_state(_H_A))
+
+
+@pytest.mark.parametrize("charge", [0, 1])
+def test_bound_hydrogen_identifiers_keep_exact_label_and_element_one(charge):
+    def state(first, second):
+        return _simple_state(
+            atoms={
+                0: Atom("O", 0.0, 0.0, explicit_label=True),
+                1: Atom(first, 25.0, 0.0, explicit_label=True),
+                2: Atom(second, -12.5, 21.65, explicit_label=True),
+            },
+            bonds=[Bond(0, 1), Bond(0, 2)],
+            atom_annotations={1: {"formal_charge": charge}} if charge else None,
+        )
+
+    hydrogen = CdxmlLabelBinding.element_identity("H")
+    bound_state = state(_H_A, _H_B)
+    xml_bytes, plan = _export_bound(bound_state, {1: hydrogen, 2: hydrogen})
+    control_bytes, _ = _export_cdxml(state("H", "H"))
+    root, control = ET.fromstring(xml_bytes), ET.fromstring(control_bytes)
+    _assert_label_vocabulary_and_ids(root)
+
+    labelled = {_label_text(n): n for n in _top_nodes(root) if n.find("t") is not None}
+    assert [ord(c) for c in _label_text(labelled[_H_A])] == [0x48, 0x1D43]
+    assert [ord(c) for c in _label_text(labelled[_H_B])] == [0x48, 0x1D47]
+    control_h = [
+        n for n in _top_nodes(control) if _chemical_atom(n).get("Element") == "1"
+    ]
+    assert len(control_h) == 2
+    atoms = deserialize_model_state(bound_state["model"]).atoms
+    for atom_id, label in ((1, _H_A), (2, _H_B)):
+        node = labelled[label]
+        chemical = _chemical_atom(node)
+        assert chemical.get("Element") == "1"
+        assert chemical.get("NodeType") is None
+        assert "Isotope" not in chemical.attrib
+        expected_charge = str(charge) if (charge and atom_id == 1) else None
+        assert chemical.get("Charge") == expected_charge
+        assert _point(node) == pytest.approx(_expected_point(plan, atoms[atom_id]))
+        assert _label_style(node) == _label_style(labelled["O"])
+    assert len(_top_bonds(root)) == 2
+
+
+@pytest.mark.parametrize("label", ["H\u00b2", "H\u207a", "Hx", _H_A + "\u00b2", "D"])
+def test_bound_hydrogen_identifier_rejects_non_identifier_suffixes(label):
+    state = _label_state(label)
+    with pytest.raises(CdxmlUnsupportedObjectError, match="does not match bound"):
+        _export_bound(state, {1: CdxmlLabelBinding.element_identity("H")})
+
+
+# 2. Verified group labels: native nickname with the full internal graph.
+
+
+@pytest.mark.parametrize("label", ["Me", "Ph", "tBu"])
+def test_nickname_node_z_block_keeps_its_contents_together(label):
+    xml_bytes, _plan = _export_cdxml(_label_state(label))
+    root = ET.fromstring(xml_bytes)
+    _assert_label_vocabulary_and_ids(root)
+    oxygen, group = _nickname_parts(root)
+    for node in (oxygen, group):
+        leaves = [el for el in node.iter() if el.tag in _Z_TAGS]
+        z = [int(el.get("Z")) for el in leaves]
+        # The node, its contracted atoms and bonds, then its label.
+        assert z == list(range(z[0], z[0] + len(z)))
+        assert leaves[-1].tag == "t"
+    assert all(el.get("Z") is None for el in group.iter("fragment"))
+
+
+@pytest.mark.parametrize("reverse", [False, True])
+@pytest.mark.parametrize("label", ["Me", "Ph", "tBu"])
+def test_verified_group_label_exports_nickname_fragment(label, reverse):
+    state = _label_state(label, bonds=[Bond(1, 0) if reverse else Bond(0, 1)])
+    xml_bytes, plan = _export_cdxml(state)
+    root = ET.fromstring(xml_bytes)
+    _assert_label_vocabulary_and_ids(root)
+
+    assert len(_page_fragments(root)) == 1
+    assert len(_top_nodes(root)) == 2
+    (outer,) = _top_bonds(root)
+    oxygen, group = _nickname_parts(root)
+    assert group.get("NodeType") == "Nickname"
+    for attr in ("Element", "Charge", "NumHydrogens", "GenericNickname"):
+        assert attr not in group.attrib
+    assert _label_text(group) == label
+    assert _label_style(group) == _label_style(oxygen)
+    first, second = (group, oxygen) if reverse else (oxygen, group)
+    assert (outer.get("B"), outer.get("E")) == (first.get("id"), second.get("id"))
+    assert outer.get("Order") is None and outer.get("Display") is None
+    atoms = deserialize_model_state(state["model"]).atoms
+    assert _point(group) == pytest.approx(_expected_point(plan, atoms[1]))
+    assert _point(oxygen) == pytest.approx(_expected_point(plan, atoms[0]))
+
+    (inner,) = group.findall("fragment")
+    inner_nodes = inner.findall("n")
+    (connection,) = [n for n in inner_nodes if n.get("NodeType") is not None]
+    assert connection.get("NodeType") == "ExternalConnectionPoint"
+    assert _point(connection) == pytest.approx(_point(oxygen))
+    carbons = [n for n in inner_nodes if n.get("NodeType") is None]
+    assert all(n.get("Element") is None for n in carbons)
+    expected_carbons, expected_hydrogens = _GROUP_FORMULAS[label]
+    assert len(carbons) == expected_carbons
+    assert sum(int(n.get("NumHydrogens")) for n in carbons) == expected_hydrogens
+
+    inner_bonds = inner.findall("b")
+    valence = {n.get("id"): int(n.get("NumHydrogens")) for n in carbons}
+    for bond in inner_bonds:
+        for end in (bond.get("B"), bond.get("E")):
+            if end in valence:
+                valence[end] += int(bond.get("Order", "1"))
+    assert set(valence.values()) == {4}
+    (attachment,) = [
+        b for b in inner_bonds if connection.get("id") in (b.get("B"), b.get("E"))
+    ]
+    assert attachment.get("Order") is None
+    (ipso,) = [n for n in carbons if n.get("id") == attachment.get("B")]
+    assert _point(ipso) == pytest.approx(_point(group))
+    by_id = {n.get("id"): n for n in inner_nodes}
+    outer_length = math.dist(_point(oxygen), _point(group))
+    for bond in inner_bonds:
+        length = math.dist(_point(by_id[bond.get("B")]), _point(by_id[bond.get("E")]))
+        assert length == pytest.approx(outer_length, rel=1e-9)
+    if label == "Ph":
+        ring = [b.get("Order", "1") for b in inner_bonds if b is not attachment]
+        assert sorted(ring) == ["1", "1", "1", "2", "2", "2"]
+
+
+def test_group_label_export_is_deterministic():
+    state = _label_state("Ph")
+    assert _export_cdxml(state)[0] == _export_cdxml(state)[0]
+
+
+@pytest.mark.parametrize(
+    ("label", "bonds", "annotations", "match"),
+    [
+        ("Me", [], None, "found 0"),
+        ("Ph", [Bond(0, 1), Bond(1, 2)], None, "found 2"),
+        ("tBu", [Bond(0, 1, order=2, style="double")], None, "order 2"),
+        ("Me", [Bond(1, 0, style="wedge")], None, "style 'wedge'"),
+        ("Ph", [Bond(1, 0, style="hash")], None, "wide end"),
+        ("Me", [Bond(0, 1)], {1: {"formal_charge": -1}}, "charge or radical"),
+        ("tBu", [Bond(0, 1)], {1: {"radical_electrons": 1}}, "charge or radical"),
+    ],
+)
+def test_group_label_attachment_refusals(label, bonds, annotations, match):
+    state = _label_state(
+        label,
+        bonds=bonds,
+        annotations=annotations,
+        extra_atoms={2: Atom("C", 50.0, 0.0)},
+    )
+    with pytest.raises(CdxmlUnsupportedObjectError, match=match):
+        _export_cdxml(state)
+
+
+@pytest.mark.parametrize("label", ["Et", "t-Bu", "OMe", "CO2Me", "PPh3"])
+def test_unverified_alias_labels_still_refuse(label):
+    with pytest.raises(CdxmlUnsupportedObjectError, match="without a verified"):
+        _export_cdxml(_label_state(label))
+
+
+# 3. Literal Ar is a drawn unexpanded placeholder; explicit argon stays distinct.
+
+
+def test_raw_ar_requires_explicit_semantics_before_writing(tmp_path):
+    from chemvas.bootstrap import document_render as cli
+
+    state = _label_state("Ar")
+    with pytest.raises(CdxmlUnsupportedObjectError, match="ambiguous"):
+        _export_cdxml(state)
+    source = tmp_path / "unbound.chemvas"
+    write_document(source, state, CANVAS_FILE_VERSION)
+    before = source.read_bytes()
+    output = tmp_path / "output.cdxml"
+    with pytest.raises(CdxmlUnsupportedObjectError, match="ambiguous"):
+        cli._render_document(
+            source, output=output, background="white", dpi=300, width_mm=170.0
+        )
+    assert source.read_bytes() == before
+    assert not output.exists()
+
+
+def test_bound_argon_exports_element_18():
+    xml_bytes, _ = _export_bound(
+        _label_state("Ar"), {1: CdxmlLabelBinding.element_identity("Ar")}
+    )
+    root = ET.fromstring(xml_bytes)
+    _assert_label_vocabulary_and_ids(root)
+    (argon,) = [n for n in _top_nodes(root) if n.get("Element") == "18"]
+    assert argon.get("NodeType") is None and argon.find("fragment") is None
+    assert _label_text(argon) == "Ar"
+
+
+@pytest.mark.parametrize(
+    ("neighbor_element", "atomic_number"), [("O", "8"), ("P", "15")]
+)
+def test_bound_generic_aryl_keeps_display_with_native_ary_query(
+    neighbor_element, atomic_number
+):
+    xml_bytes, _ = _export_bound(
+        _label_state(
+            "Ar", extra_atoms={0: Atom(neighbor_element, 0.0, 0.0, explicit_label=True)}
+        ),
+        {1: CdxmlLabelBinding.generic_aryl()},
+    )
+    root = ET.fromstring(xml_bytes)
+    _assert_label_vocabulary_and_ids(root)
+    (oxygen,) = [n for n in _top_nodes(root) if n.get("Element") == atomic_number]
+    (group,) = [n for n in _top_nodes(root) if n.get("NodeType") == "Nickname"]
+    assert "Element" not in group.attrib
+    inner = group.find("fragment")
+    query = inner.find('n[@GenericNickname="ARY"]')
+    assert query.get("NodeType") == "GenericNickname"
+    assert _label_text(query) == "ARY"
+    assert "Element" not in query.attrib
+    port = inner.find('n[@NodeType="ExternalConnectionPoint"]')
+    assert inner.find("b").get("B") == query.get("id")
+    assert inner.find("b").get("E") == port.get("id")
+    assert _label_text(group) == "Ar"
+    assert group.find("t").get("InterpretChemically") == "yes"
+    assert oxygen.find("t").get("InterpretChemically") == "yes"
+    (outer,) = _top_bonds(root)
+    assert outer.get("Order", "1") == "1"
+    assert (outer.get("B"), outer.get("E")) == (oxygen.get("id"), group.get("id"))
+
+
+def test_bound_concrete_aryl_keeps_phenyl_graph_and_ar_label():
+    xml_bytes, _ = _export_bound(
+        _label_state("Ar"), {1: CdxmlLabelBinding.aryl_fragment("Ph")}
+    )
+    root = ET.fromstring(xml_bytes)
+    _assert_label_vocabulary_and_ids(root)
+    _, group = _nickname_parts(root)
+    assert group.get("NodeType") == "Nickname"
+    assert _label_text(group) == "Ar"
+    (inner,) = group.findall("fragment")
+    carbons = [n for n in inner.findall("n") if n.get("NodeType") is None]
+    assert len(carbons) == 6
+    assert sum(int(n.get("NumHydrogens")) for n in carbons) == 5
+
+
+@pytest.mark.parametrize(
+    ("label", "binding", "match"),
+    [
+        ("Ar", CdxmlLabelBinding.aryl_fragment("Me"), "no verified aryl"),
+        ("Ar", CdxmlLabelBinding.aryl_fragment("Tol"), "no verified aryl"),
+        ("Me", CdxmlLabelBinding.generic_aryl(), "alias"),
+        ("N", CdxmlLabelBinding.generic_aryl(), "only to the label 'Ar'"),
+        ("Ar", "argon", "must be a CdxmlLabelBinding"),
+        ("Ac", CdxmlLabelBinding.element_identity("Ac"), "alias"),
+        (_H_A, CdxmlLabelBinding.element_identity("He"), "does not match"),
+        ("Ar", CdxmlLabelBinding("isotope"), "unknown label binding"),
+    ],
+)
+def test_label_binding_refusals(label, binding, match):
+    with pytest.raises(CdxmlUnsupportedObjectError, match=match):
+        _export_bound(_label_state(label), {1: binding})
+
+
+def test_label_binding_for_missing_atom_refuses():
+    with pytest.raises(CdxmlUnsupportedObjectError, match="not in the document"):
+        _export_bound(_label_state("N"), {9: CdxmlLabelBinding.generic_aryl()})
+
+
+def test_generic_aryl_refuses_double_attachment():
+    state = _label_state("Ar", bonds=[Bond(0, 1, order=2, style="double")])
+    with pytest.raises(CdxmlUnsupportedObjectError, match="order 2"):
+        _export_bound(state, {1: CdxmlLabelBinding.generic_aryl()})
+
+
+class _StrSubclass(str):
+    pass
+
+
+# Each meaning takes exactly its own field, as an exact str; anything else is
+# the caller contradicting itself and is refused, never dropped or converted.
+@pytest.mark.parametrize(
+    ("label", "binding", "match"),
+    [
+        # Conflicting or extra fields.
+        (
+            "Ar",
+            CdxmlLabelBinding("element", element="Ar", fragment="Ph"),
+            "'element' takes no fragment field",
+        ),
+        (
+            _H_A,
+            CdxmlLabelBinding("element", element="H", fragment="Ph"),
+            "'element' takes no fragment field",
+        ),
+        (
+            "Ar",
+            CdxmlLabelBinding("generic_aryl", fragment="Ph"),
+            "'generic_aryl' takes no fragment field",
+        ),
+        (
+            "Ar",
+            CdxmlLabelBinding("generic_aryl", element="Ar"),
+            "'generic_aryl' takes no element field",
+        ),
+        (
+            "Ar",
+            CdxmlLabelBinding("aryl_fragment", element="Ar", fragment="Ph"),
+            "'aryl_fragment' takes no element field",
+        ),
+        (
+            "Ar",
+            CdxmlLabelBinding("generic_aryl", fragment=""),
+            "'generic_aryl' takes no fragment field",
+        ),
+        # Missing required field.
+        (
+            "Ar",
+            CdxmlLabelBinding("element"),
+            "'element' needs its element field as a str",
+        ),
+        (
+            "Ar",
+            CdxmlLabelBinding("aryl_fragment"),
+            "'aryl_fragment' needs its fragment field as a str",
+        ),
+        # Required field that is not exactly a str.
+        (
+            "Ar",
+            CdxmlLabelBinding("element", element=18),
+            "needs its element field as a str",
+        ),
+        (
+            "Ar",
+            CdxmlLabelBinding("element", element=b"Ar"),
+            "needs its element field as a str",
+        ),
+        (
+            "Ar",
+            CdxmlLabelBinding("element", element=_StrSubclass("Ar")),
+            "needs its element field as a str",
+        ),
+        ("Ar", CdxmlLabelBinding.aryl_fragment(1), "needs its fragment field as a str"),
+        (
+            "Ar",
+            CdxmlLabelBinding.aryl_fragment(b"Ph"),
+            "needs its fragment field as a str",
+        ),
+        (
+            "Ar",
+            CdxmlLabelBinding.aryl_fragment(["Ph"]),
+            "needs its fragment field as a str",
+        ),
+        (
+            "Ar",
+            CdxmlLabelBinding.aryl_fragment(_StrSubclass("Ph")),
+            "needs its fragment field as a str",
+        ),
+        # Unknown or mistyped meaning.
+        ("Ar", CdxmlLabelBinding("isotope"), "unknown label binding meaning"),
+        ("Ar", CdxmlLabelBinding(""), "unknown label binding meaning"),
+        (
+            "Ar",
+            CdxmlLabelBinding("Element", element="Ar"),
+            "unknown label binding meaning",
+        ),
+        ("Ar", CdxmlLabelBinding(None), "unknown label binding meaning"),
+        ("Ar", CdxmlLabelBinding(1), "unknown label binding meaning"),
+        (
+            "Ar",
+            CdxmlLabelBinding(_StrSubclass("element"), element="Ar"),
+            "unknown label binding meaning",
+        ),
+    ],
+)
+def test_label_binding_field_contract_refusals(label, binding, match):
+    with pytest.raises(CdxmlUnsupportedObjectError, match=match):
+        _export_bound(_label_state(label), {1: binding})
+
+
+def test_label_binding_field_contract_is_enforced_by_serialize_alone():
+    binding = CdxmlLabelBinding("element", element="Ar", fragment="Ph")
+    state = _label_state("Ar")
+    with offscreen_document_scene(state, command="test-cdxml") as context:
+        items, plan = _resolved_export(context)
+        with pytest.raises(CdxmlUnsupportedObjectError, match="takes no fragment"):
+            serialize_cdxml(context, items, plan, label_bindings={1: binding})
+
+
+@pytest.mark.parametrize(
+    ("label", "factory", "explicit"),
+    [
+        (
+            "Ar",
+            CdxmlLabelBinding.element_identity("Ar"),
+            CdxmlLabelBinding("element", element="Ar"),
+        ),
+        (
+            _H_A,
+            CdxmlLabelBinding.element_identity("H"),
+            CdxmlLabelBinding("element", element="H"),
+        ),
+        ("Ar", CdxmlLabelBinding.generic_aryl(), CdxmlLabelBinding("generic_aryl")),
+        (
+            "Ar",
+            CdxmlLabelBinding.aryl_fragment("Ph"),
+            CdxmlLabelBinding("aryl_fragment", fragment="Ph"),
+        ),
+    ],
+)
+def test_well_formed_bindings_still_export_unchanged(label, factory, explicit):
+    assert factory == explicit
+    factory_bytes, _ = _export_bound(_label_state(label), {1: factory})
+    explicit_bytes, _ = _export_bound(_label_state(label), {1: explicit})
+    assert factory_bytes == explicit_bytes
+
+
+# 5. Document contract: source and model unchanged, atomic refusal.
+
+
+@pytest.mark.parametrize("label", ["Ar", _H_A, "Et"])
+def test_label_refusal_keeps_destination_and_writes_nothing(tmp_path, label):
+    existing = tmp_path / "existing.cdxml"
+    existing.write_bytes(b"previous export")
+    fresh = tmp_path / "fresh.cdxml"
+    state = _label_state(
+        label, annotations={1: {"formal_charge": 1}} if label == "Ar" else None
+    )
+    with offscreen_document_scene(state, command="test-cdxml") as context:
+        service = FigureExportService(context)
+        for dest in (existing, fresh):
+            with pytest.raises(CdxmlUnsupportedObjectError):
+                service.export_figure(
+                    str(dest),
+                    fmt="cdxml",
+                    scope="sheet",
+                    sizing="custom",
+                    target_width_mm=170.0,
+                )
+    assert existing.read_bytes() == b"previous export"
+    assert not fresh.exists()
+
+
+def test_group_label_cli_export_leaves_source_unchanged(tmp_path):
+    from chemvas.bootstrap import document_render as cli
+
+    source = tmp_path / "me.chemvas"
+    write_document(source, _label_state("Me"), CANVAS_FILE_VERSION)
+    before = source.read_bytes()
+    output = tmp_path / "me.cdxml"
+    report = cli._render_document(
+        source, output=output, background="white", dpi=300, width_mm=170.0
+    )
+    assert report["written"] is True
+    assert source.read_bytes() == before
+    _, group = _nickname_parts(ET.fromstring(output.read_bytes()))
+    assert group.get("NodeType") == "Nickname"
+
+
+def test_bound_export_leaves_model_unchanged():
+    import json
+
+    state = _simple_state(
+        atoms={
+            0: Atom("O", 0.0, 0.0, explicit_label=True),
+            1: Atom("Ar", 25.0, 0.0, explicit_label=True),
+            2: Atom(_H_A, -25.0, 0.0, explicit_label=True),
+        },
+        bonds=[Bond(0, 1), Bond(0, 2)],
+    )
+    before_state = json.dumps(state, sort_keys=True)
+    bindings = {
+        1: CdxmlLabelBinding.generic_aryl(),
+        2: CdxmlLabelBinding.element_identity("H"),
+    }
+    with offscreen_document_scene(state, command="test-cdxml") as context:
+        model_before = json.dumps(serialize_model_state(context.model), sort_keys=True)
+        items, plan = _resolved_export(context)
+        preflight_cdxml(context, items, plan, label_bindings=bindings)
+        serialize_cdxml(context, items, plan, label_bindings=bindings)
+        model_after = json.dumps(serialize_model_state(context.model), sort_keys=True)
+    assert model_before == model_after
+    assert json.dumps(state, sort_keys=True) == before_state
+
+
+# 6. Label support does not unlock marks, dashed lines or other refusals.
+
+
+@pytest.mark.parametrize(
+    ("extra", "match"),
+    [
+        (
+            {
+                "marks": [
+                    {
+                        "kind": "plus",
+                        "atom_id": 0,
+                        "text": "+",
+                        "x": 2.0,
+                        "y": -2.0,
+                        "dx": 2.0,
+                        "dy": -2.0,
+                        "_auto_position": True,
+                    }
+                ]
+            },
+            "mark",
+        ),
+        (
+            {
+                "shapes": [
+                    {
+                        "kind": "shape",
+                        "left": 0.0,
+                        "top": 60.0,
+                        "right": 20.0,
+                        "bottom": 80.0,
+                        "shape_kind": "rect",
+                        "stroke_style": "dashed",
+                    }
+                ]
+            },
+            "dashed",
+        ),
+    ],
+)
+def test_group_label_does_not_unlock_unsupported_objects(tmp_path, extra, match):
+    state = _label_state("Me")
+    for key, value in extra.items():
+        state[key] = value
+    dest = tmp_path / "compound.cdxml"
+    with offscreen_document_scene(state, command="test-cdxml") as context:
+        service = FigureExportService(context)
+        with pytest.raises(CdxmlUnsupportedObjectError, match=match):
+            service.export_figure(
+                str(dest),
+                fmt="cdxml",
+                scope="sheet",
+                sizing="custom",
+                target_width_mm=170.0,
+            )
+    assert not dest.exists()
+
+
+@pytest.mark.parametrize("contact", ["margin", "node_ink", "bond_ink"])
+@pytest.mark.parametrize("boundary", ["preflight", "serialize"])
+def test_square_bracket_checks_ink_and_actual_paint_order(contact, boundary):
+    from PyQt6.QtGui import QPainterPathStroker
+
+    from chemvas.ui.canvas.graphics_items import AtomLabelItem
+
+    state = _simple_state(
+        atoms={0: Atom("P", 0.0, 0.0), 1: Atom("C", 40.0, 0.0)}, bonds=[Bond(0, 1)]
+    )
+    state["ts_brackets"] = [
+        {
+            "kind": "ts_bracket",
+            "left": -6.0
+            if contact == "margin"
+            else (-3.0 if contact == "node_ink" else 20.0),
+            "top": -15.0,
+            "right": 45.0,
+            "bottom": 15.0,
+            "bracket_kind": "square_pair",
+        }
+    ]
+    with offscreen_document_scene(state, command="test-cdxml") as context:
+        bracket = next(i for i in context.scene.items() if i.data(0) == "ts_bracket")
+        bracket.setZValue(1)
+        atoms = [i for i in context.scene.items() if i.data(0) == "atom"]
+        for item in atoms:
+            item.setZValue(2)
+        for item in context.state.bond_graphics_state.bond_items[0]:
+            item.setZValue(0)
+        label = next(
+            i for i in atoms if isinstance(i, AtomLabelItem) and i.data(1) == 0
+        )
+        native_ink = label.mapToScene(label.glyph_path())
+        bracket_ink = bracket.mapToScene(
+            QPainterPathStroker(bracket.pen()).createStroke(bracket.path())
+        )
+        if contact == "margin":
+            assert bracket.sceneBoundingRect().intersects(label.sceneBoundingRect())
+            assert not bracket_ink.intersects(native_ink)
+        elif contact == "node_ink":
+            assert bracket_ink.intersects(native_ink)
+        else:
+            assert bracket_ink.intersects(
+                context.state.bond_graphics_state.bond_items[0][0].shape()
+            )
+        items, plan = FigureExportService(context)._resolve_figure_export(
+            scope="sheet", selection=None, sizing="custom", target_width_mm=170.0
+        )
+        operation = preflight_cdxml if boundary == "preflight" else serialize_cdxml
+        if contact == "bond_ink":
+            with pytest.raises(CdxmlUnsupportedObjectError, match="interleaves"):
+                operation(context, items, plan)
+        else:
+            operation(context, items, plan)
+
+
+@pytest.mark.parametrize("overlap", [False, True])
+@pytest.mark.parametrize("boundary", ["preflight", "serialize"])
+def test_note_hit_margin_does_not_replace_painted_ink(overlap, boundary):
+    from chemvas.ui.canvas.graphics_items import note_paint_scene_path
+
+    state = _simple_state(
+        atoms={0: Atom("C", 0, 0), 1: Atom("C", 40, 0)},
+        notes=[{"text": "example", "x": 5, "y": 0}],
+    )
+    with offscreen_document_scene(state, command="test-cdxml") as context:
+        note = next(i for i in context.scene.items() if i.data(0) == "note")
+        ink = note_paint_scene_path(note).boundingRect()
+        note.moveBy(0, (-0.1 if overlap else -2.0) - ink.bottom())
+        note.setZValue(1)
+        for item in context.scene.items():
+            if item.data(0) == "atom":
+                item.setZValue(2)
+            elif item.data(0) == "bond":
+                item.setZValue(0)
+        bond = context.state.bond_graphics_state.bond_items[0][0]
+        assert note.sceneBoundingRect().intersects(bond.sceneBoundingRect())
+        assert (
+            note_paint_scene_path(note)
+            .boundingRect()
+            .intersects(bond.sceneBoundingRect())
+            == overlap
+        )
+        items, plan = _resolved_export(context)
+        operation = preflight_cdxml if boundary == "preflight" else serialize_cdxml
+        if overlap:
+            with pytest.raises(CdxmlUnsupportedObjectError, match="interleaves"):
+                operation(context, items, plan)
+        else:
+            operation(context, items, plan)
+
+
+@pytest.mark.parametrize("overlap", [False, True])
+@pytest.mark.parametrize("boundary", ["preflight", "serialize"])
+def test_fragment_pair_uses_painted_ink_not_label_hit_boxes(overlap, boundary):
+    y = 0.0 if overlap else 15.0
+    state = _simple_state(
+        atoms={
+            0: Atom("P", 0, 0),
+            1: Atom("C", 40, 0),
+            2: Atom("P", 0, y),
+            3: Atom("C", 40, y),
+        },
+        bonds=[Bond(0, 1), Bond(2, 3)],
+    )
+    with offscreen_document_scene(state, command="test-cdxml") as context:
+        for item in context.scene.items():
+            if item.data(0) == "bond":
+                item.setZValue(item.data(1))
+            elif item.data(0) == "atom":
+                item.setZValue(2 if item.data(1) < 2 else 3)
+        labels = [
+            i
+            for i in context.scene.items()
+            if i.data(0) == "atom" and i.data(1) in {0, 2}
+        ]
+        assert labels[0].sceneBoundingRect().intersects(labels[1].sceneBoundingRect())
+        items, plan = _resolved_export(context)
+        operation = preflight_cdxml if boundary == "preflight" else serialize_cdxml
+        if overlap:
+            with pytest.raises(CdxmlUnsupportedObjectError, match="interleave"):
+                operation(context, items, plan)
+        else:
+            operation(context, items, plan)
+
+
+def test_actual_mixed_note_uses_painted_font_ranges_and_original_text():
+    from PyQt6.QtGui import QFontDatabase
+
+    if "Apple SD Gothic Neo" not in QFontDatabase.families():
+        pytest.skip("actual source note font requires macOS")
+    text = "Ar = 4-FC₆H₄"
+    state = _simple_state(
+        atoms={},
+        bonds=[],
+        notes=[
+            {
+                "text": text,
+                "x": 120,
+                "y": -389,
+                "html": '<p style="white-space:pre-wrap"><span style="font-size:7pt; font-weight:400; color:#8C969F">'
+                + text
+                + "</span></p>",
+            }
+        ],
+        settings_overrides={
+            "text_font_family": "Apple SD Gothic Neo",
+            "text_font_size": 7,
+        },
+    )
+    with offscreen_document_scene(state, command="test-cdxml") as context:
+        note = context.state.note_items()[0]
+        note.boundingRect()
+        block = note.document().begin()
+        runs = block.layout().glyphRuns(0, block.length() - 1)
+        assert {r.rawFont().familyName() for r in runs} == {
+            "Apple SD Gothic Neo",
+            "Helvetica",
+        }
+        items, plan = _resolved_export(context)
+        preflight_cdxml(context, items, plan)
+        root = ET.fromstring(serialize_cdxml(context, items, plan))
+        fonts = {f.get("id"): f.get("name") for f in root.findall("./fonttable/font")}
+        segments = root.findall("./page/t/s")
+        assert "".join(s.text or "" for s in segments) == text
+        assert [(s.text, fonts[s.get("font")]) for s in segments] == [
+            ("Ar = 4-FC", "Apple SD Gothic Neo"),
+            ("₆", "Helvetica"),
+            ("H₄", "Apple SD Gothic Neo"),
+        ]
+        scale = plan.out_w_pt / plan.source_w
+        assert all(
+            float(s.get("size")) == pytest.approx(9 * scale, rel=0, abs=0.025)
+            for s in segments
+        )
+
+
+@pytest.mark.parametrize("text", ["A\u0301₆", "A😀"])
+def test_ambiguous_mixed_note_glyph_mapping_still_refuses(text):
+    from PyQt6.QtGui import QFontDatabase
+
+    if "Apple SD Gothic Neo" not in QFontDatabase.families():
+        pytest.skip("actual source note font requires macOS")
+    state = _simple_state(
+        atoms={},
+        bonds=[],
+        notes=[
+            {
+                "text": text,
+                "x": 0,
+                "y": 0,
+                "html": '<p><span style="font-size:7pt">' + text + "</span></p>",
+            }
+        ],
+        settings_overrides={
+            "text_font_family": "Apple SD Gothic Neo",
+            "text_font_size": 7,
+        },
+    )
+    with offscreen_document_scene(state, command="test-cdxml") as context:
+        note = context.state.note_items()[0]
+        note.boundingRect()
+        block = note.document().begin()
+        assert (
+            len(
+                {
+                    r.rawFont().familyName()
+                    for r in block.layout().glyphRuns(0, block.length() - 1)
+                }
+            )
+            > 1
+        )
+        items, plan = _resolved_export(context)
+        with pytest.raises(
+            CdxmlUnsupportedObjectError, match="glyph|surrogate|ligature"
+        ):
+            serialize_cdxml(context, items, plan)
+
+
+@pytest.mark.parametrize(
+    ("html", "expected"),
+    [
+        (
+            '<p><span style="font-size:7pt; font-weight:700; color:#8C969F">TS_M2<br/>31.6</span></p>',
+            ["TS_M2", "31.6"],
+        ),
+        (
+            '<p style="white-space:pre-wrap"><span style="font-size:7pt; color:#8C969F"> A &amp; B  <br/><br/>−42.4<br/></span></p>',
+            [" A & B  ", "−42.4"],
+        ),
+    ],
+)
+def test_note_soft_linebreak_is_layout_not_visible_separator(html, expected):
+    import json
+
+    state = _simple_state(
+        atoms={}, bonds=[], notes=[{"text": "", "html": html, "x": 10, "y": 20}]
+    )
+    state_before = json.dumps(state, ensure_ascii=False, sort_keys=True)
+    with offscreen_document_scene(state, command="test-cdxml") as context:
+        note = context.state.note_items()[0]
+        note.boundingRect()
+        block = note.document().begin()
+        assert "\u2028" in block.text()
+        text_before = note.document().toPlainText()
+        html_before = note.document().toHtml()
+        items, plan = _resolved_export(context)
+        preflight_cdxml(context, items, plan)
+        root = ET.fromstring(serialize_cdxml(context, items, plan))
+        lines = root.findall("./page/t")
+        assert [
+            "".join(s.text or "" for s in t.findall("s")) for t in lines
+        ] == expected
+        assert not any(
+            "\u2028" in (s.text or "") for t in lines for s in t.findall("s")
+        )
+        layout = block.layout()
+        painted_baselines = []
+        for index in range(layout.lineCount()):
+            line = layout.lineAt(index)
+            # Derive expected nonempty source lines from Qt, independently of
+            # the exporter's UTF-16 range slicing.
+            source_text = block.text()[
+                line.textStart() : line.textStart() + line.textLength()
+            ]
+            if source_text and source_text != "\u2028":
+                baseline = note.mapToScene(
+                    layout.position().x() + line.x(),
+                    layout.position().y() + line.y() + line.ascent(),
+                )
+                scale = plan.out_w_pt / plan.source_w
+                painted_baselines.append(
+                    (
+                        (baseline.x() - plan.source_x) * scale,
+                        (baseline.y() - plan.source_y) * scale,
+                    )
+                )
+        assert len(painted_baselines) == len(lines)
+        for t, baseline in zip(lines, painted_baselines, strict=True):
+            assert tuple(map(float, t.get("p").split())) == pytest.approx(
+                baseline, rel=1e-10
+            )
+        assert note.document().toPlainText() == text_before
+        assert note.document().toHtml() == html_before
+    assert json.dumps(state, ensure_ascii=False, sort_keys=True) == state_before
+
+
+@pytest.mark.parametrize("degree", [0, 1, 2])
+def test_explicit_generic_aryl_preserves_outer_connections(degree):
+    atoms = {0: Atom("Ar", 40, 20, explicit_label=True)}
+    for index in range(degree):
+        atoms[index + 1] = Atom("C", 20 + index * 40, 20)
+    bonds = [Bond(index + 1, 0, style="dotted") for index in range(degree)]
+    state = _simple_state(atoms=atoms, bonds=bonds)
+    raw, _ = _export_bound(state, {0: CdxmlLabelBinding.generic_aryl()})
+    root = ET.fromstring(raw)
+    group = next(n for n in _top_nodes(root) if n.get("NodeType") == "Nickname")
+    query = group.find('./fragment/n[@GenericNickname="ARY"]')
+    assert query is not None and _label_text(group) == "Ar"
+    assert not any(n.get("Element") == "18" for n in root.iter("n"))
+    outer = _top_bonds(root)
+    assert len(outer) == degree
+    assert all(
+        b.get("E") == group.get("id") and b.get("Display") == "Dash" for b in outer
+    )
+    assert len(
+        group.findall('./fragment/n[@NodeType="ExternalConnectionPoint"]')
+    ) == bool(degree)
+
+
+def test_generic_aryl_refuses_unverified_three_connections():
+    state = _simple_state(
+        atoms={
+            0: Atom("Ar", 40, 40),
+            1: Atom("C", 20, 40),
+            2: Atom("C", 60, 40),
+            3: Atom("C", 40, 60),
+        },
+        bonds=[Bond(1, 0), Bond(2, 0), Bond(3, 0)],
+    )
+    with pytest.raises(CdxmlUnsupportedObjectError, match="at most two"):
+        _export_bound(state, {0: CdxmlLabelBinding.generic_aryl()})

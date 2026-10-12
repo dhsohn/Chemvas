@@ -10,6 +10,12 @@ Future Chemvas updates will continue to open supported, valid **v7 `.chemvas` do
 - **Non-destructive Opening**: Opening a document never mutates the original file.
 - **Saving**: Explicitly saving a document normalizes the data to the current format version while preserving all supported content.
 
+Rendering convention is uniform across supported versions (ADR 0046). Existing
+drawings use centered single Bold and native-style double placement when opened;
+there is no legacy appearance branch or automatic source-file rewrite. Coordinates,
+connectivity, orders, charges and labels retain their stored meaning. The new
+appearance may change crop-based figure bounds even at the same physical width.
+
 The retired `last_smiles_input` field is insertion metadata, not drawing content.
 Readers continue accepting its existing string or `null` values in v7/v8 files.
 It has no runtime or Undo state; new saves normalize it to `null`. The field stays
@@ -55,7 +61,7 @@ When loading a document, Chemvas validates fields in the following order:
 ## Scope & Calculation Data
 
 - **Scope**: Covers native `.chemvas` files and `.chemvas` payloads embedded in editable SVGs.
-- **Calculation Plans**: Calculation metadata stored in documents is preserved regardless of whether the optional RDKit backend is installed. Chemvas preserves existing plans and validates whether they remain consistent with the current drawing structure upon save or CLI inspection (`inspect-plan`).
+- **Calculation Plans**: A calculation plan already stored in a document is kept when it still matches the drawing. Save refuses when the current drawing would drop that plan. Chemvas does not create, map, or export plans, and it does not depend on a chemistry backend.
 
 ## Test Fixtures
 

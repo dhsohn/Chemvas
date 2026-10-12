@@ -405,9 +405,6 @@ def test_batch_refresh_publishes_final_selection_info_once(canvas):
     observations.clear()
     canvas.services.history_service.undo()
     assert observations == [0]
-    assert info.signature is None
-    assert info.pending_signature is None
-    assert info.cache == ("", "")
 
 
 def test_real_canvas_keys_and_rotation_knob_keep_exact_history(canvas, app, tmp_path):

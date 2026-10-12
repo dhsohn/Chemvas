@@ -1,5 +1,7 @@
 """User-facing regressions from the macOS 0.21 usage audit."""
 
+from unittest.mock import Mock
+
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QColor, QKeySequence, QPalette, QStatusTipEvent
 from PyQt6.QtTest import QTest
@@ -10,21 +12,16 @@ from PyQt6.QtWidgets import (
     QDialog,
     QDoubleSpinBox,
     QLabel,
-    QLineEdit,
     QScrollArea,
-    QToolBar,
     QToolButton,
     QVBoxLayout,
 )
 
 from chemvas.domain.document import Atom, Bond, MoleculeModel, serialize_model_state
 from chemvas.shell.palette import PALETTE
-from chemvas.ui.dialogs import calculation_plan_actions
 from chemvas.ui.dialogs.arrow_label_dialog import _label_input
-from chemvas.ui.dialogs.calculation_step_dialog import CalculationStepDialog
 from chemvas.ui.window.main_window_document_dialogs import prompt_export_options
-from tests.calculation_plan_support import _document_state, _plan
-from tests.gui_workflow_support import _tool
+from tests.calculation_plan_support import _document_state
 from tests.gui_workflow_support import app as app
 from tests.gui_workflow_support import drawing as drawing
 
@@ -56,7 +53,7 @@ def test_feedback_has_space_and_pending_recovery_returns(drawing, app):
     # The context the notice leaves at this width, which feedback must restore.
     shown = [context_label.isVisible() for context_label in context]
     status.show_error_message(
-        window, "Invalid SMILES: check the structure", timeout=10_000
+        window, "Invalid atom label: check the drawing", timeout=10_000
     )
     app.processEvents()
     assert label.isVisible()
@@ -216,32 +213,9 @@ def test_arrow_preview_uses_paper_colors_with_dark_system_palette(app):
     dialog.close()
 
 
-def test_narrow_toolbar_extension_exposes_smiles_input(drawing, app):
-    window, _canvas = drawing
-    _tool(window, "select")
-    window.resize(727, 542)
-    app.processEvents()
-    bar = window.findChild(QToolBar, "contextOptionsBar")
-    extension = bar.findChild(QToolButton, "qt_toolbar_ext_button")
-    field = bar.findChild(QLineEdit, "contextSmilesInput")
-    assert extension.isVisible()
-    QTest.mouseClick(extension, Qt.MouseButton.LeftButton)
-    # Wait for the expanded toolbar to lay the field out rather than a fixed time.
-    for _ in range(100):
-        if field.isVisible() and bar.rect().contains(
-            field.mapTo(bar, field.rect().center())
-        ):
-            break
-        QTest.qWait(10)
-    assert field.isVisible()
-    assert bar.rect().contains(field.mapTo(bar, field.rect().center()))
-    field.setFocus()
-    QTest.keyClicks(field, "CCO")
-    assert field.text() == "CCO"
-    QTest.mouseClick(extension, Qt.MouseButton.LeftButton)
-
-
-def test_invalid_alias_shows_actionable_error_without_changing_document(drawing):
+def test_mol_alias_refusal_shows_actionable_error_without_changing_document(
+    drawing, tmp_path
+):
     window, canvas = drawing
     state = _document_state()
     model = MoleculeModel(
@@ -264,48 +238,18 @@ def test_invalid_alias_shows_actionable_error_without_changing_document(drawing)
     session = canvas.services.canvas_document_session_service
     session.apply_state(state)
     before = session.snapshot_state()
-    calculation_plan_actions.open_calculation_panel_for_window(window)
-    panel = window.ui_references.calculation_panel
-    page = panel.content_stack.currentWidget()
-    assert panel.editor is None
-    assert page is not None and page.objectName() == "calculationLoadError"
-    message = " ".join(label.text() for label in page.findChildren(QLabel))
-    assert "'OH' on atom 7" in message
-    assert "use an element label" in message
-    assert session.snapshot_state() == before
-
-
-def test_mapping_status_remains_readable_after_rebuild_and_clear(app):
-    state = _document_state()
-    state["calculation_plan"] = _plan()
-    dialog = CalculationStepDialog(state)
-    dialog.resize(850, 800)
-    dialog.show()
-    table_toggle = next(
-        box
-        for box in dialog.findChildren(QCheckBox)
-        if box.text() == "Show mapping table"
+    output = tmp_path / "drawing.mol"
+    picker, message_box = Mock(), Mock()
+    picker.getSaveFileName.return_value = (str(output), "MDL Molfile (*.mol)")
+    window.services.document_action_service.export_mol(
+        window, file_dialog=picker, message_box=message_box
     )
-    table_toggle.setChecked(True)
-    for operation in (
-        dialog._refresh_mapping_table,
-        dialog._clear_active_mappings,
-        dialog._refresh_mapping_table,
-    ):
-        operation()
-        app.processEvents()
-        table = dialog.mapping_table
-        for row in range(table.rowCount()):
-            item = table.item(row, 2)
-            assert (
-                table.columnWidth(2)
-                >= table.fontMetrics().horizontalAdvance(item.text()) + 10
-            )
-        assert (
-            sum(table.columnWidth(i) for i in range(3)) >= table.viewport().width() - 2
-        )
-    dialog.hide()
-    dialog.deleteLater()
+    message_box.warning.assert_called_once()
+    message = message_box.warning.call_args.args[2]
+    assert "OH" in message
+    assert "Replace them with explicit element atoms" in message
+    assert not output.exists()
+    assert session.snapshot_state() == before
 
 
 def test_export_options_survive_retry_and_cancelled_edits(drawing, monkeypatch):
@@ -375,11 +319,11 @@ def test_recovery_action_is_keyboard_accessible_and_preserves_feedback(
     QTest.keyClick(button, Qt.Key.Key_Space)
     assert calls == [window]
     status.set_autosave_error(window, "Autosave paused: disk full")
-    window.statusBar().showMessage("Invalid SMILES")
+    window.statusBar().showMessage("Invalid atom label")
     _settle(app)
     assert button.isVisible()
     assert "disk full" in status.autosave_error_label.text()
-    assert window.statusBar().currentMessage() == "Invalid SMILES"
+    assert window.statusBar().currentMessage() == "Invalid atom label"
     status.set_recovery_notice(window, None)
     assert button.isHidden()
     assert "disk full" in status.autosave_error_label.text()

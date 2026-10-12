@@ -14,9 +14,17 @@ from chemvas.bootstrap.document_cli_shared import (
     graphics_record_count,
     json_text,
     offscreen_document_scene,
+    read_json_request,
     sha256_hex,
 )
 from chemvas.core.document_io import atomic_create_bytes, read_exact_document
+from chemvas.features.export import (
+    MAX_CDXML_CONSUMER_BYTES,
+    CdxmlLabelBindings,
+    CdxmlTextLayoutReference,
+    parse_cdxml_text_layout_reference,
+    read_cdxml_label_bindings,
+)
 from chemvas.ui.export.export_guard_service import (
     MAX_RASTER_DIMENSION_PIXELS,
     MAX_RASTER_PIXELS,
@@ -48,6 +56,7 @@ def run(argv: list[str]) -> int:
     try:
         # add_subparsers(required=True) with one registered subparser: argparse
         # has already exited for a missing or unknown command.
+        sidecar = args.cdxml_label_bindings
         report = _render_document(
             Path(args.document),
             output=Path(args.output),
@@ -56,6 +65,12 @@ def run(argv: list[str]) -> int:
             width_mm=args.width_mm,
             max_height_mm=args.max_height_mm,
             min_font_pt=args.min_font_pt,
+            label_bindings=None if sidecar is None else Path(sidecar),
+            layout_reference=(
+                Path(args.cdxml_layout_reference)
+                if args.cdxml_layout_reference is not None
+                else None
+            ),
         )
         sys.stdout.write(json_text(report))
         return 0
@@ -108,6 +123,19 @@ def _argument_parser() -> argparse.ArgumentParser:
         type=_positive_finite_number,
         help="SVG/PNG only: reject glyphs below this final point size, including scripts",
     )
+    render_parser.add_argument(
+        "--cdxml-label-bindings",
+        metavar="SIDECAR",
+        help=(
+            "CDXML only: strict JSON sidecar stating the meaning of Ar/H-identifier "
+            "atom labels, bound to the exact input bytes by SHA-256"
+        ),
+    )
+    render_parser.add_argument(
+        "--cdxml-layout-reference",
+        metavar="SIDECAR",
+        help="CDXML only: measured consumer text bounds for explicitly selected notes",
+    )
     return parser
 
 
@@ -130,11 +158,46 @@ def _render_document(
     width_mm: float | None = None,
     max_height_mm: float | None = None,
     min_font_pt: float | None = None,
+    label_bindings: Path | None = None,
+    layout_reference: Path | None = None,
 ) -> dict[str, object]:
     output_format = _validate_paths(source, output)
     if output_format in {"pdf", "cdxml"} and min_font_pt is not None:
         raise ValueError("--min-font-pt supports SVG and PNG output only")
+    if label_bindings is not None:
+        if output_format != "cdxml":
+            raise ValueError("--cdxml-label-bindings supports CDXML output only")
+        if not label_bindings.is_file():
+            raise ValueError(f"label bindings sidecar does not exist: {label_bindings}")
+    if layout_reference is not None and output_format != "cdxml":
+        raise ValueError("--cdxml-layout-reference supports CDXML output only")
+    # One read: the digest, the label-binding check and the rendered state all
+    # come from these bytes, so a file replaced mid-command is never re-read.
     document = read_exact_document(source, max_bytes=MAX_DOCUMENT_BYTES).document
+    bindings: CdxmlLabelBindings | None = None
+    if label_bindings is not None:
+        bindings = _read_label_bindings(label_bindings, document.source_sha256)
+    layout = (
+        _read_layout_reference(
+            layout_reference,
+            document.source_sha256,
+            export_options={
+                "format": output_format,
+                "scope": "sheet",
+                "sizing": "bond",
+                "background": background,
+                "dpi": dpi,
+                "width_mm": width_mm,
+                "max_height_mm": max_height_mm,
+                "min_font_pt": min_font_pt,
+            },
+            label_bindings_sha256=bindings.sidecar_sha256
+            if bindings is not None
+            else None,
+        )
+        if layout_reference is not None
+        else None
+    )
     state = cast("Mapping[str, object]", document.state)
     graphics_records = graphics_record_count(state)
     if graphics_records > MAX_GRAPHICS_RECORDS:
@@ -151,6 +214,8 @@ def _render_document(
         width_mm=width_mm,
         max_height_mm=max_height_mm,
         min_font_pt=min_font_pt,
+        label_bindings=bindings,
+        layout_reference=layout,
     )
     atomic_create_bytes(output, rendered.content)
     output_sha256 = sha256_hex(rendered.content)
@@ -175,7 +240,55 @@ def _render_document(
     }
     if rendered.font_readability is not None:
         report["font_readability"] = rendered.font_readability
+    if bindings is not None:
+        report["cdxml_label_bindings"] = {
+            "sidecar": str(label_bindings),
+            **bindings.report(),
+        }
+    if layout is not None:
+        report["cdxml_layout_reference"] = {
+            "sidecar": str(layout_reference),
+            **layout.report(),
+        }
     return report
+
+
+def _read_layout_reference(
+    path: Path,
+    source_sha256: str | None,
+    *,
+    export_options: dict[str, Any],
+    label_bindings_sha256: str | None,
+) -> CdxmlTextLayoutReference:
+    if source_sha256 is None:
+        raise ValueError("CDXML layout reference requires a source document digest")
+    raw, payload = read_json_request(
+        path,
+        max_bytes=1024 * 1024,
+        limit_message="CDXML layout reference exceeds the byte limit",
+        invalid_message="CDXML layout reference is not strict JSON",
+    )
+    if (
+        not isinstance(payload, dict)
+        or not isinstance(payload.get("consumer_file"), str)
+        or not payload["consumer_file"]
+    ):
+        raise ValueError("CDXML layout reference consumer_file must be a path")
+    consumer = path.parent / payload["consumer_file"]
+    with consumer.open("rb") as stream:
+        content = stream.read(MAX_CDXML_CONSUMER_BYTES + 1)
+    return parse_cdxml_text_layout_reference(
+        payload,
+        consumer_xml=content,
+        source_sha256=source_sha256,
+        reference_sha256=sha256_hex(raw),
+        export_options=export_options,
+        label_bindings_sha256=label_bindings_sha256,
+    )
+
+
+def _read_label_bindings(path: Path, source_sha256: str | None) -> CdxmlLabelBindings:
+    return read_cdxml_label_bindings(path, source_sha256)
 
 
 def _validate_paths(source: Path, output: Path) -> str:
@@ -204,6 +317,8 @@ def _render_offscreen(
     width_mm: float | None = None,
     max_height_mm: float | None = None,
     min_font_pt: float | None = None,
+    label_bindings: CdxmlLabelBindings | None = None,
+    layout_reference: CdxmlTextLayoutReference | None = None,
 ) -> _RenderedDocument:
     with offscreen_document_scene(state, command="render-document") as context:
         from chemvas.ui.export.figure_export_service import FigureExportService
@@ -223,6 +338,8 @@ def _render_offscreen(
                 sizing="bond",
                 target_width_mm=width_mm,
                 max_height_mm=max_height_mm,
+                label_bindings=label_bindings,
+                layout_reference=layout_reference,
             )
             rendered_size = rendered_path.stat().st_size
             if rendered_size > MAX_OUTPUT_BYTES:

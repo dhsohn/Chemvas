@@ -12,7 +12,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 from PyQt6.QtCore import QEvent, QPointF
 from PyQt6.QtGui import QKeySequence
 from PyQt6.QtTest import QTest
-from PyQt6.QtWidgets import QApplication, QMessageBox, QToolButton
+from PyQt6.QtWidgets import QApplication, QMessageBox
 
 from chemvas.bootstrap.main_window import build_main_window
 from chemvas.core.document_io import write_document
@@ -26,9 +26,9 @@ from chemvas.shell.window_registry import (
 )
 from chemvas.ui.canvas.canvas_mark_registry import mark_registry_for
 from chemvas.ui.molecule.structure_mutation_access import add_bond_between_points_for
-from chemvas.ui.molecule.structure_payload_access import build_3d_conversion_payload_for
+from chemvas.ui.molecule.structure_payload_access import build_mol_export_payload_for
 from chemvas.ui.scene.mark_item_access import mark_kinds_by_atom_for
-from chemvas.ui.scene.scene_decoration_access import materialize_mark_for_atom_for
+from chemvas.ui.scene.scene_decoration_access import add_mark_for_atom_for
 from chemvas.ui.window import (
     main_window_document_action_service as document_action_module,
 )
@@ -326,7 +326,7 @@ class MainWindowDocumentActionServiceTest(unittest.TestCase):
             )
             message_box.question.assert_called_once()
 
-    def test_save_checks_stale_invalid_or_inconsistent_plan_before_writing(
+    def test_save_refuses_stale_or_invalid_plan_without_replacing_destination(
         self,
     ) -> None:
         from chemvas.ui.canvas.canvas_calculation_plan_state import (
@@ -337,77 +337,66 @@ class MainWindowDocumentActionServiceTest(unittest.TestCase):
 
         canvas = active_canvas_for_window(self.window)
         documents = self.window.services.canvas_document_service
-        for kind in ("charge", "stale", "invalid"):
+        for kind in ("stale", "invalid"):
             with self.subTest(kind=kind), tempfile.TemporaryDirectory() as temp_dir:
-                state = _document_state()
                 documents.replace_canvas_with_state(
                     self.window,
                     canvas,
-                    state=state,
+                    state=_document_state(),
                     file_path=None,
                     display_name="draft",
                 )
                 plan = _plan()
-                if kind == "charge":
-                    plan["states"][0]["charge"] = 1
-                elif kind == "stale":
+                if kind == "stale":
                     plan["states"][0]["members"][0]["component_atom_ids"] = [999]
                 else:
                     plan["states"][0]["multiplicity"] = 0
                 set_calculation_plan_for(canvas, plan)
                 documents.mark_dirty(canvas)
                 message_box = mock.Mock()
-                message_box.question.return_value = QMessageBox.StandardButton.No
                 path = Path(temp_dir) / "draft.chemvas"
-
+                path.write_bytes(b"existing document")
                 self.assertFalse(
                     self.service.save_canvas_to_path(
-                        self.window,
-                        str(path),
-                        message_box=message_box,
+                        self.window, str(path), message_box=message_box
                     )
                 )
-                self.assertFalse(path.exists())
+                self.assertEqual(path.read_bytes(), b"existing document")
+                self.assertEqual(list(path.parent.iterdir()), [path])
                 self.assertEqual(calculation_plan_for(canvas), plan)
                 self.assertTrue(documents.is_dirty(canvas))
-                message_box.question.assert_called_once()
-                prompt = message_box.question.call_args.args[2]
-                if kind == "charge":
-                    self.assertIn("no longer matches this drawing", prompt)
-                    self.assertIn(
-                        "keep the calculation plan as an invalid draft", prompt
-                    )
-                    self.assertIn("Reaction Mapping toolbar icon", prompt)
-                    button = self.window.findChild(
-                        QToolButton, "reactionMappingToggleButton"
-                    )
-                    self.assertIsNotNone(button)
-                    self.assertIn("Reaction Mapping", button.toolTip())
-                elif kind == "stale":
-                    self.assertIn("no longer matches this drawing", prompt)
-                    self.assertIn("undo the graph edit", prompt)
-                else:
-                    self.assertIn("The calculation plan is invalid", prompt)
-                    self.assertIn("State R01 multiplicity must be positive.", prompt)
-                    self.assertIn("omit the invalid calculation plan", prompt)
-                    self.assertNotIn("undo", prompt.lower())
-                    self.assertNotIn("drawing", prompt)
-
-                message_box.question.return_value = QMessageBox.StandardButton.Yes
-                self.assertTrue(
-                    self.service.save_canvas_to_path(
-                        self.window,
-                        str(path),
-                        message_box=message_box,
-                    )
+                message_box.question.assert_not_called()
+                message_box.warning.assert_called_once()
+                self.assertIn(
+                    "Chemvas keeps that plan unchanged",
+                    message_box.warning.call_args.args[2],
                 )
-                from chemvas.core.document_io import read_document
 
-                saved = read_document(path).state
-                if kind == "charge":
-                    self.assertEqual(saved["calculation_plan"], plan)
-                else:
-                    self.assertNotIn("calculation_plan", saved)
+    def test_save_preserves_legacy_charge_metadata_without_prompt(self) -> None:
+        from chemvas.core.document_io import read_document
+        from chemvas.ui.canvas.canvas_calculation_plan_state import (
+            set_calculation_plan_for,
+        )
+        from tests.calculation_plan_support import _document_state, _plan
+
+        canvas = active_canvas_for_window(self.window)
+        self.window.services.canvas_document_service.replace_canvas_with_state(
+            self.window, canvas, state=_document_state(), file_path=None
+        )
+        plan = _plan()
+        plan["states"][0]["charge"] = 1
+        set_calculation_plan_for(canvas, plan)
+        message_box = mock.Mock()
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir) / "legacy.chemvas"
+            self.assertTrue(
+                self.service.save_canvas_to_path(
+                    self.window, str(path), message_box=message_box
+                )
+            )
+            self.assertEqual(read_document(path).state["calculation_plan"], plan)
+        message_box.question.assert_not_called()
+        message_box.warning.assert_not_called()
 
     def test_save_canvas_to_path_rejects_a_path_owned_by_another_canvas(
         self,
@@ -844,9 +833,7 @@ class MainWindowDocumentActionServiceTest(unittest.TestCase):
         canvas = active_canvas_for_window(self.window)
         add_bond_between_points_for(canvas, QPointF(-20, 0), QPointF(20, 0))
         atom_id = min(canvas.model.atoms)
-        mark = materialize_mark_for_atom_for(
-            canvas, atom_id, QPointF(-20, -10), kind="plus"
-        )
+        mark = add_mark_for_atom_for(canvas, atom_id, QPointF(-20, -10), kind="plus")
         self.assertIsNotNone(mark)
         before = canvas.services.canvas_document_session_service.snapshot_state()
 
@@ -898,11 +885,11 @@ class MainWindowDocumentActionServiceTest(unittest.TestCase):
         # Windows) while naming the same file the dialog already confirmed —
         # the guard must compare path identity, not strings.
         with tempfile.TemporaryDirectory() as temp_dir:
-            existing = Path(temp_dir) / "target.xyz"
+            existing = Path(temp_dir) / "target.mol"
             existing.write_text("sentinel")
             file_dialog = mock.Mock()
             file_dialog.getSaveFileName.return_value = (
-                f"{temp_dir}//./target.xyz",
+                f"{temp_dir}//./target.mol",
                 "",
             )
             message_box = mock.Mock()
@@ -913,13 +900,13 @@ class MainWindowDocumentActionServiceTest(unittest.TestCase):
                 "document_session_service_for_window",
                 return_value=session_service,
             ):
-                self.service.export_xyz(
+                self.service.export_mol(
                     self.window,
                     file_dialog=file_dialog,
                     message_box=message_box,
                 )
             message_box.question.assert_not_called()
-            session_service.export_xyz_async.assert_called_once()
+            session_service.export_mol.assert_called_once()
 
     def test_export_figure_confirms_replacing_the_file_the_format_retargets_to(
         self,
@@ -974,7 +961,6 @@ class MainWindowDocumentActionServiceTest(unittest.TestCase):
     ) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             cases = (
-                ("target.xyz", "export_xyz", "export_xyz_async"),
                 ("target.mol", "export_mol", "export_mol"),
                 ("target.svg", "export_figure", "export_figure"),
             )
@@ -1306,7 +1292,7 @@ class MainWindowDocumentActionServiceTest(unittest.TestCase):
                     math.hypot(mark_data["dx"], mark_data["dy"]),
                     base_mark_distance,
                 )
-        export_model, export_annotations = build_3d_conversion_payload_for(canvas)
+        export_model, export_annotations = build_mol_export_payload_for(canvas)
         self.assertEqual(export_annotations, expected_annotations)
         reparsed = parse_molfile(
             write_molfile(export_model, atom_annotations=export_annotations)
@@ -1575,36 +1561,3 @@ class MainWindowDocumentActionServiceTest(unittest.TestCase):
                 )
             )
         save_canvas.assert_called_once_with(self.window, canvas=canvas)
-
-    def test_confirm_close_canvas_rejects_active_xyz_export_until_job_finishes(
-        self,
-    ) -> None:
-        canvas = active_canvas_for_window(self.window)
-        message_box = mock.Mock()
-
-        with mock.patch(
-            "chemvas.ui.window.main_window_document_action_service.rdkit_export_jobs_for",
-            return_value=[(object(), object())],
-        ):
-            self.assertFalse(
-                self.service.confirm_close_canvas(
-                    self.window, canvas, message_box=message_box
-                )
-            )
-
-        message_box.warning.assert_called_once_with(
-            self.window,
-            "XYZ Export in Progress",
-            "Wait for the 3D XYZ export from Canvas 1 to finish before closing it.",
-        )
-        message_box.question.assert_not_called()
-
-        with mock.patch(
-            "chemvas.ui.window.main_window_document_action_service.rdkit_export_jobs_for",
-            return_value=[],
-        ):
-            self.assertTrue(
-                self.service.confirm_close_canvas(
-                    self.window, canvas, message_box=message_box
-                )
-            )

@@ -59,8 +59,6 @@ class _HitTestingService(Protocol):
 class _InsertController(Protocol):
     def render_template_preview(self, pos: QPointF) -> None: ...
 
-    def render_smiles_preview(self, pos: QPointF) -> None: ...
-
 
 class _SceneDecorationBuildService(Protocol):
     def build_mark_item(self, kind: str) -> QGraphicsItem | None: ...
@@ -261,14 +259,10 @@ class HoverController:
         if self._suspended:
             return
         scene_pos = scene_pos_from_global_pos_for(self.canvas, QCursor.pos())
-        insert_state = self.canvas.runtime_state.insert_state
-        if insert_state.template_active or insert_state.smiles_active:
+        if self.canvas.runtime_state.insert_state.template_active:
             self.clear_hover_highlight()
             if scene_pos is not None and render_insert_preview:
-                if insert_state.template_active:
-                    self.insert_controller.render_template_preview(scene_pos)
-                elif insert_state.smiles_active:
-                    self.insert_controller.render_smiles_preview(scene_pos)
+                self.insert_controller.render_template_preview(scene_pos)
             return
         if scene_pos is not None:
             self.update_hover_highlight(scene_pos)

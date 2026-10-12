@@ -7,10 +7,11 @@ from chemvas.features.rendering import (
     DOUBLE_STYLE_DEFAULT,
     DOUBLE_STYLE_OUTER,
     dotted_bond_dot_centers,
+    double_position_for_style,
     hash_segments_from_segment,
+    is_positionable_double_bond_style,
     normalized_plain_double_style,
     offset_segment,
-    trim_segment,
     trimmed_line_segment,
     wedge_triangle_from_segment,
 )
@@ -130,10 +131,39 @@ class BondLineGeometryService:
         side_offset = self.context.renderer.bond_spacing() * 1.1
         return side_offset, side_offset * 0.5
 
+    def _native_double_distances(self, style: str) -> tuple[float, float]:
+        side, center = self._plain_double_offsets()
+        variant = normalized_plain_double_style(style, 2)
+        if variant == DOUBLE_STYLE_DEFAULT:
+            return 0.0, side
+        if variant == DOUBLE_STYLE_OUTER:
+            return 0.0, -side
+        return -center, center
+
+    def terminal_label_offset(self, atom_id: int) -> tuple[float, float]:
+        """Center a terminal label between the same two painted bond axes."""
+        bond_ids = self.graph.atom_bond_ids.get(atom_id, ())
+        if len(bond_ids) != 1:
+            return 0.0, 0.0
+        bond = self.context.model.bond_for_id(next(iter(bond_ids)))
+        if bond is None or not is_positionable_double_bond_style(
+            bond.style, bond.order
+        ):
+            return 0.0, 0.0
+        a, b = self.context.model.atoms[bond.a], self.context.model.atoms[bond.b]
+        nx, ny = self._plain_double_normal(a.x, a.y, b.x, b.y, bond.a, bond.b)
+        distances = self._native_double_distances(
+            double_position_for_style(bond.style, bond.order)
+        )
+        shift = sum(distances) / 2.0
+        return nx * shift, ny * shift
+
     def _double_neighbor_target(
         self,
         a_id: int | None,
         b_id: int | None,
+        origin_x: float,
+        origin_y: float,
     ) -> QPointF | None:
         if a_id is None or b_id is None:
             return None
@@ -157,7 +187,7 @@ class BondLineGeometryService:
                 other = None
             if other is None:
                 continue
-            points.append((other.x, other.y))
+            points.append((other.x - origin_x, other.y - origin_y))
         if not points:
             return None
         point_factory = self._point_factory
@@ -166,8 +196,8 @@ class BondLineGeometryService:
 
             point_factory = QPointF
         return point_factory(
-            sum(point[0] for point in points) / len(points),
-            sum(point[1] for point in points) / len(points),
+            math.fsum(point[0] for point in points) / len(points),
+            math.fsum(point[1] for point in points) / len(points),
         )
 
     def _plain_double_normal(
@@ -179,9 +209,9 @@ class BondLineGeometryService:
         a_id: int | None = None,
         b_id: int | None = None,
     ) -> tuple[float, float]:
-        target = self._double_neighbor_target(a_id, b_id)
+        target = self._double_neighbor_target(a_id, b_id, x1, y1)
         if target is not None:
-            return self.context.geometry.line_normal(x1, y1, x2, y2, target)
+            return self.context.geometry.line_normal(0, 0, x2 - x1, y2 - y1, target)
         if a_id is not None and b_id is not None:
             offset_unit = self.context.geometry.bond_offset_unit_3d(a_id, b_id)
             if offset_unit is not None:
@@ -203,17 +233,63 @@ class BondLineGeometryService:
         tuple[float, float, float, float],
         tuple[float, float],
     ]:
-        dx = x2 - x1
-        dy = y2 - y1
         inner_nx, inner_ny = self._plain_double_normal(x1, y1, x2, y2, a_id, b_id)
-        side_offset, center_offset = self._plain_double_offsets()
-        variant = normalized_plain_double_style(style, 2)
-        if variant == DOUBLE_STYLE_DEFAULT:
-            distances = (0.0, side_offset)
-        elif variant == DOUBLE_STYLE_OUTER:
-            distances = (-side_offset, 0.0)
-        else:
-            distances = (-center_offset, center_offset)
+        return self.native_double_segments(
+            x1,
+            y1,
+            x2,
+            y2,
+            style=style,
+            normal=(inner_nx, inner_ny),
+            a_id=a_id,
+            b_id=b_id,
+        )
+
+    def _double_endpoint_cotangent(
+        self, atom_id, other_id, dx, dy, nx, ny
+    ) -> float | None:
+        """Intersect the inset with an adjacent bond's angular bisector.
+
+        Only neighbors on the inset side shorten that line. No neighbor means
+        a square full-length end. Chemical coordinates are never adjusted.
+        """
+        if (
+            atom_id is None
+            or self.context.geometry.label_rect_for_atom(atom_id) is not None
+        ):
+            return None
+        atom = self.context.model.atoms.get(atom_id)
+        length = math.hypot(dx, dy)
+        if atom is None or length <= 1e-9:
+            return None
+        values = []
+        for bond_id in self.graph.atom_bond_ids.get(atom_id, ()):
+            bond = self.context.model.bond_for_id(bond_id)
+            if bond is None:
+                continue
+            peer_id = bond.b if bond.a == atom_id else bond.a
+            if peer_id == other_id:
+                continue
+            peer = self.context.model.atoms.get(peer_id)
+            if peer is None:
+                continue
+            vx, vy = peer.x - atom.x, peer.y - atom.y
+            distance = math.hypot(vx, vy)
+            if distance <= 1e-9 or vx * nx + vy * ny <= 1e-9:
+                continue
+            cosine = max(-1.0, min(1.0, (dx * vx + dy * vy) / (length * distance)))
+            if cosine >= 1.0 - 1e-9:
+                continue
+            values.append(math.sqrt((1.0 + cosine) / (1.0 - cosine)))
+        return max(values) if values else None
+
+    def native_double_segments(
+        self, x1, y1, x2, y2, *, style, normal, a_id=None, b_id=None
+    ):
+        """Shared native axis/side placement for rings, chains and previews."""
+        dx, dy = x2 - x1, y2 - y1
+        inner_nx, inner_ny = normal
+        distances = self._native_double_distances(style)
         offsets = tuple((inner_nx * d, inner_ny * d) for d in distances)
         t0, t1 = self.context.geometry.trim_line_for_labels(
             a_id, b_id, x1, y1, x2, y2, offsets
@@ -224,45 +300,71 @@ class BondLineGeometryService:
             x1 + dx * t1,
             y1 + dy * t1,
         )
-        outer_full_seg = offset_segment(base_segment, inner_nx, inner_ny, -side_offset)
-        inner_full_seg = offset_segment(base_segment, inner_nx, inner_ny, side_offset)
-        outer_center_seg = offset_segment(
-            base_segment, inner_nx, inner_ny, -center_offset
+        length = math.hypot(dx, dy) or 1.0
+        visible_length = math.hypot(
+            base_segment[2] - base_segment[0], base_segment[3] - base_segment[1]
         )
-        inner_center_seg = offset_segment(
-            base_segment, inner_nx, inner_ny, center_offset
+        segments = []
+        for offset in distances:
+            segment = offset_segment(base_segment, inner_nx, inner_ny, offset)
+            if abs(offset) > 1e-9:
+                sign = 1 if offset > 0 else -1
+                nx, ny = inner_nx * sign, inner_ny * sign
+                left = (
+                    self._double_endpoint_cotangent(a_id, b_id, dx, dy, nx, ny) or 0.0
+                )
+                right = (
+                    self._double_endpoint_cotangent(b_id, a_id, -dx, -dy, nx, ny) or 0.0
+                )
+                start = min(visible_length * 0.45, abs(offset) * left)
+                end = min(visible_length * 0.45, abs(offset) * right)
+                segment = (
+                    segment[0] + dx / length * start,
+                    segment[1] + dy / length * start,
+                    segment[2] - dx / length * end,
+                    segment[3] - dy / length * end,
+                )
+            segments.append(segment)
+        return segments[0], segments[1], normal
+
+    def bond_stroke_corners(self, segment, a, b, a_id, b_id):
+        """Paint the native flat inset and bounded primary-axis end mitres."""
+        x1, y1, x2, y2 = segment
+        dx, dy = b.x - a.x, b.y - a.y
+        length = math.hypot(dx, dy) or 1.0
+        stroke_dx, stroke_dy = x2 - x1, y2 - y1
+        stroke_length = math.hypot(stroke_dx, stroke_dy)
+        nx, ny = (
+            (-stroke_dy / stroke_length, stroke_dx / stroke_length)
+            if stroke_length > 1e-9
+            else (-dy / length, dx / length)
         )
-        base_length = (
-            math.hypot(
-                base_segment[2] - base_segment[0], base_segment[3] - base_segment[1]
-            )
-            or 1.0
-        )
-        has_label = False
-        if (
-            a_id is not None
-            and self.context.geometry.label_rect_for_atom(a_id) is not None
-        ):
-            has_label = True
-        if (
-            b_id is not None
-            and self.context.geometry.label_rect_for_atom(b_id) is not None
-        ):
-            has_label = True
-        trim = double_short_trim(base_length, has_label=has_label)
-        if variant == DOUBLE_STYLE_DEFAULT:
+        half = self.context.renderer.bond_line_width() / 2.0
+        on_axis = abs((x1 - a.x) * nx + (y1 - a.y) * ny) < 1e-7
+
+        def endpoint(x, y, atom, first, second, vx, vy, off):
+            shift = 0.0
+            if on_axis and math.hypot(x - atom.x, y - atom.y) < 1e-7:
+                cot = self._double_endpoint_cotangent(first, second, vx, vy, nx, ny)
+                if cot is None:
+                    opposite = self._double_endpoint_cotangent(
+                        first, second, vx, vy, -nx, -ny
+                    )
+                    cot = -opposite if opposite is not None else 0.0
+                shift = off * cot
+                if abs(shift) > 6 * half:
+                    shift = 0.0
             return (
-                base_segment,
-                trim_segment(inner_full_seg, trim),
-                (inner_nx, inner_ny),
+                x + nx * off + vx / length * shift,
+                y + ny * off + vy / length * shift,
             )
-        if variant == DOUBLE_STYLE_OUTER:
-            return (
-                base_segment,
-                trim_segment(outer_full_seg, trim),
-                (inner_nx, inner_ny),
-            )
-        return outer_center_seg, inner_center_seg, (inner_nx, inner_ny)
+
+        return [
+            endpoint(x1, y1, a, a_id, b_id, dx, dy, -half),
+            endpoint(x2, y2, b, b_id, a_id, -dx, -dy, -half),
+            endpoint(x2, y2, b, b_id, a_id, -dx, -dy, half),
+            endpoint(x1, y1, a, a_id, b_id, dx, dy, half),
+        ]
 
     def _stereo_label_trim(self, a_id, b_id, x1, y1, x2, y2):
         length = math.hypot(x2 - x1, y2 - y1) or 1.0

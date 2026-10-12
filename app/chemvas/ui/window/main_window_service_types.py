@@ -21,7 +21,6 @@ if TYPE_CHECKING:
     from chemvas.ui.window.main_window_document_action_service import (
         MainWindowDocumentActionService,
     )
-    from chemvas.ui.window.main_window_panel_service import MainWindowPanelService
     from chemvas.ui.window.main_window_status_service import MainWindowStatusService
     from chemvas.ui.window.main_window_text_style_service import (
         MainWindowTextStyleService,
@@ -53,7 +52,6 @@ class MainWindowServices:
     ui_assembly_service: MainWindowUIAssemblyService
     context_bar_service: MainWindowContextBarService
     status_service: MainWindowStatusService
-    panel_service: MainWindowPanelService
 
 
 __all__ = ["MainWindowServices"]

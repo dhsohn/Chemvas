@@ -1,0 +1,2465 @@
+{
+  "consumer": "ChemDraw 25.0.2.14 Windows",
+  "grayscale": [
+    {
+      "channel": 0,
+      "actual_reopened_rgb": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "channel": 1,
+      "actual_reopened_rgb": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "channel": 2,
+      "actual_reopened_rgb": [
+        1,
+        1,
+        1
+      ]
+    },
+    {
+      "channel": 3,
+      "actual_reopened_rgb": [
+        3,
+        3,
+        3
+      ]
+    },
+    {
+      "channel": 4,
+      "actual_reopened_rgb": [
+        4,
+        4,
+        4
+      ]
+    },
+    {
+      "channel": 5,
+      "actual_reopened_rgb": [
+        4,
+        4,
+        4
+      ]
+    },
+    {
+      "channel": 6,
+      "actual_reopened_rgb": [
+        5,
+        5,
+        5
+      ]
+    },
+    {
+      "channel": 7,
+      "actual_reopened_rgb": [
+        7,
+        7,
+        7
+      ]
+    },
+    {
+      "channel": 8,
+      "actual_reopened_rgb": [
+        8,
+        8,
+        8
+      ]
+    },
+    {
+      "channel": 9,
+      "actual_reopened_rgb": [
+        9,
+        9,
+        9
+      ]
+    },
+    {
+      "channel": 10,
+      "actual_reopened_rgb": [
+        9,
+        9,
+        9
+      ]
+    },
+    {
+      "channel": 11,
+      "actual_reopened_rgb": [
+        10,
+        10,
+        10
+      ]
+    },
+    {
+      "channel": 12,
+      "actual_reopened_rgb": [
+        12,
+        12,
+        12
+      ]
+    },
+    {
+      "channel": 13,
+      "actual_reopened_rgb": [
+        13,
+        13,
+        13
+      ]
+    },
+    {
+      "channel": 14,
+      "actual_reopened_rgb": [
+        13,
+        13,
+        13
+      ]
+    },
+    {
+      "channel": 15,
+      "actual_reopened_rgb": [
+        14,
+        14,
+        14
+      ]
+    },
+    {
+      "channel": 16,
+      "actual_reopened_rgb": [
+        15,
+        15,
+        15
+      ]
+    },
+    {
+      "channel": 17,
+      "actual_reopened_rgb": [
+        17,
+        17,
+        17
+      ]
+    },
+    {
+      "channel": 18,
+      "actual_reopened_rgb": [
+        18,
+        18,
+        18
+      ]
+    },
+    {
+      "channel": 19,
+      "actual_reopened_rgb": [
+        18,
+        18,
+        18
+      ]
+    },
+    {
+      "channel": 20,
+      "actual_reopened_rgb": [
+        19,
+        19,
+        19
+      ]
+    },
+    {
+      "channel": 21,
+      "actual_reopened_rgb": [
+        21,
+        21,
+        21
+      ]
+    },
+    {
+      "channel": 22,
+      "actual_reopened_rgb": [
+        22,
+        22,
+        22
+      ]
+    },
+    {
+      "channel": 23,
+      "actual_reopened_rgb": [
+        23,
+        23,
+        23
+      ]
+    },
+    {
+      "channel": 24,
+      "actual_reopened_rgb": [
+        23,
+        23,
+        23
+      ]
+    },
+    {
+      "channel": 25,
+      "actual_reopened_rgb": [
+        24,
+        24,
+        24
+      ]
+    },
+    {
+      "channel": 26,
+      "actual_reopened_rgb": [
+        26,
+        26,
+        26
+      ]
+    },
+    {
+      "channel": 27,
+      "actual_reopened_rgb": [
+        27,
+        27,
+        27
+      ]
+    },
+    {
+      "channel": 28,
+      "actual_reopened_rgb": [
+        27,
+        27,
+        27
+      ]
+    },
+    {
+      "channel": 29,
+      "actual_reopened_rgb": [
+        28,
+        28,
+        28
+      ]
+    },
+    {
+      "channel": 30,
+      "actual_reopened_rgb": [
+        29,
+        29,
+        29
+      ]
+    },
+    {
+      "channel": 31,
+      "actual_reopened_rgb": [
+        31,
+        31,
+        31
+      ]
+    },
+    {
+      "channel": 32,
+      "actual_reopened_rgb": [
+        32,
+        32,
+        32
+      ]
+    },
+    {
+      "channel": 33,
+      "actual_reopened_rgb": [
+        32,
+        32,
+        32
+      ]
+    },
+    {
+      "channel": 34,
+      "actual_reopened_rgb": [
+        33,
+        33,
+        33
+      ]
+    },
+    {
+      "channel": 35,
+      "actual_reopened_rgb": [
+        35,
+        35,
+        35
+      ]
+    },
+    {
+      "channel": 36,
+      "actual_reopened_rgb": [
+        36,
+        36,
+        36
+      ]
+    },
+    {
+      "channel": 37,
+      "actual_reopened_rgb": [
+        37,
+        37,
+        37
+      ]
+    },
+    {
+      "channel": 38,
+      "actual_reopened_rgb": [
+        37,
+        37,
+        37
+      ]
+    },
+    {
+      "channel": 39,
+      "actual_reopened_rgb": [
+        38,
+        38,
+        38
+      ]
+    },
+    {
+      "channel": 40,
+      "actual_reopened_rgb": [
+        40,
+        40,
+        40
+      ]
+    },
+    {
+      "channel": 41,
+      "actual_reopened_rgb": [
+        41,
+        41,
+        41
+      ]
+    },
+    {
+      "channel": 42,
+      "actual_reopened_rgb": [
+        41,
+        41,
+        41
+      ]
+    },
+    {
+      "channel": 43,
+      "actual_reopened_rgb": [
+        42,
+        42,
+        42
+      ]
+    },
+    {
+      "channel": 44,
+      "actual_reopened_rgb": [
+        43,
+        43,
+        43
+      ]
+    },
+    {
+      "channel": 45,
+      "actual_reopened_rgb": [
+        45,
+        45,
+        45
+      ]
+    },
+    {
+      "channel": 46,
+      "actual_reopened_rgb": [
+        46,
+        46,
+        46
+      ]
+    },
+    {
+      "channel": 47,
+      "actual_reopened_rgb": [
+        46,
+        46,
+        46
+      ]
+    },
+    {
+      "channel": 48,
+      "actual_reopened_rgb": [
+        47,
+        47,
+        47
+      ]
+    },
+    {
+      "channel": 49,
+      "actual_reopened_rgb": [
+        49,
+        49,
+        49
+      ]
+    },
+    {
+      "channel": 50,
+      "actual_reopened_rgb": [
+        50,
+        50,
+        50
+      ]
+    },
+    {
+      "channel": 51,
+      "actual_reopened_rgb": [
+        51,
+        51,
+        51
+      ]
+    },
+    {
+      "channel": 52,
+      "actual_reopened_rgb": [
+        51,
+        51,
+        51
+      ]
+    },
+    {
+      "channel": 53,
+      "actual_reopened_rgb": [
+        52,
+        52,
+        52
+      ]
+    },
+    {
+      "channel": 54,
+      "actual_reopened_rgb": [
+        54,
+        54,
+        54
+      ]
+    },
+    {
+      "channel": 55,
+      "actual_reopened_rgb": [
+        55,
+        55,
+        55
+      ]
+    },
+    {
+      "channel": 56,
+      "actual_reopened_rgb": [
+        55,
+        55,
+        55
+      ]
+    },
+    {
+      "channel": 57,
+      "actual_reopened_rgb": [
+        56,
+        56,
+        56
+      ]
+    },
+    {
+      "channel": 58,
+      "actual_reopened_rgb": [
+        58,
+        58,
+        58
+      ]
+    },
+    {
+      "channel": 59,
+      "actual_reopened_rgb": [
+        59,
+        59,
+        59
+      ]
+    },
+    {
+      "channel": 60,
+      "actual_reopened_rgb": [
+        60,
+        60,
+        60
+      ]
+    },
+    {
+      "channel": 61,
+      "actual_reopened_rgb": [
+        60,
+        60,
+        60
+      ]
+    },
+    {
+      "channel": 62,
+      "actual_reopened_rgb": [
+        61,
+        61,
+        61
+      ]
+    },
+    {
+      "channel": 63,
+      "actual_reopened_rgb": [
+        63,
+        63,
+        63
+      ]
+    },
+    {
+      "channel": 64,
+      "actual_reopened_rgb": [
+        64,
+        64,
+        64
+      ]
+    },
+    {
+      "channel": 65,
+      "actual_reopened_rgb": [
+        64,
+        64,
+        64
+      ]
+    },
+    {
+      "channel": 66,
+      "actual_reopened_rgb": [
+        65,
+        65,
+        65
+      ]
+    },
+    {
+      "channel": 67,
+      "actual_reopened_rgb": [
+        66,
+        66,
+        66
+      ]
+    },
+    {
+      "channel": 68,
+      "actual_reopened_rgb": [
+        68,
+        68,
+        68
+      ]
+    },
+    {
+      "channel": 69,
+      "actual_reopened_rgb": [
+        69,
+        69,
+        69
+      ]
+    },
+    {
+      "channel": 70,
+      "actual_reopened_rgb": [
+        69,
+        69,
+        69
+      ]
+    },
+    {
+      "channel": 71,
+      "actual_reopened_rgb": [
+        70,
+        70,
+        70
+      ]
+    },
+    {
+      "channel": 72,
+      "actual_reopened_rgb": [
+        72,
+        72,
+        72
+      ]
+    },
+    {
+      "channel": 73,
+      "actual_reopened_rgb": [
+        73,
+        73,
+        73
+      ]
+    },
+    {
+      "channel": 74,
+      "actual_reopened_rgb": [
+        74,
+        74,
+        74
+      ]
+    },
+    {
+      "channel": 75,
+      "actual_reopened_rgb": [
+        74,
+        74,
+        74
+      ]
+    },
+    {
+      "channel": 76,
+      "actual_reopened_rgb": [
+        75,
+        75,
+        75
+      ]
+    },
+    {
+      "channel": 77,
+      "actual_reopened_rgb": [
+        77,
+        77,
+        77
+      ]
+    },
+    {
+      "channel": 78,
+      "actual_reopened_rgb": [
+        78,
+        78,
+        78
+      ]
+    },
+    {
+      "channel": 79,
+      "actual_reopened_rgb": [
+        78,
+        78,
+        78
+      ]
+    },
+    {
+      "channel": 80,
+      "actual_reopened_rgb": [
+        79,
+        79,
+        79
+      ]
+    },
+    {
+      "channel": 81,
+      "actual_reopened_rgb": [
+        80,
+        80,
+        80
+      ]
+    },
+    {
+      "channel": 82,
+      "actual_reopened_rgb": [
+        82,
+        82,
+        82
+      ]
+    },
+    {
+      "channel": 83,
+      "actual_reopened_rgb": [
+        83,
+        83,
+        83
+      ]
+    },
+    {
+      "channel": 84,
+      "actual_reopened_rgb": [
+        83,
+        83,
+        83
+      ]
+    },
+    {
+      "channel": 85,
+      "actual_reopened_rgb": [
+        84,
+        84,
+        84
+      ]
+    },
+    {
+      "channel": 86,
+      "actual_reopened_rgb": [
+        86,
+        86,
+        86
+      ]
+    },
+    {
+      "channel": 87,
+      "actual_reopened_rgb": [
+        87,
+        87,
+        87
+      ]
+    },
+    {
+      "channel": 88,
+      "actual_reopened_rgb": [
+        88,
+        88,
+        88
+      ]
+    },
+    {
+      "channel": 89,
+      "actual_reopened_rgb": [
+        88,
+        88,
+        88
+      ]
+    },
+    {
+      "channel": 90,
+      "actual_reopened_rgb": [
+        89,
+        89,
+        89
+      ]
+    },
+    {
+      "channel": 91,
+      "actual_reopened_rgb": [
+        91,
+        91,
+        91
+      ]
+    },
+    {
+      "channel": 92,
+      "actual_reopened_rgb": [
+        92,
+        92,
+        92
+      ]
+    },
+    {
+      "channel": 93,
+      "actual_reopened_rgb": [
+        92,
+        92,
+        92
+      ]
+    },
+    {
+      "channel": 94,
+      "actual_reopened_rgb": [
+        93,
+        93,
+        93
+      ]
+    },
+    {
+      "channel": 95,
+      "actual_reopened_rgb": [
+        94,
+        94,
+        94
+      ]
+    },
+    {
+      "channel": 96,
+      "actual_reopened_rgb": [
+        96,
+        96,
+        96
+      ]
+    },
+    {
+      "channel": 97,
+      "actual_reopened_rgb": [
+        97,
+        97,
+        97
+      ]
+    },
+    {
+      "channel": 98,
+      "actual_reopened_rgb": [
+        97,
+        97,
+        97
+      ]
+    },
+    {
+      "channel": 99,
+      "actual_reopened_rgb": [
+        98,
+        98,
+        98
+      ]
+    },
+    {
+      "channel": 100,
+      "actual_reopened_rgb": [
+        100,
+        100,
+        100
+      ]
+    },
+    {
+      "channel": 101,
+      "actual_reopened_rgb": [
+        101,
+        101,
+        101
+      ]
+    },
+    {
+      "channel": 102,
+      "actual_reopened_rgb": [
+        102,
+        102,
+        102
+      ]
+    },
+    {
+      "channel": 103,
+      "actual_reopened_rgb": [
+        102,
+        102,
+        102
+      ]
+    },
+    {
+      "channel": 104,
+      "actual_reopened_rgb": [
+        103,
+        103,
+        103
+      ]
+    },
+    {
+      "channel": 105,
+      "actual_reopened_rgb": [
+        105,
+        105,
+        105
+      ]
+    },
+    {
+      "channel": 106,
+      "actual_reopened_rgb": [
+        106,
+        106,
+        106
+      ]
+    },
+    {
+      "channel": 107,
+      "actual_reopened_rgb": [
+        106,
+        106,
+        106
+      ]
+    },
+    {
+      "channel": 108,
+      "actual_reopened_rgb": [
+        107,
+        107,
+        107
+      ]
+    },
+    {
+      "channel": 109,
+      "actual_reopened_rgb": [
+        109,
+        109,
+        109
+      ]
+    },
+    {
+      "channel": 110,
+      "actual_reopened_rgb": [
+        110,
+        110,
+        110
+      ]
+    },
+    {
+      "channel": 111,
+      "actual_reopened_rgb": [
+        111,
+        111,
+        111
+      ]
+    },
+    {
+      "channel": 112,
+      "actual_reopened_rgb": [
+        111,
+        111,
+        111
+      ]
+    },
+    {
+      "channel": 113,
+      "actual_reopened_rgb": [
+        112,
+        112,
+        112
+      ]
+    },
+    {
+      "channel": 114,
+      "actual_reopened_rgb": [
+        114,
+        114,
+        114
+      ]
+    },
+    {
+      "channel": 115,
+      "actual_reopened_rgb": [
+        115,
+        115,
+        115
+      ]
+    },
+    {
+      "channel": 116,
+      "actual_reopened_rgb": [
+        115,
+        115,
+        115
+      ]
+    },
+    {
+      "channel": 117,
+      "actual_reopened_rgb": [
+        116,
+        116,
+        116
+      ]
+    },
+    {
+      "channel": 118,
+      "actual_reopened_rgb": [
+        117,
+        117,
+        117
+      ]
+    },
+    {
+      "channel": 119,
+      "actual_reopened_rgb": [
+        119,
+        119,
+        119
+      ]
+    },
+    {
+      "channel": 120,
+      "actual_reopened_rgb": [
+        120,
+        120,
+        120
+      ]
+    },
+    {
+      "channel": 121,
+      "actual_reopened_rgb": [
+        120,
+        120,
+        120
+      ]
+    },
+    {
+      "channel": 122,
+      "actual_reopened_rgb": [
+        121,
+        121,
+        121
+      ]
+    },
+    {
+      "channel": 123,
+      "actual_reopened_rgb": [
+        123,
+        123,
+        123
+      ]
+    },
+    {
+      "channel": 124,
+      "actual_reopened_rgb": [
+        124,
+        124,
+        124
+      ]
+    },
+    {
+      "channel": 125,
+      "actual_reopened_rgb": [
+        125,
+        125,
+        125
+      ]
+    },
+    {
+      "channel": 126,
+      "actual_reopened_rgb": [
+        125,
+        125,
+        125
+      ]
+    },
+    {
+      "channel": 127,
+      "actual_reopened_rgb": [
+        126,
+        126,
+        126
+      ]
+    },
+    {
+      "channel": 128,
+      "actual_reopened_rgb": [
+        128,
+        128,
+        128
+      ]
+    },
+    {
+      "channel": 129,
+      "actual_reopened_rgb": [
+        129,
+        129,
+        129
+      ]
+    },
+    {
+      "channel": 130,
+      "actual_reopened_rgb": [
+        129,
+        129,
+        129
+      ]
+    },
+    {
+      "channel": 131,
+      "actual_reopened_rgb": [
+        130,
+        130,
+        130
+      ]
+    },
+    {
+      "channel": 132,
+      "actual_reopened_rgb": [
+        131,
+        131,
+        131
+      ]
+    },
+    {
+      "channel": 133,
+      "actual_reopened_rgb": [
+        133,
+        133,
+        133
+      ]
+    },
+    {
+      "channel": 134,
+      "actual_reopened_rgb": [
+        134,
+        134,
+        134
+      ]
+    },
+    {
+      "channel": 135,
+      "actual_reopened_rgb": [
+        134,
+        134,
+        134
+      ]
+    },
+    {
+      "channel": 136,
+      "actual_reopened_rgb": [
+        135,
+        135,
+        135
+      ]
+    },
+    {
+      "channel": 137,
+      "actual_reopened_rgb": [
+        137,
+        137,
+        137
+      ]
+    },
+    {
+      "channel": 138,
+      "actual_reopened_rgb": [
+        138,
+        138,
+        138
+      ]
+    },
+    {
+      "channel": 139,
+      "actual_reopened_rgb": [
+        139,
+        139,
+        139
+      ]
+    },
+    {
+      "channel": 140,
+      "actual_reopened_rgb": [
+        139,
+        139,
+        139
+      ]
+    },
+    {
+      "channel": 141,
+      "actual_reopened_rgb": [
+        140,
+        140,
+        140
+      ]
+    },
+    {
+      "channel": 142,
+      "actual_reopened_rgb": [
+        142,
+        142,
+        142
+      ]
+    },
+    {
+      "channel": 143,
+      "actual_reopened_rgb": [
+        143,
+        143,
+        143
+      ]
+    },
+    {
+      "channel": 144,
+      "actual_reopened_rgb": [
+        143,
+        143,
+        143
+      ]
+    },
+    {
+      "channel": 145,
+      "actual_reopened_rgb": [
+        144,
+        144,
+        144
+      ]
+    },
+    {
+      "channel": 146,
+      "actual_reopened_rgb": [
+        145,
+        145,
+        145
+      ]
+    },
+    {
+      "channel": 147,
+      "actual_reopened_rgb": [
+        147,
+        147,
+        147
+      ]
+    },
+    {
+      "channel": 148,
+      "actual_reopened_rgb": [
+        148,
+        148,
+        148
+      ]
+    },
+    {
+      "channel": 149,
+      "actual_reopened_rgb": [
+        148,
+        148,
+        148
+      ]
+    },
+    {
+      "channel": 150,
+      "actual_reopened_rgb": [
+        149,
+        149,
+        149
+      ]
+    },
+    {
+      "channel": 151,
+      "actual_reopened_rgb": [
+        151,
+        151,
+        151
+      ]
+    },
+    {
+      "channel": 152,
+      "actual_reopened_rgb": [
+        152,
+        152,
+        152
+      ]
+    },
+    {
+      "channel": 153,
+      "actual_reopened_rgb": [
+        153,
+        153,
+        153
+      ]
+    },
+    {
+      "channel": 154,
+      "actual_reopened_rgb": [
+        153,
+        153,
+        153
+      ]
+    },
+    {
+      "channel": 155,
+      "actual_reopened_rgb": [
+        154,
+        154,
+        154
+      ]
+    },
+    {
+      "channel": 156,
+      "actual_reopened_rgb": [
+        156,
+        156,
+        156
+      ]
+    },
+    {
+      "channel": 157,
+      "actual_reopened_rgb": [
+        157,
+        157,
+        157
+      ]
+    },
+    {
+      "channel": 158,
+      "actual_reopened_rgb": [
+        157,
+        157,
+        157
+      ]
+    },
+    {
+      "channel": 159,
+      "actual_reopened_rgb": [
+        158,
+        158,
+        158
+      ]
+    },
+    {
+      "channel": 160,
+      "actual_reopened_rgb": [
+        160,
+        160,
+        160
+      ]
+    },
+    {
+      "channel": 161,
+      "actual_reopened_rgb": [
+        161,
+        161,
+        161
+      ]
+    },
+    {
+      "channel": 162,
+      "actual_reopened_rgb": [
+        162,
+        162,
+        162
+      ]
+    },
+    {
+      "channel": 163,
+      "actual_reopened_rgb": [
+        162,
+        162,
+        162
+      ]
+    },
+    {
+      "channel": 164,
+      "actual_reopened_rgb": [
+        163,
+        163,
+        163
+      ]
+    },
+    {
+      "channel": 165,
+      "actual_reopened_rgb": [
+        165,
+        165,
+        165
+      ]
+    },
+    {
+      "channel": 166,
+      "actual_reopened_rgb": [
+        166,
+        166,
+        166
+      ]
+    },
+    {
+      "channel": 167,
+      "actual_reopened_rgb": [
+        166,
+        166,
+        166
+      ]
+    },
+    {
+      "channel": 168,
+      "actual_reopened_rgb": [
+        167,
+        167,
+        167
+      ]
+    },
+    {
+      "channel": 169,
+      "actual_reopened_rgb": [
+        168,
+        168,
+        168
+      ]
+    },
+    {
+      "channel": 170,
+      "actual_reopened_rgb": [
+        170,
+        170,
+        170
+      ]
+    },
+    {
+      "channel": 171,
+      "actual_reopened_rgb": [
+        171,
+        171,
+        171
+      ]
+    },
+    {
+      "channel": 172,
+      "actual_reopened_rgb": [
+        171,
+        171,
+        171
+      ]
+    },
+    {
+      "channel": 173,
+      "actual_reopened_rgb": [
+        172,
+        172,
+        172
+      ]
+    },
+    {
+      "channel": 174,
+      "actual_reopened_rgb": [
+        174,
+        174,
+        174
+      ]
+    },
+    {
+      "channel": 175,
+      "actual_reopened_rgb": [
+        175,
+        175,
+        175
+      ]
+    },
+    {
+      "channel": 176,
+      "actual_reopened_rgb": [
+        176,
+        176,
+        176
+      ]
+    },
+    {
+      "channel": 177,
+      "actual_reopened_rgb": [
+        176,
+        176,
+        176
+      ]
+    },
+    {
+      "channel": 178,
+      "actual_reopened_rgb": [
+        177,
+        177,
+        177
+      ]
+    },
+    {
+      "channel": 179,
+      "actual_reopened_rgb": [
+        179,
+        179,
+        179
+      ]
+    },
+    {
+      "channel": 180,
+      "actual_reopened_rgb": [
+        180,
+        180,
+        180
+      ]
+    },
+    {
+      "channel": 181,
+      "actual_reopened_rgb": [
+        180,
+        180,
+        180
+      ]
+    },
+    {
+      "channel": 182,
+      "actual_reopened_rgb": [
+        181,
+        181,
+        181
+      ]
+    },
+    {
+      "channel": 183,
+      "actual_reopened_rgb": [
+        182,
+        182,
+        182
+      ]
+    },
+    {
+      "channel": 184,
+      "actual_reopened_rgb": [
+        184,
+        184,
+        184
+      ]
+    },
+    {
+      "channel": 185,
+      "actual_reopened_rgb": [
+        185,
+        185,
+        185
+      ]
+    },
+    {
+      "channel": 186,
+      "actual_reopened_rgb": [
+        185,
+        185,
+        185
+      ]
+    },
+    {
+      "channel": 187,
+      "actual_reopened_rgb": [
+        186,
+        186,
+        186
+      ]
+    },
+    {
+      "channel": 188,
+      "actual_reopened_rgb": [
+        188,
+        188,
+        188
+      ]
+    },
+    {
+      "channel": 189,
+      "actual_reopened_rgb": [
+        189,
+        189,
+        189
+      ]
+    },
+    {
+      "channel": 190,
+      "actual_reopened_rgb": [
+        190,
+        190,
+        190
+      ]
+    },
+    {
+      "channel": 191,
+      "actual_reopened_rgb": [
+        190,
+        190,
+        190
+      ]
+    },
+    {
+      "channel": 192,
+      "actual_reopened_rgb": [
+        191,
+        191,
+        191
+      ]
+    },
+    {
+      "channel": 193,
+      "actual_reopened_rgb": [
+        193,
+        193,
+        193
+      ]
+    },
+    {
+      "channel": 194,
+      "actual_reopened_rgb": [
+        194,
+        194,
+        194
+      ]
+    },
+    {
+      "channel": 195,
+      "actual_reopened_rgb": [
+        194,
+        194,
+        194
+      ]
+    },
+    {
+      "channel": 196,
+      "actual_reopened_rgb": [
+        195,
+        195,
+        195
+      ]
+    },
+    {
+      "channel": 197,
+      "actual_reopened_rgb": [
+        196,
+        196,
+        196
+      ]
+    },
+    {
+      "channel": 198,
+      "actual_reopened_rgb": [
+        198,
+        198,
+        198
+      ]
+    },
+    {
+      "channel": 199,
+      "actual_reopened_rgb": [
+        199,
+        199,
+        199
+      ]
+    },
+    {
+      "channel": 200,
+      "actual_reopened_rgb": [
+        199,
+        199,
+        199
+      ]
+    },
+    {
+      "channel": 201,
+      "actual_reopened_rgb": [
+        200,
+        200,
+        200
+      ]
+    },
+    {
+      "channel": 202,
+      "actual_reopened_rgb": [
+        202,
+        202,
+        202
+      ]
+    },
+    {
+      "channel": 203,
+      "actual_reopened_rgb": [
+        203,
+        203,
+        203
+      ]
+    },
+    {
+      "channel": 204,
+      "actual_reopened_rgb": [
+        204,
+        204,
+        204
+      ]
+    },
+    {
+      "channel": 205,
+      "actual_reopened_rgb": [
+        204,
+        204,
+        204
+      ]
+    },
+    {
+      "channel": 206,
+      "actual_reopened_rgb": [
+        205,
+        205,
+        205
+      ]
+    },
+    {
+      "channel": 207,
+      "actual_reopened_rgb": [
+        207,
+        207,
+        207
+      ]
+    },
+    {
+      "channel": 208,
+      "actual_reopened_rgb": [
+        208,
+        208,
+        208
+      ]
+    },
+    {
+      "channel": 209,
+      "actual_reopened_rgb": [
+        208,
+        208,
+        208
+      ]
+    },
+    {
+      "channel": 210,
+      "actual_reopened_rgb": [
+        209,
+        209,
+        209
+      ]
+    },
+    {
+      "channel": 211,
+      "actual_reopened_rgb": [
+        211,
+        211,
+        211
+      ]
+    },
+    {
+      "channel": 212,
+      "actual_reopened_rgb": [
+        212,
+        212,
+        212
+      ]
+    },
+    {
+      "channel": 213,
+      "actual_reopened_rgb": [
+        213,
+        213,
+        213
+      ]
+    },
+    {
+      "channel": 214,
+      "actual_reopened_rgb": [
+        213,
+        213,
+        213
+      ]
+    },
+    {
+      "channel": 215,
+      "actual_reopened_rgb": [
+        214,
+        214,
+        214
+      ]
+    },
+    {
+      "channel": 216,
+      "actual_reopened_rgb": [
+        216,
+        216,
+        216
+      ]
+    },
+    {
+      "channel": 217,
+      "actual_reopened_rgb": [
+        217,
+        217,
+        217
+      ]
+    },
+    {
+      "channel": 218,
+      "actual_reopened_rgb": [
+        217,
+        217,
+        217
+      ]
+    },
+    {
+      "channel": 219,
+      "actual_reopened_rgb": [
+        218,
+        218,
+        218
+      ]
+    },
+    {
+      "channel": 220,
+      "actual_reopened_rgb": [
+        219,
+        219,
+        219
+      ]
+    },
+    {
+      "channel": 221,
+      "actual_reopened_rgb": [
+        221,
+        221,
+        221
+      ]
+    },
+    {
+      "channel": 222,
+      "actual_reopened_rgb": [
+        222,
+        222,
+        222
+      ]
+    },
+    {
+      "channel": 223,
+      "actual_reopened_rgb": [
+        222,
+        222,
+        222
+      ]
+    },
+    {
+      "channel": 224,
+      "actual_reopened_rgb": [
+        223,
+        223,
+        223
+      ]
+    },
+    {
+      "channel": 225,
+      "actual_reopened_rgb": [
+        225,
+        225,
+        225
+      ]
+    },
+    {
+      "channel": 226,
+      "actual_reopened_rgb": [
+        226,
+        226,
+        226
+      ]
+    },
+    {
+      "channel": 227,
+      "actual_reopened_rgb": [
+        227,
+        227,
+        227
+      ]
+    },
+    {
+      "channel": 228,
+      "actual_reopened_rgb": [
+        227,
+        227,
+        227
+      ]
+    },
+    {
+      "channel": 229,
+      "actual_reopened_rgb": [
+        228,
+        228,
+        228
+      ]
+    },
+    {
+      "channel": 230,
+      "actual_reopened_rgb": [
+        230,
+        230,
+        230
+      ]
+    },
+    {
+      "channel": 231,
+      "actual_reopened_rgb": [
+        231,
+        231,
+        231
+      ]
+    },
+    {
+      "channel": 232,
+      "actual_reopened_rgb": [
+        231,
+        231,
+        231
+      ]
+    },
+    {
+      "channel": 233,
+      "actual_reopened_rgb": [
+        232,
+        232,
+        232
+      ]
+    },
+    {
+      "channel": 234,
+      "actual_reopened_rgb": [
+        233,
+        233,
+        233
+      ]
+    },
+    {
+      "channel": 235,
+      "actual_reopened_rgb": [
+        235,
+        235,
+        235
+      ]
+    },
+    {
+      "channel": 236,
+      "actual_reopened_rgb": [
+        236,
+        236,
+        236
+      ]
+    },
+    {
+      "channel": 237,
+      "actual_reopened_rgb": [
+        236,
+        236,
+        236
+      ]
+    },
+    {
+      "channel": 238,
+      "actual_reopened_rgb": [
+        237,
+        237,
+        237
+      ]
+    },
+    {
+      "channel": 239,
+      "actual_reopened_rgb": [
+        239,
+        239,
+        239
+      ]
+    },
+    {
+      "channel": 240,
+      "actual_reopened_rgb": [
+        240,
+        240,
+        240
+      ]
+    },
+    {
+      "channel": 241,
+      "actual_reopened_rgb": [
+        241,
+        241,
+        241
+      ]
+    },
+    {
+      "channel": 242,
+      "actual_reopened_rgb": [
+        241,
+        241,
+        241
+      ]
+    },
+    {
+      "channel": 243,
+      "actual_reopened_rgb": [
+        242,
+        242,
+        242
+      ]
+    },
+    {
+      "channel": 244,
+      "actual_reopened_rgb": [
+        244,
+        244,
+        244
+      ]
+    },
+    {
+      "channel": 245,
+      "actual_reopened_rgb": [
+        245,
+        245,
+        245
+      ]
+    },
+    {
+      "channel": 246,
+      "actual_reopened_rgb": [
+        245,
+        245,
+        245
+      ]
+    },
+    {
+      "channel": 247,
+      "actual_reopened_rgb": [
+        246,
+        246,
+        246
+      ]
+    },
+    {
+      "channel": 248,
+      "actual_reopened_rgb": [
+        247,
+        247,
+        247
+      ]
+    },
+    {
+      "channel": 249,
+      "actual_reopened_rgb": [
+        249,
+        249,
+        249
+      ]
+    },
+    {
+      "channel": 250,
+      "actual_reopened_rgb": [
+        250,
+        250,
+        250
+      ]
+    },
+    {
+      "channel": 251,
+      "actual_reopened_rgb": [
+        250,
+        250,
+        250
+      ]
+    },
+    {
+      "channel": 252,
+      "actual_reopened_rgb": [
+        251,
+        251,
+        251
+      ]
+    },
+    {
+      "channel": 253,
+      "actual_reopened_rgb": [
+        253,
+        253,
+        253
+      ]
+    },
+    {
+      "channel": 254,
+      "actual_reopened_rgb": [
+        254,
+        254,
+        254
+      ]
+    },
+    {
+      "channel": 255,
+      "actual_reopened_rgb": [
+        255,
+        255,
+        255
+      ]
+    }
+  ],
+  "source_native_palette_sha256": "a0fc115e4fcf69c76daeb57eb710fa3beba8b25f453e04b0838374482a81b282",
+  "native_reopened_svg_sha256": "95be4c91e35561faf9b7ad796f19af105ea1bc6a9e96ecb7d7ceb14a77033f6b",
+  "font_encodings": [
+    {
+      "id": 0,
+      "family": "Apple SD Gothic Neo",
+      "charset": "utf-8",
+      "face": "0",
+      "native_fonts": [
+        {
+          "height": -44,
+          "weight": 400,
+          "family": "Arial"
+        }
+      ],
+      "bmp_sha256": "14e4107df1963d88a05a3fd706b72a0970a9ca1bbd4812e557752b7fe3e5c7a4",
+      "producer_xml": "<?xml version='1.0' encoding='utf-8'?>\n<CDXML CreationProgram=\"Chemvas font representative\" bgcolor=\"2\"><fonttable><font id=\"0\" charset=\"utf-8\" name=\"Apple SD Gothic Neo\" /></fonttable><colortable><color r=\"1\" g=\"1\" b=\"1\" /><color r=\"0\" g=\"0\" b=\"0\" /></colortable><page id=\"1\" BoundingBox=\"0 0 250 100\"><t id=\"2\" p=\"30 50\" Justification=\"Left\" InterpretChemically=\"no\" CaptionLineHeight=\"1\"><s font=\"0\" size=\"16.5\" color=\"0\" face=\"0\">FPh / OMe</s></t></page></CDXML>",
+      "native_xml": "<?xml version=\"1.0\" encoding=\"UTF-8\" ?>\n<!DOCTYPE CDXML SYSTEM \"https://static.chemistry.revvitycloud.com/cdxml/CDXML.dtd\" >\n<CDXML\n CreationProgram=\"ChemDraw 25.0.2.14\"\n Name=\"native.cdxml\"\n BoundingBox=\"30 36.06 109.77 50.20\"\n WindowPosition=\"-1610612736 -1610612736\"\n WindowSize=\"1610612736 1610612736\"\n FractionalWidths=\"yes\"\n InterpretChemically=\"yes\"\n ShowAtomQuery=\"yes\"\n ShowAtomStereo=\"no\"\n ShowAtomEnhancedStereo=\"yes\"\n ShowAtomNumber=\"no\"\n ShowResidueID=\"no\"\n ShowBondQuery=\"yes\"\n ShowBondRxn=\"yes\"\n ShowBondStereo=\"no\"\n ShowTerminalCarbonLabels=\"no\"\n ShowNonTerminalCarbonLabels=\"no\"\n HideImplicitHydrogens=\"no\"\n LabelFont=\"3\"\n LabelSize=\"10\"\n LabelFace=\"96\"\n CaptionFont=\"3\"\n CaptionSize=\"10\"\n HashSpacing=\"2.50\"\n MarginWidth=\"1.60\"\n LineWidth=\"0.60\"\n BoldWidth=\"2\"\n BondLength=\"14.40\"\n BondSpacing=\"18\"\n ChainAngle=\"120\"\n LabelJustification=\"Auto\"\n CaptionJustification=\"Left\"\n AminoAcidTermini=\"HOH\"\n ShowSequenceTermini=\"yes\"\n ShowSequenceBonds=\"yes\"\n ShowSequenceUnlinkedBranches=\"no\"\n ShowPrimeLabels=\"no\"\n ResidueWrapCount=\"40\"\n PrintMargins=\"36 36 36 36\"\n MacPrintInfo=\"0003000001200120000000000B6608A0FF84FF880BE309180367052703FC0002000001200120000000000B6608A0000100000064000000010001010100000001270F000100010000000000000000000000000002001901900000000000600000000000000000000100000000000000000000000000000000\"\n ChemPropName=\"\"\n ChemPropFormula=\"Chemical Formula: \"\n ChemPropExactMass=\"Exact Mass: \"\n ChemPropMolWt=\"Molecular Weight: \"\n ChemPropMOverZ=\"m/z: \"\n ChemPropAnalysis=\"Elemental Analysis: \"\n ChemPropBoilingPt=\"Boiling Point: \"\n ChemPropMeltingPt=\"Melting Point: \"\n ChemPropCritTemp=\"Critical Temp: \"\n ChemPropCritPres=\"Critical Pres: \"\n ChemPropCritVol=\"Critical Vol: \"\n ChemPropGibbs=\"Gibbs Energy: \"\n ChemPropLogP=\"Log P: \"\n ChemPropMR=\"MR: \"\n ChemPropHenry=\"Henry&apos;s Law: \"\n ChemPropEForm=\"Heat of Form: \"\n ChemProptPSA=\"tPSA: \"\n ChemPropCLogP=\"CLogP: \"\n ChemPropCMR=\"CMR: \"\n ChemPropLogS=\"LogS: \"\n ChemPropPKa=\"pKa: \"\n ChemPropID=\"\"\n ChemPropFragmentLabel=\"\"\n color=\"0\"\n bgcolor=\"1\"\n RxnAutonumberStart=\"1\"\n RxnAutonumberConditions=\"no\"\n RxnAutonumberStyle=\"Roman\"\n RxnAutonumberFormat=\"(#)\"\n><colortable>\n<color r=\"1\" g=\"1\" b=\"1\"/>\n<color r=\"0\" g=\"0\" b=\"0\"/>\n</colortable><fonttable>\n<font id=\"3\" charset=\"iso-8859-1\" name=\"Arial\"/>\n<font id=\"21\" charset=\"iso-8859-1\" name=\"Arial\"/>\n</fonttable><page\n id=\"4\"\n BoundingBox=\"0 0 540 719.75\"\n HeaderPosition=\"36\"\n FooterPosition=\"36\"\n PrintTrimMarks=\"yes\"\n HeightPages=\"1\"\n WidthPages=\"1\"\n><t\n id=\"2\"\n p=\"30 50\"\n BoundingBox=\"30 36.06 109.77 50.20\"\n Z=\"1\"\n InterpretChemically=\"no\"\n CaptionLineHeight=\"1\"\n LineHeight=\"1\"\n><s font=\"21\" size=\"16.5\" color=\"0\">FPh / OMe</s></t></page></CDXML>",
+      "native_svg_sha256": "e9e901659b87afc0877fc00079ca15fad13510f0e6fec1fc4839e4d3d663db8b"
+    },
+    {
+      "id": 1,
+      "family": "Apple SD Gothic Neo",
+      "charset": "utf-8",
+      "face": "1",
+      "native_fonts": [
+        {
+          "height": -44,
+          "weight": 700,
+          "family": "Arial"
+        }
+      ],
+      "bmp_sha256": "6c5d9064e788890bb6692d7c40668a5691a274fb0440756ee7059e5e10f3eb4a",
+      "producer_xml": "<?xml version='1.0' encoding='utf-8'?>\n<CDXML CreationProgram=\"Chemvas font representative\" bgcolor=\"2\"><fonttable><font id=\"0\" charset=\"utf-8\" name=\"Apple SD Gothic Neo\" /></fonttable><colortable><color r=\"1\" g=\"1\" b=\"1\" /><color r=\"0\" g=\"0\" b=\"0\" /></colortable><page id=\"1\" BoundingBox=\"0 0 250 100\"><t id=\"2\" p=\"30 50\" Justification=\"Left\" InterpretChemically=\"no\" CaptionLineHeight=\"1\"><s font=\"0\" size=\"16.5\" color=\"0\" face=\"1\">FPh / OMe</s></t></page></CDXML>",
+      "native_xml": "<?xml version=\"1.0\" encoding=\"UTF-8\" ?>\n<!DOCTYPE CDXML SYSTEM \"https://static.chemistry.revvitycloud.com/cdxml/CDXML.dtd\" >\n<CDXML\n CreationProgram=\"ChemDraw 25.0.2.14\"\n Name=\"native.cdxml\"\n BoundingBox=\"30 36.06 110.67 50.20\"\n WindowPosition=\"-1610612736 -1610612736\"\n WindowSize=\"1610612736 1610612736\"\n FractionalWidths=\"yes\"\n InterpretChemically=\"yes\"\n ShowAtomQuery=\"yes\"\n ShowAtomStereo=\"no\"\n ShowAtomEnhancedStereo=\"yes\"\n ShowAtomNumber=\"no\"\n ShowResidueID=\"no\"\n ShowBondQuery=\"yes\"\n ShowBondRxn=\"yes\"\n ShowBondStereo=\"no\"\n ShowTerminalCarbonLabels=\"no\"\n ShowNonTerminalCarbonLabels=\"no\"\n HideImplicitHydrogens=\"no\"\n LabelFont=\"3\"\n LabelSize=\"10\"\n LabelFace=\"96\"\n CaptionFont=\"3\"\n CaptionSize=\"10\"\n HashSpacing=\"2.50\"\n MarginWidth=\"1.60\"\n LineWidth=\"0.60\"\n BoldWidth=\"2\"\n BondLength=\"14.40\"\n BondSpacing=\"18\"\n ChainAngle=\"120\"\n LabelJustification=\"Auto\"\n CaptionJustification=\"Left\"\n AminoAcidTermini=\"HOH\"\n ShowSequenceTermini=\"yes\"\n ShowSequenceBonds=\"yes\"\n ShowSequenceUnlinkedBranches=\"no\"\n ShowPrimeLabels=\"no\"\n ResidueWrapCount=\"40\"\n PrintMargins=\"36 36 36 36\"\n MacPrintInfo=\"0003000001200120000000000B6608A0FF84FF880BE309180367052703FC0002000001200120000000000B6608A0000100000064000000010001010100000001270F000100010000000000000000000000000002001901900000000000600000000000000000000100000000000000000000000000000000\"\n ChemPropName=\"\"\n ChemPropFormula=\"Chemical Formula: \"\n ChemPropExactMass=\"Exact Mass: \"\n ChemPropMolWt=\"Molecular Weight: \"\n ChemPropMOverZ=\"m/z: \"\n ChemPropAnalysis=\"Elemental Analysis: \"\n ChemPropBoilingPt=\"Boiling Point: \"\n ChemPropMeltingPt=\"Melting Point: \"\n ChemPropCritTemp=\"Critical Temp: \"\n ChemPropCritPres=\"Critical Pres: \"\n ChemPropCritVol=\"Critical Vol: \"\n ChemPropGibbs=\"Gibbs Energy: \"\n ChemPropLogP=\"Log P: \"\n ChemPropMR=\"MR: \"\n ChemPropHenry=\"Henry&apos;s Law: \"\n ChemPropEForm=\"Heat of Form: \"\n ChemProptPSA=\"tPSA: \"\n ChemPropCLogP=\"CLogP: \"\n ChemPropCMR=\"CMR: \"\n ChemPropLogS=\"LogS: \"\n ChemPropPKa=\"pKa: \"\n ChemPropID=\"\"\n ChemPropFragmentLabel=\"\"\n color=\"0\"\n bgcolor=\"1\"\n RxnAutonumberStart=\"1\"\n RxnAutonumberConditions=\"no\"\n RxnAutonumberStyle=\"Roman\"\n RxnAutonumberFormat=\"(#)\"\n><colortable>\n<color r=\"1\" g=\"1\" b=\"1\"/>\n<color r=\"0\" g=\"0\" b=\"0\"/>\n</colortable><fonttable>\n<font id=\"3\" charset=\"iso-8859-1\" name=\"Arial\"/>\n<font id=\"21\" charset=\"iso-8859-1\" name=\"Arial\"/>\n</fonttable><page\n id=\"4\"\n BoundingBox=\"0 0 540 719.75\"\n HeaderPosition=\"36\"\n FooterPosition=\"36\"\n PrintTrimMarks=\"yes\"\n HeightPages=\"1\"\n WidthPages=\"1\"\n><t\n id=\"2\"\n p=\"30 50\"\n BoundingBox=\"30 36.06 110.67 50.20\"\n Z=\"1\"\n InterpretChemically=\"no\"\n CaptionLineHeight=\"1\"\n LineHeight=\"1\"\n><s font=\"21\" size=\"16.5\" color=\"0\" face=\"1\">FPh / OMe</s></t></page></CDXML>",
+      "native_svg_sha256": "91bad59a92bc7591bd4bb59953fa1c3e0b9ddc39b3be9153381e9e43e4a39456"
+    },
+    {
+      "id": 2,
+      "family": "Apple SD Gothic Neo",
+      "charset": "iso-8859-1",
+      "face": "0",
+      "native_fonts": [
+        {
+          "height": -44,
+          "weight": 400,
+          "family": "Arial"
+        }
+      ],
+      "bmp_sha256": "14e4107df1963d88a05a3fd706b72a0970a9ca1bbd4812e557752b7fe3e5c7a4",
+      "producer_xml": "<?xml version='1.0' encoding='utf-8'?>\n<CDXML CreationProgram=\"Chemvas font representative\" bgcolor=\"2\"><fonttable><font id=\"0\" charset=\"iso-8859-1\" name=\"Apple SD Gothic Neo\" /></fonttable><colortable><color r=\"1\" g=\"1\" b=\"1\" /><color r=\"0\" g=\"0\" b=\"0\" /></colortable><page id=\"1\" BoundingBox=\"0 0 250 100\"><t id=\"2\" p=\"30 50\" Justification=\"Left\" InterpretChemically=\"no\" CaptionLineHeight=\"1\"><s font=\"0\" size=\"16.5\" color=\"0\" face=\"0\">FPh / OMe</s></t></page></CDXML>",
+      "native_xml": "<?xml version=\"1.0\" encoding=\"UTF-8\" ?>\n<!DOCTYPE CDXML SYSTEM \"https://static.chemistry.revvitycloud.com/cdxml/CDXML.dtd\" >\n<CDXML\n CreationProgram=\"ChemDraw 25.0.2.14\"\n Name=\"native.cdxml\"\n BoundingBox=\"30 36.06 109.77 50.20\"\n WindowPosition=\"-1610612736 -1610612736\"\n WindowSize=\"1610612736 1610612736\"\n FractionalWidths=\"yes\"\n InterpretChemically=\"yes\"\n ShowAtomQuery=\"yes\"\n ShowAtomStereo=\"no\"\n ShowAtomEnhancedStereo=\"yes\"\n ShowAtomNumber=\"no\"\n ShowResidueID=\"no\"\n ShowBondQuery=\"yes\"\n ShowBondRxn=\"yes\"\n ShowBondStereo=\"no\"\n ShowTerminalCarbonLabels=\"no\"\n ShowNonTerminalCarbonLabels=\"no\"\n HideImplicitHydrogens=\"no\"\n LabelFont=\"3\"\n LabelSize=\"10\"\n LabelFace=\"96\"\n CaptionFont=\"3\"\n CaptionSize=\"10\"\n HashSpacing=\"2.50\"\n MarginWidth=\"1.60\"\n LineWidth=\"0.60\"\n BoldWidth=\"2\"\n BondLength=\"14.40\"\n BondSpacing=\"18\"\n ChainAngle=\"120\"\n LabelJustification=\"Auto\"\n CaptionJustification=\"Left\"\n AminoAcidTermini=\"HOH\"\n ShowSequenceTermini=\"yes\"\n ShowSequenceBonds=\"yes\"\n ShowSequenceUnlinkedBranches=\"no\"\n ShowPrimeLabels=\"no\"\n ResidueWrapCount=\"40\"\n PrintMargins=\"36 36 36 36\"\n MacPrintInfo=\"0003000001200120000000000B6608A0FF84FF880BE309180367052703FC0002000001200120000000000B6608A0000100000064000000010001010100000001270F000100010000000000000000000000000002001901900000000000600000000000000000000100000000000000000000000000000000\"\n ChemPropName=\"\"\n ChemPropFormula=\"Chemical Formula: \"\n ChemPropExactMass=\"Exact Mass: \"\n ChemPropMolWt=\"Molecular Weight: \"\n ChemPropMOverZ=\"m/z: \"\n ChemPropAnalysis=\"Elemental Analysis: \"\n ChemPropBoilingPt=\"Boiling Point: \"\n ChemPropMeltingPt=\"Melting Point: \"\n ChemPropCritTemp=\"Critical Temp: \"\n ChemPropCritPres=\"Critical Pres: \"\n ChemPropCritVol=\"Critical Vol: \"\n ChemPropGibbs=\"Gibbs Energy: \"\n ChemPropLogP=\"Log P: \"\n ChemPropMR=\"MR: \"\n ChemPropHenry=\"Henry&apos;s Law: \"\n ChemPropEForm=\"Heat of Form: \"\n ChemProptPSA=\"tPSA: \"\n ChemPropCLogP=\"CLogP: \"\n ChemPropCMR=\"CMR: \"\n ChemPropLogS=\"LogS: \"\n ChemPropPKa=\"pKa: \"\n ChemPropID=\"\"\n ChemPropFragmentLabel=\"\"\n color=\"0\"\n bgcolor=\"1\"\n RxnAutonumberStart=\"1\"\n RxnAutonumberConditions=\"no\"\n RxnAutonumberStyle=\"Roman\"\n RxnAutonumberFormat=\"(#)\"\n><colortable>\n<color r=\"1\" g=\"1\" b=\"1\"/>\n<color r=\"0\" g=\"0\" b=\"0\"/>\n</colortable><fonttable>\n<font id=\"3\" charset=\"iso-8859-1\" name=\"Arial\"/>\n<font id=\"21\" charset=\"iso-8859-1\" name=\"Arial\"/>\n</fonttable><page\n id=\"4\"\n BoundingBox=\"0 0 540 719.75\"\n HeaderPosition=\"36\"\n FooterPosition=\"36\"\n PrintTrimMarks=\"yes\"\n HeightPages=\"1\"\n WidthPages=\"1\"\n><t\n id=\"2\"\n p=\"30 50\"\n BoundingBox=\"30 36.06 109.77 50.20\"\n Z=\"1\"\n InterpretChemically=\"no\"\n CaptionLineHeight=\"1\"\n LineHeight=\"1\"\n><s font=\"21\" size=\"16.5\" color=\"0\">FPh / OMe</s></t></page></CDXML>",
+      "native_svg_sha256": "e9e901659b87afc0877fc00079ca15fad13510f0e6fec1fc4839e4d3d663db8b"
+    },
+    {
+      "id": 3,
+      "family": "Apple SD Gothic Neo",
+      "charset": "iso-8859-1",
+      "face": "1",
+      "native_fonts": [
+        {
+          "height": -44,
+          "weight": 700,
+          "family": "Arial"
+        }
+      ],
+      "bmp_sha256": "6c5d9064e788890bb6692d7c40668a5691a274fb0440756ee7059e5e10f3eb4a",
+      "producer_xml": "<?xml version='1.0' encoding='utf-8'?>\n<CDXML CreationProgram=\"Chemvas font representative\" bgcolor=\"2\"><fonttable><font id=\"0\" charset=\"iso-8859-1\" name=\"Apple SD Gothic Neo\" /></fonttable><colortable><color r=\"1\" g=\"1\" b=\"1\" /><color r=\"0\" g=\"0\" b=\"0\" /></colortable><page id=\"1\" BoundingBox=\"0 0 250 100\"><t id=\"2\" p=\"30 50\" Justification=\"Left\" InterpretChemically=\"no\" CaptionLineHeight=\"1\"><s font=\"0\" size=\"16.5\" color=\"0\" face=\"1\">FPh / OMe</s></t></page></CDXML>",
+      "native_xml": "<?xml version=\"1.0\" encoding=\"UTF-8\" ?>\n<!DOCTYPE CDXML SYSTEM \"https://static.chemistry.revvitycloud.com/cdxml/CDXML.dtd\" >\n<CDXML\n CreationProgram=\"ChemDraw 25.0.2.14\"\n Name=\"native.cdxml\"\n BoundingBox=\"30 36.06 110.67 50.20\"\n WindowPosition=\"-1610612736 -1610612736\"\n WindowSize=\"1610612736 1610612736\"\n FractionalWidths=\"yes\"\n InterpretChemically=\"yes\"\n ShowAtomQuery=\"yes\"\n ShowAtomStereo=\"no\"\n ShowAtomEnhancedStereo=\"yes\"\n ShowAtomNumber=\"no\"\n ShowResidueID=\"no\"\n ShowBondQuery=\"yes\"\n ShowBondRxn=\"yes\"\n ShowBondStereo=\"no\"\n ShowTerminalCarbonLabels=\"no\"\n ShowNonTerminalCarbonLabels=\"no\"\n HideImplicitHydrogens=\"no\"\n LabelFont=\"3\"\n LabelSize=\"10\"\n LabelFace=\"96\"\n CaptionFont=\"3\"\n CaptionSize=\"10\"\n HashSpacing=\"2.50\"\n MarginWidth=\"1.60\"\n LineWidth=\"0.60\"\n BoldWidth=\"2\"\n BondLength=\"14.40\"\n BondSpacing=\"18\"\n ChainAngle=\"120\"\n LabelJustification=\"Auto\"\n CaptionJustification=\"Left\"\n AminoAcidTermini=\"HOH\"\n ShowSequenceTermini=\"yes\"\n ShowSequenceBonds=\"yes\"\n ShowSequenceUnlinkedBranches=\"no\"\n ShowPrimeLabels=\"no\"\n ResidueWrapCount=\"40\"\n PrintMargins=\"36 36 36 36\"\n MacPrintInfo=\"0003000001200120000000000B6608A0FF84FF880BE309180367052703FC0002000001200120000000000B6608A0000100000064000000010001010100000001270F000100010000000000000000000000000002001901900000000000600000000000000000000100000000000000000000000000000000\"\n ChemPropName=\"\"\n ChemPropFormula=\"Chemical Formula: \"\n ChemPropExactMass=\"Exact Mass: \"\n ChemPropMolWt=\"Molecular Weight: \"\n ChemPropMOverZ=\"m/z: \"\n ChemPropAnalysis=\"Elemental Analysis: \"\n ChemPropBoilingPt=\"Boiling Point: \"\n ChemPropMeltingPt=\"Melting Point: \"\n ChemPropCritTemp=\"Critical Temp: \"\n ChemPropCritPres=\"Critical Pres: \"\n ChemPropCritVol=\"Critical Vol: \"\n ChemPropGibbs=\"Gibbs Energy: \"\n ChemPropLogP=\"Log P: \"\n ChemPropMR=\"MR: \"\n ChemPropHenry=\"Henry&apos;s Law: \"\n ChemPropEForm=\"Heat of Form: \"\n ChemProptPSA=\"tPSA: \"\n ChemPropCLogP=\"CLogP: \"\n ChemPropCMR=\"CMR: \"\n ChemPropLogS=\"LogS: \"\n ChemPropPKa=\"pKa: \"\n ChemPropID=\"\"\n ChemPropFragmentLabel=\"\"\n color=\"0\"\n bgcolor=\"1\"\n RxnAutonumberStart=\"1\"\n RxnAutonumberConditions=\"no\"\n RxnAutonumberStyle=\"Roman\"\n RxnAutonumberFormat=\"(#)\"\n><colortable>\n<color r=\"1\" g=\"1\" b=\"1\"/>\n<color r=\"0\" g=\"0\" b=\"0\"/>\n</colortable><fonttable>\n<font id=\"3\" charset=\"iso-8859-1\" name=\"Arial\"/>\n<font id=\"21\" charset=\"iso-8859-1\" name=\"Arial\"/>\n</fonttable><page\n id=\"4\"\n BoundingBox=\"0 0 540 719.75\"\n HeaderPosition=\"36\"\n FooterPosition=\"36\"\n PrintTrimMarks=\"yes\"\n HeightPages=\"1\"\n WidthPages=\"1\"\n><t\n id=\"2\"\n p=\"30 50\"\n BoundingBox=\"30 36.06 110.67 50.20\"\n Z=\"1\"\n InterpretChemically=\"no\"\n CaptionLineHeight=\"1\"\n LineHeight=\"1\"\n><s font=\"21\" size=\"16.5\" color=\"0\" face=\"1\">FPh / OMe</s></t></page></CDXML>",
+      "native_svg_sha256": "91bad59a92bc7591bd4bb59953fa1c3e0b9ddc39b3be9153381e9e43e4a39456"
+    },
+    {
+      "id": 4,
+      "family": "Apple SD Gothic Neo",
+      "charset": "x-mac-roman",
+      "face": "0",
+      "native_fonts": [
+        {
+          "height": -44,
+          "weight": 400,
+          "family": "Arial"
+        }
+      ],
+      "bmp_sha256": "14e4107df1963d88a05a3fd706b72a0970a9ca1bbd4812e557752b7fe3e5c7a4",
+      "producer_xml": "<?xml version='1.0' encoding='utf-8'?>\n<CDXML CreationProgram=\"Chemvas font representative\" bgcolor=\"2\"><fonttable><font id=\"0\" charset=\"x-mac-roman\" name=\"Apple SD Gothic Neo\" /></fonttable><colortable><color r=\"1\" g=\"1\" b=\"1\" /><color r=\"0\" g=\"0\" b=\"0\" /></colortable><page id=\"1\" BoundingBox=\"0 0 250 100\"><t id=\"2\" p=\"30 50\" Justification=\"Left\" InterpretChemically=\"no\" CaptionLineHeight=\"1\"><s font=\"0\" size=\"16.5\" color=\"0\" face=\"0\">FPh / OMe</s></t></page></CDXML>",
+      "native_xml": "<?xml version=\"1.0\" encoding=\"UTF-8\" ?>\n<!DOCTYPE CDXML SYSTEM \"https://static.chemistry.revvitycloud.com/cdxml/CDXML.dtd\" >\n<CDXML\n CreationProgram=\"ChemDraw 25.0.2.14\"\n Name=\"native.cdxml\"\n BoundingBox=\"30 36.06 109.77 50.20\"\n WindowPosition=\"-1610612736 -1610612736\"\n WindowSize=\"1610612736 1610612736\"\n FractionalWidths=\"yes\"\n InterpretChemically=\"yes\"\n ShowAtomQuery=\"yes\"\n ShowAtomStereo=\"no\"\n ShowAtomEnhancedStereo=\"yes\"\n ShowAtomNumber=\"no\"\n ShowResidueID=\"no\"\n ShowBondQuery=\"yes\"\n ShowBondRxn=\"yes\"\n ShowBondStereo=\"no\"\n ShowTerminalCarbonLabels=\"no\"\n ShowNonTerminalCarbonLabels=\"no\"\n HideImplicitHydrogens=\"no\"\n LabelFont=\"3\"\n LabelSize=\"10\"\n LabelFace=\"96\"\n CaptionFont=\"3\"\n CaptionSize=\"10\"\n HashSpacing=\"2.50\"\n MarginWidth=\"1.60\"\n LineWidth=\"0.60\"\n BoldWidth=\"2\"\n BondLength=\"14.40\"\n BondSpacing=\"18\"\n ChainAngle=\"120\"\n LabelJustification=\"Auto\"\n CaptionJustification=\"Left\"\n AminoAcidTermini=\"HOH\"\n ShowSequenceTermini=\"yes\"\n ShowSequenceBonds=\"yes\"\n ShowSequenceUnlinkedBranches=\"no\"\n ShowPrimeLabels=\"no\"\n ResidueWrapCount=\"40\"\n PrintMargins=\"36 36 36 36\"\n MacPrintInfo=\"0003000001200120000000000B6608A0FF84FF880BE309180367052703FC0002000001200120000000000B6608A0000100000064000000010001010100000001270F000100010000000000000000000000000002001901900000000000600000000000000000000100000000000000000000000000000000\"\n ChemPropName=\"\"\n ChemPropFormula=\"Chemical Formula: \"\n ChemPropExactMass=\"Exact Mass: \"\n ChemPropMolWt=\"Molecular Weight: \"\n ChemPropMOverZ=\"m/z: \"\n ChemPropAnalysis=\"Elemental Analysis: \"\n ChemPropBoilingPt=\"Boiling Point: \"\n ChemPropMeltingPt=\"Melting Point: \"\n ChemPropCritTemp=\"Critical Temp: \"\n ChemPropCritPres=\"Critical Pres: \"\n ChemPropCritVol=\"Critical Vol: \"\n ChemPropGibbs=\"Gibbs Energy: \"\n ChemPropLogP=\"Log P: \"\n ChemPropMR=\"MR: \"\n ChemPropHenry=\"Henry&apos;s Law: \"\n ChemPropEForm=\"Heat of Form: \"\n ChemProptPSA=\"tPSA: \"\n ChemPropCLogP=\"CLogP: \"\n ChemPropCMR=\"CMR: \"\n ChemPropLogS=\"LogS: \"\n ChemPropPKa=\"pKa: \"\n ChemPropID=\"\"\n ChemPropFragmentLabel=\"\"\n color=\"0\"\n bgcolor=\"1\"\n RxnAutonumberStart=\"1\"\n RxnAutonumberConditions=\"no\"\n RxnAutonumberStyle=\"Roman\"\n RxnAutonumberFormat=\"(#)\"\n><colortable>\n<color r=\"1\" g=\"1\" b=\"1\"/>\n<color r=\"0\" g=\"0\" b=\"0\"/>\n</colortable><fonttable>\n<font id=\"3\" charset=\"iso-8859-1\" name=\"Arial\"/>\n<font id=\"21\" charset=\"iso-8859-1\" name=\"Arial\"/>\n</fonttable><page\n id=\"4\"\n BoundingBox=\"0 0 540 719.75\"\n HeaderPosition=\"36\"\n FooterPosition=\"36\"\n PrintTrimMarks=\"yes\"\n HeightPages=\"1\"\n WidthPages=\"1\"\n><t\n id=\"2\"\n p=\"30 50\"\n BoundingBox=\"30 36.06 109.77 50.20\"\n Z=\"1\"\n InterpretChemically=\"no\"\n CaptionLineHeight=\"1\"\n LineHeight=\"1\"\n><s font=\"21\" size=\"16.5\" color=\"0\">FPh / OMe</s></t></page></CDXML>",
+      "native_svg_sha256": "e9e901659b87afc0877fc00079ca15fad13510f0e6fec1fc4839e4d3d663db8b"
+    },
+    {
+      "id": 5,
+      "family": "Apple SD Gothic Neo",
+      "charset": "x-mac-roman",
+      "face": "1",
+      "native_fonts": [
+        {
+          "height": -44,
+          "weight": 700,
+          "family": "Arial"
+        }
+      ],
+      "bmp_sha256": "6c5d9064e788890bb6692d7c40668a5691a274fb0440756ee7059e5e10f3eb4a",
+      "producer_xml": "<?xml version='1.0' encoding='utf-8'?>\n<CDXML CreationProgram=\"Chemvas font representative\" bgcolor=\"2\"><fonttable><font id=\"0\" charset=\"x-mac-roman\" name=\"Apple SD Gothic Neo\" /></fonttable><colortable><color r=\"1\" g=\"1\" b=\"1\" /><color r=\"0\" g=\"0\" b=\"0\" /></colortable><page id=\"1\" BoundingBox=\"0 0 250 100\"><t id=\"2\" p=\"30 50\" Justification=\"Left\" InterpretChemically=\"no\" CaptionLineHeight=\"1\"><s font=\"0\" size=\"16.5\" color=\"0\" face=\"1\">FPh / OMe</s></t></page></CDXML>",
+      "native_xml": "<?xml version=\"1.0\" encoding=\"UTF-8\" ?>\n<!DOCTYPE CDXML SYSTEM \"https://static.chemistry.revvitycloud.com/cdxml/CDXML.dtd\" >\n<CDXML\n CreationProgram=\"ChemDraw 25.0.2.14\"\n Name=\"native.cdxml\"\n BoundingBox=\"30 36.06 110.67 50.20\"\n WindowPosition=\"-1610612736 -1610612736\"\n WindowSize=\"1610612736 1610612736\"\n FractionalWidths=\"yes\"\n InterpretChemically=\"yes\"\n ShowAtomQuery=\"yes\"\n ShowAtomStereo=\"no\"\n ShowAtomEnhancedStereo=\"yes\"\n ShowAtomNumber=\"no\"\n ShowResidueID=\"no\"\n ShowBondQuery=\"yes\"\n ShowBondRxn=\"yes\"\n ShowBondStereo=\"no\"\n ShowTerminalCarbonLabels=\"no\"\n ShowNonTerminalCarbonLabels=\"no\"\n HideImplicitHydrogens=\"no\"\n LabelFont=\"3\"\n LabelSize=\"10\"\n LabelFace=\"96\"\n CaptionFont=\"3\"\n CaptionSize=\"10\"\n HashSpacing=\"2.50\"\n MarginWidth=\"1.60\"\n LineWidth=\"0.60\"\n BoldWidth=\"2\"\n BondLength=\"14.40\"\n BondSpacing=\"18\"\n ChainAngle=\"120\"\n LabelJustification=\"Auto\"\n CaptionJustification=\"Left\"\n AminoAcidTermini=\"HOH\"\n ShowSequenceTermini=\"yes\"\n ShowSequenceBonds=\"yes\"\n ShowSequenceUnlinkedBranches=\"no\"\n ShowPrimeLabels=\"no\"\n ResidueWrapCount=\"40\"\n PrintMargins=\"36 36 36 36\"\n MacPrintInfo=\"0003000001200120000000000B6608A0FF84FF880BE309180367052703FC0002000001200120000000000B6608A0000100000064000000010001010100000001270F000100010000000000000000000000000002001901900000000000600000000000000000000100000000000000000000000000000000\"\n ChemPropName=\"\"\n ChemPropFormula=\"Chemical Formula: \"\n ChemPropExactMass=\"Exact Mass: \"\n ChemPropMolWt=\"Molecular Weight: \"\n ChemPropMOverZ=\"m/z: \"\n ChemPropAnalysis=\"Elemental Analysis: \"\n ChemPropBoilingPt=\"Boiling Point: \"\n ChemPropMeltingPt=\"Melting Point: \"\n ChemPropCritTemp=\"Critical Temp: \"\n ChemPropCritPres=\"Critical Pres: \"\n ChemPropCritVol=\"Critical Vol: \"\n ChemPropGibbs=\"Gibbs Energy: \"\n ChemPropLogP=\"Log P: \"\n ChemPropMR=\"MR: \"\n ChemPropHenry=\"Henry&apos;s Law: \"\n ChemPropEForm=\"Heat of Form: \"\n ChemProptPSA=\"tPSA: \"\n ChemPropCLogP=\"CLogP: \"\n ChemPropCMR=\"CMR: \"\n ChemPropLogS=\"LogS: \"\n ChemPropPKa=\"pKa: \"\n ChemPropID=\"\"\n ChemPropFragmentLabel=\"\"\n color=\"0\"\n bgcolor=\"1\"\n RxnAutonumberStart=\"1\"\n RxnAutonumberConditions=\"no\"\n RxnAutonumberStyle=\"Roman\"\n RxnAutonumberFormat=\"(#)\"\n><colortable>\n<color r=\"1\" g=\"1\" b=\"1\"/>\n<color r=\"0\" g=\"0\" b=\"0\"/>\n</colortable><fonttable>\n<font id=\"3\" charset=\"iso-8859-1\" name=\"Arial\"/>\n<font id=\"21\" charset=\"iso-8859-1\" name=\"Arial\"/>\n</fonttable><page\n id=\"4\"\n BoundingBox=\"0 0 540 719.75\"\n HeaderPosition=\"36\"\n FooterPosition=\"36\"\n PrintTrimMarks=\"yes\"\n HeightPages=\"1\"\n WidthPages=\"1\"\n><t\n id=\"2\"\n p=\"30 50\"\n BoundingBox=\"30 36.06 110.67 50.20\"\n Z=\"1\"\n InterpretChemically=\"no\"\n CaptionLineHeight=\"1\"\n LineHeight=\"1\"\n><s font=\"21\" size=\"16.5\" color=\"0\" face=\"1\">FPh / OMe</s></t></page></CDXML>",
+      "native_svg_sha256": "91bad59a92bc7591bd4bb59953fa1c3e0b9ddc39b3be9153381e9e43e4a39456"
+    },
+    {
+      "id": 6,
+      "family": "Apple SD Gothic Neo",
+      "charset": null,
+      "face": "0",
+      "native_fonts": [
+        {
+          "height": -44,
+          "weight": 400,
+          "family": "Arial"
+        }
+      ],
+      "bmp_sha256": "14e4107df1963d88a05a3fd706b72a0970a9ca1bbd4812e557752b7fe3e5c7a4",
+      "producer_xml": "<?xml version='1.0' encoding='utf-8'?>\n<CDXML CreationProgram=\"Chemvas font representative\" bgcolor=\"2\"><fonttable><font id=\"0\" name=\"Apple SD Gothic Neo\" /></fonttable><colortable><color r=\"1\" g=\"1\" b=\"1\" /><color r=\"0\" g=\"0\" b=\"0\" /></colortable><page id=\"1\" BoundingBox=\"0 0 250 100\"><t id=\"2\" p=\"30 50\" Justification=\"Left\" InterpretChemically=\"no\" CaptionLineHeight=\"1\"><s font=\"0\" size=\"16.5\" color=\"0\" face=\"0\">FPh / OMe</s></t></page></CDXML>",
+      "native_xml": "<?xml version=\"1.0\" encoding=\"UTF-8\" ?>\n<!DOCTYPE CDXML SYSTEM \"https://static.chemistry.revvitycloud.com/cdxml/CDXML.dtd\" >\n<CDXML\n CreationProgram=\"ChemDraw 25.0.2.14\"\n Name=\"native.cdxml\"\n BoundingBox=\"30 36.06 109.77 50.20\"\n WindowPosition=\"-1610612736 -1610612736\"\n WindowSize=\"1610612736 1610612736\"\n FractionalWidths=\"yes\"\n InterpretChemically=\"yes\"\n ShowAtomQuery=\"yes\"\n ShowAtomStereo=\"no\"\n ShowAtomEnhancedStereo=\"yes\"\n ShowAtomNumber=\"no\"\n ShowResidueID=\"no\"\n ShowBondQuery=\"yes\"\n ShowBondRxn=\"yes\"\n ShowBondStereo=\"no\"\n ShowTerminalCarbonLabels=\"no\"\n ShowNonTerminalCarbonLabels=\"no\"\n HideImplicitHydrogens=\"no\"\n LabelFont=\"3\"\n LabelSize=\"10\"\n LabelFace=\"96\"\n CaptionFont=\"3\"\n CaptionSize=\"10\"\n HashSpacing=\"2.50\"\n MarginWidth=\"1.60\"\n LineWidth=\"0.60\"\n BoldWidth=\"2\"\n BondLength=\"14.40\"\n BondSpacing=\"18\"\n ChainAngle=\"120\"\n LabelJustification=\"Auto\"\n CaptionJustification=\"Left\"\n AminoAcidTermini=\"HOH\"\n ShowSequenceTermini=\"yes\"\n ShowSequenceBonds=\"yes\"\n ShowSequenceUnlinkedBranches=\"no\"\n ShowPrimeLabels=\"no\"\n ResidueWrapCount=\"40\"\n PrintMargins=\"36 36 36 36\"\n MacPrintInfo=\"0003000001200120000000000B6608A0FF84FF880BE309180367052703FC0002000001200120000000000B6608A0000100000064000000010001010100000001270F000100010000000000000000000000000002001901900000000000600000000000000000000100000000000000000000000000000000\"\n ChemPropName=\"\"\n ChemPropFormula=\"Chemical Formula: \"\n ChemPropExactMass=\"Exact Mass: \"\n ChemPropMolWt=\"Molecular Weight: \"\n ChemPropMOverZ=\"m/z: \"\n ChemPropAnalysis=\"Elemental Analysis: \"\n ChemPropBoilingPt=\"Boiling Point: \"\n ChemPropMeltingPt=\"Melting Point: \"\n ChemPropCritTemp=\"Critical Temp: \"\n ChemPropCritPres=\"Critical Pres: \"\n ChemPropCritVol=\"Critical Vol: \"\n ChemPropGibbs=\"Gibbs Energy: \"\n ChemPropLogP=\"Log P: \"\n ChemPropMR=\"MR: \"\n ChemPropHenry=\"Henry&apos;s Law: \"\n ChemPropEForm=\"Heat of Form: \"\n ChemProptPSA=\"tPSA: \"\n ChemPropCLogP=\"CLogP: \"\n ChemPropCMR=\"CMR: \"\n ChemPropLogS=\"LogS: \"\n ChemPropPKa=\"pKa: \"\n ChemPropID=\"\"\n ChemPropFragmentLabel=\"\"\n color=\"0\"\n bgcolor=\"1\"\n RxnAutonumberStart=\"1\"\n RxnAutonumberConditions=\"no\"\n RxnAutonumberStyle=\"Roman\"\n RxnAutonumberFormat=\"(#)\"\n><colortable>\n<color r=\"1\" g=\"1\" b=\"1\"/>\n<color r=\"0\" g=\"0\" b=\"0\"/>\n</colortable><fonttable>\n<font id=\"3\" charset=\"iso-8859-1\" name=\"Arial\"/>\n<font id=\"21\" charset=\"iso-8859-1\" name=\"Arial\"/>\n</fonttable><page\n id=\"4\"\n BoundingBox=\"0 0 540 719.75\"\n HeaderPosition=\"36\"\n FooterPosition=\"36\"\n PrintTrimMarks=\"yes\"\n HeightPages=\"1\"\n WidthPages=\"1\"\n><t\n id=\"2\"\n p=\"30 50\"\n BoundingBox=\"30 36.06 109.77 50.20\"\n Z=\"1\"\n InterpretChemically=\"no\"\n CaptionLineHeight=\"1\"\n LineHeight=\"1\"\n><s font=\"21\" size=\"16.5\" color=\"0\">FPh / OMe</s></t></page></CDXML>",
+      "native_svg_sha256": "e9e901659b87afc0877fc00079ca15fad13510f0e6fec1fc4839e4d3d663db8b"
+    },
+    {
+      "id": 7,
+      "family": "Apple SD Gothic Neo",
+      "charset": null,
+      "face": "1",
+      "native_fonts": [
+        {
+          "height": -44,
+          "weight": 700,
+          "family": "Arial"
+        }
+      ],
+      "bmp_sha256": "6c5d9064e788890bb6692d7c40668a5691a274fb0440756ee7059e5e10f3eb4a",
+      "producer_xml": "<?xml version='1.0' encoding='utf-8'?>\n<CDXML CreationProgram=\"Chemvas font representative\" bgcolor=\"2\"><fonttable><font id=\"0\" name=\"Apple SD Gothic Neo\" /></fonttable><colortable><color r=\"1\" g=\"1\" b=\"1\" /><color r=\"0\" g=\"0\" b=\"0\" /></colortable><page id=\"1\" BoundingBox=\"0 0 250 100\"><t id=\"2\" p=\"30 50\" Justification=\"Left\" InterpretChemically=\"no\" CaptionLineHeight=\"1\"><s font=\"0\" size=\"16.5\" color=\"0\" face=\"1\">FPh / OMe</s></t></page></CDXML>",
+      "native_xml": "<?xml version=\"1.0\" encoding=\"UTF-8\" ?>\n<!DOCTYPE CDXML SYSTEM \"https://static.chemistry.revvitycloud.com/cdxml/CDXML.dtd\" >\n<CDXML\n CreationProgram=\"ChemDraw 25.0.2.14\"\n Name=\"native.cdxml\"\n BoundingBox=\"30 36.06 110.67 50.20\"\n WindowPosition=\"-1610612736 -1610612736\"\n WindowSize=\"1610612736 1610612736\"\n FractionalWidths=\"yes\"\n InterpretChemically=\"yes\"\n ShowAtomQuery=\"yes\"\n ShowAtomStereo=\"no\"\n ShowAtomEnhancedStereo=\"yes\"\n ShowAtomNumber=\"no\"\n ShowResidueID=\"no\"\n ShowBondQuery=\"yes\"\n ShowBondRxn=\"yes\"\n ShowBondStereo=\"no\"\n ShowTerminalCarbonLabels=\"no\"\n ShowNonTerminalCarbonLabels=\"no\"\n HideImplicitHydrogens=\"no\"\n LabelFont=\"3\"\n LabelSize=\"10\"\n LabelFace=\"96\"\n CaptionFont=\"3\"\n CaptionSize=\"10\"\n HashSpacing=\"2.50\"\n MarginWidth=\"1.60\"\n LineWidth=\"0.60\"\n BoldWidth=\"2\"\n BondLength=\"14.40\"\n BondSpacing=\"18\"\n ChainAngle=\"120\"\n LabelJustification=\"Auto\"\n CaptionJustification=\"Left\"\n AminoAcidTermini=\"HOH\"\n ShowSequenceTermini=\"yes\"\n ShowSequenceBonds=\"yes\"\n ShowSequenceUnlinkedBranches=\"no\"\n ShowPrimeLabels=\"no\"\n ResidueWrapCount=\"40\"\n PrintMargins=\"36 36 36 36\"\n MacPrintInfo=\"0003000001200120000000000B6608A0FF84FF880BE309180367052703FC0002000001200120000000000B6608A0000100000064000000010001010100000001270F000100010000000000000000000000000002001901900000000000600000000000000000000100000000000000000000000000000000\"\n ChemPropName=\"\"\n ChemPropFormula=\"Chemical Formula: \"\n ChemPropExactMass=\"Exact Mass: \"\n ChemPropMolWt=\"Molecular Weight: \"\n ChemPropMOverZ=\"m/z: \"\n ChemPropAnalysis=\"Elemental Analysis: \"\n ChemPropBoilingPt=\"Boiling Point: \"\n ChemPropMeltingPt=\"Melting Point: \"\n ChemPropCritTemp=\"Critical Temp: \"\n ChemPropCritPres=\"Critical Pres: \"\n ChemPropCritVol=\"Critical Vol: \"\n ChemPropGibbs=\"Gibbs Energy: \"\n ChemPropLogP=\"Log P: \"\n ChemPropMR=\"MR: \"\n ChemPropHenry=\"Henry&apos;s Law: \"\n ChemPropEForm=\"Heat of Form: \"\n ChemProptPSA=\"tPSA: \"\n ChemPropCLogP=\"CLogP: \"\n ChemPropCMR=\"CMR: \"\n ChemPropLogS=\"LogS: \"\n ChemPropPKa=\"pKa: \"\n ChemPropID=\"\"\n ChemPropFragmentLabel=\"\"\n color=\"0\"\n bgcolor=\"1\"\n RxnAutonumberStart=\"1\"\n RxnAutonumberConditions=\"no\"\n RxnAutonumberStyle=\"Roman\"\n RxnAutonumberFormat=\"(#)\"\n><colortable>\n<color r=\"1\" g=\"1\" b=\"1\"/>\n<color r=\"0\" g=\"0\" b=\"0\"/>\n</colortable><fonttable>\n<font id=\"3\" charset=\"iso-8859-1\" name=\"Arial\"/>\n<font id=\"21\" charset=\"iso-8859-1\" name=\"Arial\"/>\n</fonttable><page\n id=\"4\"\n BoundingBox=\"0 0 540 719.75\"\n HeaderPosition=\"36\"\n FooterPosition=\"36\"\n PrintTrimMarks=\"yes\"\n HeightPages=\"1\"\n WidthPages=\"1\"\n><t\n id=\"2\"\n p=\"30 50\"\n BoundingBox=\"30 36.06 110.67 50.20\"\n Z=\"1\"\n InterpretChemically=\"no\"\n CaptionLineHeight=\"1\"\n LineHeight=\"1\"\n><s font=\"21\" size=\"16.5\" color=\"0\" face=\"1\">FPh / OMe</s></t></page></CDXML>",
+      "native_svg_sha256": "91bad59a92bc7591bd4bb59953fa1c3e0b9ddc39b3be9153381e9e43e4a39456"
+    },
+    {
+      "id": 8,
+      "family": "AppleSDGothicNeo-Bold",
+      "charset": "utf-8",
+      "face": "0",
+      "native_fonts": [
+        {
+          "height": -44,
+          "weight": 400,
+          "family": "Arial"
+        }
+      ],
+      "bmp_sha256": "14e4107df1963d88a05a3fd706b72a0970a9ca1bbd4812e557752b7fe3e5c7a4",
+      "producer_xml": "<?xml version='1.0' encoding='utf-8'?>\n<CDXML CreationProgram=\"Chemvas font representative\" bgcolor=\"2\"><fonttable><font id=\"0\" charset=\"utf-8\" name=\"AppleSDGothicNeo-Bold\" /></fonttable><colortable><color r=\"1\" g=\"1\" b=\"1\" /><color r=\"0\" g=\"0\" b=\"0\" /></colortable><page id=\"1\" BoundingBox=\"0 0 250 100\"><t id=\"2\" p=\"30 50\" Justification=\"Left\" InterpretChemically=\"no\" CaptionLineHeight=\"1\"><s font=\"0\" size=\"16.5\" color=\"0\" face=\"0\">FPh / OMe</s></t></page></CDXML>",
+      "native_xml": "<?xml version=\"1.0\" encoding=\"UTF-8\" ?>\n<!DOCTYPE CDXML SYSTEM \"https://static.chemistry.revvitycloud.com/cdxml/CDXML.dtd\" >\n<CDXML\n CreationProgram=\"ChemDraw 25.0.2.14\"\n Name=\"native.cdxml\"\n BoundingBox=\"30 36.06 109.77 50.20\"\n WindowPosition=\"-1610612736 -1610612736\"\n WindowSize=\"1610612736 1610612736\"\n FractionalWidths=\"yes\"\n InterpretChemically=\"yes\"\n ShowAtomQuery=\"yes\"\n ShowAtomStereo=\"no\"\n ShowAtomEnhancedStereo=\"yes\"\n ShowAtomNumber=\"no\"\n ShowResidueID=\"no\"\n ShowBondQuery=\"yes\"\n ShowBondRxn=\"yes\"\n ShowBondStereo=\"no\"\n ShowTerminalCarbonLabels=\"no\"\n ShowNonTerminalCarbonLabels=\"no\"\n HideImplicitHydrogens=\"no\"\n LabelFont=\"3\"\n LabelSize=\"10\"\n LabelFace=\"96\"\n CaptionFont=\"3\"\n CaptionSize=\"10\"\n HashSpacing=\"2.50\"\n MarginWidth=\"1.60\"\n LineWidth=\"0.60\"\n BoldWidth=\"2\"\n BondLength=\"14.40\"\n BondSpacing=\"18\"\n ChainAngle=\"120\"\n LabelJustification=\"Auto\"\n CaptionJustification=\"Left\"\n AminoAcidTermini=\"HOH\"\n ShowSequenceTermini=\"yes\"\n ShowSequenceBonds=\"yes\"\n ShowSequenceUnlinkedBranches=\"no\"\n ShowPrimeLabels=\"no\"\n ResidueWrapCount=\"40\"\n PrintMargins=\"36 36 36 36\"\n MacPrintInfo=\"0003000001200120000000000B6608A0FF84FF880BE309180367052703FC0002000001200120000000000B6608A0000100000064000000010001010100000001270F000100010000000000000000000000000002001901900000000000600000000000000000000100000000000000000000000000000000\"\n ChemPropName=\"\"\n ChemPropFormula=\"Chemical Formula: \"\n ChemPropExactMass=\"Exact Mass: \"\n ChemPropMolWt=\"Molecular Weight: \"\n ChemPropMOverZ=\"m/z: \"\n ChemPropAnalysis=\"Elemental Analysis: \"\n ChemPropBoilingPt=\"Boiling Point: \"\n ChemPropMeltingPt=\"Melting Point: \"\n ChemPropCritTemp=\"Critical Temp: \"\n ChemPropCritPres=\"Critical Pres: \"\n ChemPropCritVol=\"Critical Vol: \"\n ChemPropGibbs=\"Gibbs Energy: \"\n ChemPropLogP=\"Log P: \"\n ChemPropMR=\"MR: \"\n ChemPropHenry=\"Henry&apos;s Law: \"\n ChemPropEForm=\"Heat of Form: \"\n ChemProptPSA=\"tPSA: \"\n ChemPropCLogP=\"CLogP: \"\n ChemPropCMR=\"CMR: \"\n ChemPropLogS=\"LogS: \"\n ChemPropPKa=\"pKa: \"\n ChemPropID=\"\"\n ChemPropFragmentLabel=\"\"\n color=\"0\"\n bgcolor=\"1\"\n RxnAutonumberStart=\"1\"\n RxnAutonumberConditions=\"no\"\n RxnAutonumberStyle=\"Roman\"\n RxnAutonumberFormat=\"(#)\"\n><colortable>\n<color r=\"1\" g=\"1\" b=\"1\"/>\n<color r=\"0\" g=\"0\" b=\"0\"/>\n</colortable><fonttable>\n<font id=\"3\" charset=\"iso-8859-1\" name=\"Arial\"/>\n<font id=\"21\" charset=\"iso-8859-1\" name=\"Arial\"/>\n</fonttable><page\n id=\"4\"\n BoundingBox=\"0 0 540 719.75\"\n HeaderPosition=\"36\"\n FooterPosition=\"36\"\n PrintTrimMarks=\"yes\"\n HeightPages=\"1\"\n WidthPages=\"1\"\n><t\n id=\"2\"\n p=\"30 50\"\n BoundingBox=\"30 36.06 109.77 50.20\"\n Z=\"1\"\n InterpretChemically=\"no\"\n CaptionLineHeight=\"1\"\n LineHeight=\"1\"\n><s font=\"21\" size=\"16.5\" color=\"0\">FPh / OMe</s></t></page></CDXML>",
+      "native_svg_sha256": "e9e901659b87afc0877fc00079ca15fad13510f0e6fec1fc4839e4d3d663db8b"
+    },
+    {
+      "id": 9,
+      "family": "AppleSDGothicNeo-Bold",
+      "charset": "utf-8",
+      "face": "1",
+      "native_fonts": [
+        {
+          "height": -44,
+          "weight": 700,
+          "family": "Arial"
+        }
+      ],
+      "bmp_sha256": "6c5d9064e788890bb6692d7c40668a5691a274fb0440756ee7059e5e10f3eb4a",
+      "producer_xml": "<?xml version='1.0' encoding='utf-8'?>\n<CDXML CreationProgram=\"Chemvas font representative\" bgcolor=\"2\"><fonttable><font id=\"0\" charset=\"utf-8\" name=\"AppleSDGothicNeo-Bold\" /></fonttable><colortable><color r=\"1\" g=\"1\" b=\"1\" /><color r=\"0\" g=\"0\" b=\"0\" /></colortable><page id=\"1\" BoundingBox=\"0 0 250 100\"><t id=\"2\" p=\"30 50\" Justification=\"Left\" InterpretChemically=\"no\" CaptionLineHeight=\"1\"><s font=\"0\" size=\"16.5\" color=\"0\" face=\"1\">FPh / OMe</s></t></page></CDXML>",
+      "native_xml": "<?xml version=\"1.0\" encoding=\"UTF-8\" ?>\n<!DOCTYPE CDXML SYSTEM \"https://static.chemistry.revvitycloud.com/cdxml/CDXML.dtd\" >\n<CDXML\n CreationProgram=\"ChemDraw 25.0.2.14\"\n Name=\"native.cdxml\"\n BoundingBox=\"30 36.06 110.67 50.20\"\n WindowPosition=\"-1610612736 -1610612736\"\n WindowSize=\"1610612736 1610612736\"\n FractionalWidths=\"yes\"\n InterpretChemically=\"yes\"\n ShowAtomQuery=\"yes\"\n ShowAtomStereo=\"no\"\n ShowAtomEnhancedStereo=\"yes\"\n ShowAtomNumber=\"no\"\n ShowResidueID=\"no\"\n ShowBondQuery=\"yes\"\n ShowBondRxn=\"yes\"\n ShowBondStereo=\"no\"\n ShowTerminalCarbonLabels=\"no\"\n ShowNonTerminalCarbonLabels=\"no\"\n HideImplicitHydrogens=\"no\"\n LabelFont=\"3\"\n LabelSize=\"10\"\n LabelFace=\"96\"\n CaptionFont=\"3\"\n CaptionSize=\"10\"\n HashSpacing=\"2.50\"\n MarginWidth=\"1.60\"\n LineWidth=\"0.60\"\n BoldWidth=\"2\"\n BondLength=\"14.40\"\n BondSpacing=\"18\"\n ChainAngle=\"120\"\n LabelJustification=\"Auto\"\n CaptionJustification=\"Left\"\n AminoAcidTermini=\"HOH\"\n ShowSequenceTermini=\"yes\"\n ShowSequenceBonds=\"yes\"\n ShowSequenceUnlinkedBranches=\"no\"\n ShowPrimeLabels=\"no\"\n ResidueWrapCount=\"40\"\n PrintMargins=\"36 36 36 36\"\n MacPrintInfo=\"0003000001200120000000000B6608A0FF84FF880BE309180367052703FC0002000001200120000000000B6608A0000100000064000000010001010100000001270F000100010000000000000000000000000002001901900000000000600000000000000000000100000000000000000000000000000000\"\n ChemPropName=\"\"\n ChemPropFormula=\"Chemical Formula: \"\n ChemPropExactMass=\"Exact Mass: \"\n ChemPropMolWt=\"Molecular Weight: \"\n ChemPropMOverZ=\"m/z: \"\n ChemPropAnalysis=\"Elemental Analysis: \"\n ChemPropBoilingPt=\"Boiling Point: \"\n ChemPropMeltingPt=\"Melting Point: \"\n ChemPropCritTemp=\"Critical Temp: \"\n ChemPropCritPres=\"Critical Pres: \"\n ChemPropCritVol=\"Critical Vol: \"\n ChemPropGibbs=\"Gibbs Energy: \"\n ChemPropLogP=\"Log P: \"\n ChemPropMR=\"MR: \"\n ChemPropHenry=\"Henry&apos;s Law: \"\n ChemPropEForm=\"Heat of Form: \"\n ChemProptPSA=\"tPSA: \"\n ChemPropCLogP=\"CLogP: \"\n ChemPropCMR=\"CMR: \"\n ChemPropLogS=\"LogS: \"\n ChemPropPKa=\"pKa: \"\n ChemPropID=\"\"\n ChemPropFragmentLabel=\"\"\n color=\"0\"\n bgcolor=\"1\"\n RxnAutonumberStart=\"1\"\n RxnAutonumberConditions=\"no\"\n RxnAutonumberStyle=\"Roman\"\n RxnAutonumberFormat=\"(#)\"\n><colortable>\n<color r=\"1\" g=\"1\" b=\"1\"/>\n<color r=\"0\" g=\"0\" b=\"0\"/>\n</colortable><fonttable>\n<font id=\"3\" charset=\"iso-8859-1\" name=\"Arial\"/>\n<font id=\"21\" charset=\"iso-8859-1\" name=\"Arial\"/>\n</fonttable><page\n id=\"4\"\n BoundingBox=\"0 0 540 719.75\"\n HeaderPosition=\"36\"\n FooterPosition=\"36\"\n PrintTrimMarks=\"yes\"\n HeightPages=\"1\"\n WidthPages=\"1\"\n><t\n id=\"2\"\n p=\"30 50\"\n BoundingBox=\"30 36.06 110.67 50.20\"\n Z=\"1\"\n InterpretChemically=\"no\"\n CaptionLineHeight=\"1\"\n LineHeight=\"1\"\n><s font=\"21\" size=\"16.5\" color=\"0\" face=\"1\">FPh / OMe</s></t></page></CDXML>",
+      "native_svg_sha256": "91bad59a92bc7591bd4bb59953fa1c3e0b9ddc39b3be9153381e9e43e4a39456"
+    },
+    {
+      "id": 10,
+      "family": "AppleSDGothicNeo-Bold",
+      "charset": "iso-8859-1",
+      "face": "0",
+      "native_fonts": [
+        {
+          "height": -44,
+          "weight": 400,
+          "family": "Arial"
+        }
+      ],
+      "bmp_sha256": "14e4107df1963d88a05a3fd706b72a0970a9ca1bbd4812e557752b7fe3e5c7a4",
+      "producer_xml": "<?xml version='1.0' encoding='utf-8'?>\n<CDXML CreationProgram=\"Chemvas font representative\" bgcolor=\"2\"><fonttable><font id=\"0\" charset=\"iso-8859-1\" name=\"AppleSDGothicNeo-Bold\" /></fonttable><colortable><color r=\"1\" g=\"1\" b=\"1\" /><color r=\"0\" g=\"0\" b=\"0\" /></colortable><page id=\"1\" BoundingBox=\"0 0 250 100\"><t id=\"2\" p=\"30 50\" Justification=\"Left\" InterpretChemically=\"no\" CaptionLineHeight=\"1\"><s font=\"0\" size=\"16.5\" color=\"0\" face=\"0\">FPh / OMe</s></t></page></CDXML>",
+      "native_xml": "<?xml version=\"1.0\" encoding=\"UTF-8\" ?>\n<!DOCTYPE CDXML SYSTEM \"https://static.chemistry.revvitycloud.com/cdxml/CDXML.dtd\" >\n<CDXML\n CreationProgram=\"ChemDraw 25.0.2.14\"\n Name=\"native.cdxml\"\n BoundingBox=\"30 36.06 109.77 50.20\"\n WindowPosition=\"-1610612736 -1610612736\"\n WindowSize=\"1610612736 1610612736\"\n FractionalWidths=\"yes\"\n InterpretChemically=\"yes\"\n ShowAtomQuery=\"yes\"\n ShowAtomStereo=\"no\"\n ShowAtomEnhancedStereo=\"yes\"\n ShowAtomNumber=\"no\"\n ShowResidueID=\"no\"\n ShowBondQuery=\"yes\"\n ShowBondRxn=\"yes\"\n ShowBondStereo=\"no\"\n ShowTerminalCarbonLabels=\"no\"\n ShowNonTerminalCarbonLabels=\"no\"\n HideImplicitHydrogens=\"no\"\n LabelFont=\"3\"\n LabelSize=\"10\"\n LabelFace=\"96\"\n CaptionFont=\"3\"\n CaptionSize=\"10\"\n HashSpacing=\"2.50\"\n MarginWidth=\"1.60\"\n LineWidth=\"0.60\"\n BoldWidth=\"2\"\n BondLength=\"14.40\"\n BondSpacing=\"18\"\n ChainAngle=\"120\"\n LabelJustification=\"Auto\"\n CaptionJustification=\"Left\"\n AminoAcidTermini=\"HOH\"\n ShowSequenceTermini=\"yes\"\n ShowSequenceBonds=\"yes\"\n ShowSequenceUnlinkedBranches=\"no\"\n ShowPrimeLabels=\"no\"\n ResidueWrapCount=\"40\"\n PrintMargins=\"36 36 36 36\"\n MacPrintInfo=\"0003000001200120000000000B6608A0FF84FF880BE309180367052703FC0002000001200120000000000B6608A0000100000064000000010001010100000001270F000100010000000000000000000000000002001901900000000000600000000000000000000100000000000000000000000000000000\"\n ChemPropName=\"\"\n ChemPropFormula=\"Chemical Formula: \"\n ChemPropExactMass=\"Exact Mass: \"\n ChemPropMolWt=\"Molecular Weight: \"\n ChemPropMOverZ=\"m/z: \"\n ChemPropAnalysis=\"Elemental Analysis: \"\n ChemPropBoilingPt=\"Boiling Point: \"\n ChemPropMeltingPt=\"Melting Point: \"\n ChemPropCritTemp=\"Critical Temp: \"\n ChemPropCritPres=\"Critical Pres: \"\n ChemPropCritVol=\"Critical Vol: \"\n ChemPropGibbs=\"Gibbs Energy: \"\n ChemPropLogP=\"Log P: \"\n ChemPropMR=\"MR: \"\n ChemPropHenry=\"Henry&apos;s Law: \"\n ChemPropEForm=\"Heat of Form: \"\n ChemProptPSA=\"tPSA: \"\n ChemPropCLogP=\"CLogP: \"\n ChemPropCMR=\"CMR: \"\n ChemPropLogS=\"LogS: \"\n ChemPropPKa=\"pKa: \"\n ChemPropID=\"\"\n ChemPropFragmentLabel=\"\"\n color=\"0\"\n bgcolor=\"1\"\n RxnAutonumberStart=\"1\"\n RxnAutonumberConditions=\"no\"\n RxnAutonumberStyle=\"Roman\"\n RxnAutonumberFormat=\"(#)\"\n><colortable>\n<color r=\"1\" g=\"1\" b=\"1\"/>\n<color r=\"0\" g=\"0\" b=\"0\"/>\n</colortable><fonttable>\n<font id=\"3\" charset=\"iso-8859-1\" name=\"Arial\"/>\n<font id=\"21\" charset=\"iso-8859-1\" name=\"Arial\"/>\n</fonttable><page\n id=\"4\"\n BoundingBox=\"0 0 540 719.75\"\n HeaderPosition=\"36\"\n FooterPosition=\"36\"\n PrintTrimMarks=\"yes\"\n HeightPages=\"1\"\n WidthPages=\"1\"\n><t\n id=\"2\"\n p=\"30 50\"\n BoundingBox=\"30 36.06 109.77 50.20\"\n Z=\"1\"\n InterpretChemically=\"no\"\n CaptionLineHeight=\"1\"\n LineHeight=\"1\"\n><s font=\"21\" size=\"16.5\" color=\"0\">FPh / OMe</s></t></page></CDXML>",
+      "native_svg_sha256": "e9e901659b87afc0877fc00079ca15fad13510f0e6fec1fc4839e4d3d663db8b"
+    },
+    {
+      "id": 11,
+      "family": "AppleSDGothicNeo-Bold",
+      "charset": "iso-8859-1",
+      "face": "1",
+      "native_fonts": [
+        {
+          "height": -44,
+          "weight": 700,
+          "family": "Arial"
+        }
+      ],
+      "bmp_sha256": "6c5d9064e788890bb6692d7c40668a5691a274fb0440756ee7059e5e10f3eb4a",
+      "producer_xml": "<?xml version='1.0' encoding='utf-8'?>\n<CDXML CreationProgram=\"Chemvas font representative\" bgcolor=\"2\"><fonttable><font id=\"0\" charset=\"iso-8859-1\" name=\"AppleSDGothicNeo-Bold\" /></fonttable><colortable><color r=\"1\" g=\"1\" b=\"1\" /><color r=\"0\" g=\"0\" b=\"0\" /></colortable><page id=\"1\" BoundingBox=\"0 0 250 100\"><t id=\"2\" p=\"30 50\" Justification=\"Left\" InterpretChemically=\"no\" CaptionLineHeight=\"1\"><s font=\"0\" size=\"16.5\" color=\"0\" face=\"1\">FPh / OMe</s></t></page></CDXML>",
+      "native_xml": "<?xml version=\"1.0\" encoding=\"UTF-8\" ?>\n<!DOCTYPE CDXML SYSTEM \"https://static.chemistry.revvitycloud.com/cdxml/CDXML.dtd\" >\n<CDXML\n CreationProgram=\"ChemDraw 25.0.2.14\"\n Name=\"native.cdxml\"\n BoundingBox=\"30 36.06 110.67 50.20\"\n WindowPosition=\"-1610612736 -1610612736\"\n WindowSize=\"1610612736 1610612736\"\n FractionalWidths=\"yes\"\n InterpretChemically=\"yes\"\n ShowAtomQuery=\"yes\"\n ShowAtomStereo=\"no\"\n ShowAtomEnhancedStereo=\"yes\"\n ShowAtomNumber=\"no\"\n ShowResidueID=\"no\"\n ShowBondQuery=\"yes\"\n ShowBondRxn=\"yes\"\n ShowBondStereo=\"no\"\n ShowTerminalCarbonLabels=\"no\"\n ShowNonTerminalCarbonLabels=\"no\"\n HideImplicitHydrogens=\"no\"\n LabelFont=\"3\"\n LabelSize=\"10\"\n LabelFace=\"96\"\n CaptionFont=\"3\"\n CaptionSize=\"10\"\n HashSpacing=\"2.50\"\n MarginWidth=\"1.60\"\n LineWidth=\"0.60\"\n BoldWidth=\"2\"\n BondLength=\"14.40\"\n BondSpacing=\"18\"\n ChainAngle=\"120\"\n LabelJustification=\"Auto\"\n CaptionJustification=\"Left\"\n AminoAcidTermini=\"HOH\"\n ShowSequenceTermini=\"yes\"\n ShowSequenceBonds=\"yes\"\n ShowSequenceUnlinkedBranches=\"no\"\n ShowPrimeLabels=\"no\"\n ResidueWrapCount=\"40\"\n PrintMargins=\"36 36 36 36\"\n MacPrintInfo=\"0003000001200120000000000B6608A0FF84FF880BE309180367052703FC0002000001200120000000000B6608A0000100000064000000010001010100000001270F000100010000000000000000000000000002001901900000000000600000000000000000000100000000000000000000000000000000\"\n ChemPropName=\"\"\n ChemPropFormula=\"Chemical Formula: \"\n ChemPropExactMass=\"Exact Mass: \"\n ChemPropMolWt=\"Molecular Weight: \"\n ChemPropMOverZ=\"m/z: \"\n ChemPropAnalysis=\"Elemental Analysis: \"\n ChemPropBoilingPt=\"Boiling Point: \"\n ChemPropMeltingPt=\"Melting Point: \"\n ChemPropCritTemp=\"Critical Temp: \"\n ChemPropCritPres=\"Critical Pres: \"\n ChemPropCritVol=\"Critical Vol: \"\n ChemPropGibbs=\"Gibbs Energy: \"\n ChemPropLogP=\"Log P: \"\n ChemPropMR=\"MR: \"\n ChemPropHenry=\"Henry&apos;s Law: \"\n ChemPropEForm=\"Heat of Form: \"\n ChemProptPSA=\"tPSA: \"\n ChemPropCLogP=\"CLogP: \"\n ChemPropCMR=\"CMR: \"\n ChemPropLogS=\"LogS: \"\n ChemPropPKa=\"pKa: \"\n ChemPropID=\"\"\n ChemPropFragmentLabel=\"\"\n color=\"0\"\n bgcolor=\"1\"\n RxnAutonumberStart=\"1\"\n RxnAutonumberConditions=\"no\"\n RxnAutonumberStyle=\"Roman\"\n RxnAutonumberFormat=\"(#)\"\n><colortable>\n<color r=\"1\" g=\"1\" b=\"1\"/>\n<color r=\"0\" g=\"0\" b=\"0\"/>\n</colortable><fonttable>\n<font id=\"3\" charset=\"iso-8859-1\" name=\"Arial\"/>\n<font id=\"21\" charset=\"iso-8859-1\" name=\"Arial\"/>\n</fonttable><page\n id=\"4\"\n BoundingBox=\"0 0 540 719.75\"\n HeaderPosition=\"36\"\n FooterPosition=\"36\"\n PrintTrimMarks=\"yes\"\n HeightPages=\"1\"\n WidthPages=\"1\"\n><t\n id=\"2\"\n p=\"30 50\"\n BoundingBox=\"30 36.06 110.67 50.20\"\n Z=\"1\"\n InterpretChemically=\"no\"\n CaptionLineHeight=\"1\"\n LineHeight=\"1\"\n><s font=\"21\" size=\"16.5\" color=\"0\" face=\"1\">FPh / OMe</s></t></page></CDXML>",
+      "native_svg_sha256": "91bad59a92bc7591bd4bb59953fa1c3e0b9ddc39b3be9153381e9e43e4a39456"
+    },
+    {
+      "id": 12,
+      "family": "AppleSDGothicNeo-Bold",
+      "charset": "x-mac-roman",
+      "face": "0",
+      "native_fonts": [
+        {
+          "height": -44,
+          "weight": 400,
+          "family": "Arial"
+        }
+      ],
+      "bmp_sha256": "14e4107df1963d88a05a3fd706b72a0970a9ca1bbd4812e557752b7fe3e5c7a4",
+      "producer_xml": "<?xml version='1.0' encoding='utf-8'?>\n<CDXML CreationProgram=\"Chemvas font representative\" bgcolor=\"2\"><fonttable><font id=\"0\" charset=\"x-mac-roman\" name=\"AppleSDGothicNeo-Bold\" /></fonttable><colortable><color r=\"1\" g=\"1\" b=\"1\" /><color r=\"0\" g=\"0\" b=\"0\" /></colortable><page id=\"1\" BoundingBox=\"0 0 250 100\"><t id=\"2\" p=\"30 50\" Justification=\"Left\" InterpretChemically=\"no\" CaptionLineHeight=\"1\"><s font=\"0\" size=\"16.5\" color=\"0\" face=\"0\">FPh / OMe</s></t></page></CDXML>",
+      "native_xml": "<?xml version=\"1.0\" encoding=\"UTF-8\" ?>\n<!DOCTYPE CDXML SYSTEM \"https://static.chemistry.revvitycloud.com/cdxml/CDXML.dtd\" >\n<CDXML\n CreationProgram=\"ChemDraw 25.0.2.14\"\n Name=\"native.cdxml\"\n BoundingBox=\"30 36.06 109.77 50.20\"\n WindowPosition=\"-1610612736 -1610612736\"\n WindowSize=\"1610612736 1610612736\"\n FractionalWidths=\"yes\"\n InterpretChemically=\"yes\"\n ShowAtomQuery=\"yes\"\n ShowAtomStereo=\"no\"\n ShowAtomEnhancedStereo=\"yes\"\n ShowAtomNumber=\"no\"\n ShowResidueID=\"no\"\n ShowBondQuery=\"yes\"\n ShowBondRxn=\"yes\"\n ShowBondStereo=\"no\"\n ShowTerminalCarbonLabels=\"no\"\n ShowNonTerminalCarbonLabels=\"no\"\n HideImplicitHydrogens=\"no\"\n LabelFont=\"3\"\n LabelSize=\"10\"\n LabelFace=\"96\"\n CaptionFont=\"3\"\n CaptionSize=\"10\"\n HashSpacing=\"2.50\"\n MarginWidth=\"1.60\"\n LineWidth=\"0.60\"\n BoldWidth=\"2\"\n BondLength=\"14.40\"\n BondSpacing=\"18\"\n ChainAngle=\"120\"\n LabelJustification=\"Auto\"\n CaptionJustification=\"Left\"\n AminoAcidTermini=\"HOH\"\n ShowSequenceTermini=\"yes\"\n ShowSequenceBonds=\"yes\"\n ShowSequenceUnlinkedBranches=\"no\"\n ShowPrimeLabels=\"no\"\n ResidueWrapCount=\"40\"\n PrintMargins=\"36 36 36 36\"\n MacPrintInfo=\"0003000001200120000000000B6608A0FF84FF880BE309180367052703FC0002000001200120000000000B6608A0000100000064000000010001010100000001270F000100010000000000000000000000000002001901900000000000600000000000000000000100000000000000000000000000000000\"\n ChemPropName=\"\"\n ChemPropFormula=\"Chemical Formula: \"\n ChemPropExactMass=\"Exact Mass: \"\n ChemPropMolWt=\"Molecular Weight: \"\n ChemPropMOverZ=\"m/z: \"\n ChemPropAnalysis=\"Elemental Analysis: \"\n ChemPropBoilingPt=\"Boiling Point: \"\n ChemPropMeltingPt=\"Melting Point: \"\n ChemPropCritTemp=\"Critical Temp: \"\n ChemPropCritPres=\"Critical Pres: \"\n ChemPropCritVol=\"Critical Vol: \"\n ChemPropGibbs=\"Gibbs Energy: \"\n ChemPropLogP=\"Log P: \"\n ChemPropMR=\"MR: \"\n ChemPropHenry=\"Henry&apos;s Law: \"\n ChemPropEForm=\"Heat of Form: \"\n ChemProptPSA=\"tPSA: \"\n ChemPropCLogP=\"CLogP: \"\n ChemPropCMR=\"CMR: \"\n ChemPropLogS=\"LogS: \"\n ChemPropPKa=\"pKa: \"\n ChemPropID=\"\"\n ChemPropFragmentLabel=\"\"\n color=\"0\"\n bgcolor=\"1\"\n RxnAutonumberStart=\"1\"\n RxnAutonumberConditions=\"no\"\n RxnAutonumberStyle=\"Roman\"\n RxnAutonumberFormat=\"(#)\"\n><colortable>\n<color r=\"1\" g=\"1\" b=\"1\"/>\n<color r=\"0\" g=\"0\" b=\"0\"/>\n</colortable><fonttable>\n<font id=\"3\" charset=\"iso-8859-1\" name=\"Arial\"/>\n<font id=\"21\" charset=\"iso-8859-1\" name=\"Arial\"/>\n</fonttable><page\n id=\"4\"\n BoundingBox=\"0 0 540 719.75\"\n HeaderPosition=\"36\"\n FooterPosition=\"36\"\n PrintTrimMarks=\"yes\"\n HeightPages=\"1\"\n WidthPages=\"1\"\n><t\n id=\"2\"\n p=\"30 50\"\n BoundingBox=\"30 36.06 109.77 50.20\"\n Z=\"1\"\n InterpretChemically=\"no\"\n CaptionLineHeight=\"1\"\n LineHeight=\"1\"\n><s font=\"21\" size=\"16.5\" color=\"0\">FPh / OMe</s></t></page></CDXML>",
+      "native_svg_sha256": "e9e901659b87afc0877fc00079ca15fad13510f0e6fec1fc4839e4d3d663db8b"
+    },
+    {
+      "id": 13,
+      "family": "AppleSDGothicNeo-Bold",
+      "charset": "x-mac-roman",
+      "face": "1",
+      "native_fonts": [
+        {
+          "height": -44,
+          "weight": 700,
+          "family": "Arial"
+        }
+      ],
+      "bmp_sha256": "6c5d9064e788890bb6692d7c40668a5691a274fb0440756ee7059e5e10f3eb4a",
+      "producer_xml": "<?xml version='1.0' encoding='utf-8'?>\n<CDXML CreationProgram=\"Chemvas font representative\" bgcolor=\"2\"><fonttable><font id=\"0\" charset=\"x-mac-roman\" name=\"AppleSDGothicNeo-Bold\" /></fonttable><colortable><color r=\"1\" g=\"1\" b=\"1\" /><color r=\"0\" g=\"0\" b=\"0\" /></colortable><page id=\"1\" BoundingBox=\"0 0 250 100\"><t id=\"2\" p=\"30 50\" Justification=\"Left\" InterpretChemically=\"no\" CaptionLineHeight=\"1\"><s font=\"0\" size=\"16.5\" color=\"0\" face=\"1\">FPh / OMe</s></t></page></CDXML>",
+      "native_xml": "<?xml version=\"1.0\" encoding=\"UTF-8\" ?>\n<!DOCTYPE CDXML SYSTEM \"https://static.chemistry.revvitycloud.com/cdxml/CDXML.dtd\" >\n<CDXML\n CreationProgram=\"ChemDraw 25.0.2.14\"\n Name=\"native.cdxml\"\n BoundingBox=\"30 36.06 110.67 50.20\"\n WindowPosition=\"-1610612736 -1610612736\"\n WindowSize=\"1610612736 1610612736\"\n FractionalWidths=\"yes\"\n InterpretChemically=\"yes\"\n ShowAtomQuery=\"yes\"\n ShowAtomStereo=\"no\"\n ShowAtomEnhancedStereo=\"yes\"\n ShowAtomNumber=\"no\"\n ShowResidueID=\"no\"\n ShowBondQuery=\"yes\"\n ShowBondRxn=\"yes\"\n ShowBondStereo=\"no\"\n ShowTerminalCarbonLabels=\"no\"\n ShowNonTerminalCarbonLabels=\"no\"\n HideImplicitHydrogens=\"no\"\n LabelFont=\"3\"\n LabelSize=\"10\"\n LabelFace=\"96\"\n CaptionFont=\"3\"\n CaptionSize=\"10\"\n HashSpacing=\"2.50\"\n MarginWidth=\"1.60\"\n LineWidth=\"0.60\"\n BoldWidth=\"2\"\n BondLength=\"14.40\"\n BondSpacing=\"18\"\n ChainAngle=\"120\"\n LabelJustification=\"Auto\"\n CaptionJustification=\"Left\"\n AminoAcidTermini=\"HOH\"\n ShowSequenceTermini=\"yes\"\n ShowSequenceBonds=\"yes\"\n ShowSequenceUnlinkedBranches=\"no\"\n ShowPrimeLabels=\"no\"\n ResidueWrapCount=\"40\"\n PrintMargins=\"36 36 36 36\"\n MacPrintInfo=\"0003000001200120000000000B6608A0FF84FF880BE309180367052703FC0002000001200120000000000B6608A0000100000064000000010001010100000001270F000100010000000000000000000000000002001901900000000000600000000000000000000100000000000000000000000000000000\"\n ChemPropName=\"\"\n ChemPropFormula=\"Chemical Formula: \"\n ChemPropExactMass=\"Exact Mass: \"\n ChemPropMolWt=\"Molecular Weight: \"\n ChemPropMOverZ=\"m/z: \"\n ChemPropAnalysis=\"Elemental Analysis: \"\n ChemPropBoilingPt=\"Boiling Point: \"\n ChemPropMeltingPt=\"Melting Point: \"\n ChemPropCritTemp=\"Critical Temp: \"\n ChemPropCritPres=\"Critical Pres: \"\n ChemPropCritVol=\"Critical Vol: \"\n ChemPropGibbs=\"Gibbs Energy: \"\n ChemPropLogP=\"Log P: \"\n ChemPropMR=\"MR: \"\n ChemPropHenry=\"Henry&apos;s Law: \"\n ChemPropEForm=\"Heat of Form: \"\n ChemProptPSA=\"tPSA: \"\n ChemPropCLogP=\"CLogP: \"\n ChemPropCMR=\"CMR: \"\n ChemPropLogS=\"LogS: \"\n ChemPropPKa=\"pKa: \"\n ChemPropID=\"\"\n ChemPropFragmentLabel=\"\"\n color=\"0\"\n bgcolor=\"1\"\n RxnAutonumberStart=\"1\"\n RxnAutonumberConditions=\"no\"\n RxnAutonumberStyle=\"Roman\"\n RxnAutonumberFormat=\"(#)\"\n><colortable>\n<color r=\"1\" g=\"1\" b=\"1\"/>\n<color r=\"0\" g=\"0\" b=\"0\"/>\n</colortable><fonttable>\n<font id=\"3\" charset=\"iso-8859-1\" name=\"Arial\"/>\n<font id=\"21\" charset=\"iso-8859-1\" name=\"Arial\"/>\n</fonttable><page\n id=\"4\"\n BoundingBox=\"0 0 540 719.75\"\n HeaderPosition=\"36\"\n FooterPosition=\"36\"\n PrintTrimMarks=\"yes\"\n HeightPages=\"1\"\n WidthPages=\"1\"\n><t\n id=\"2\"\n p=\"30 50\"\n BoundingBox=\"30 36.06 110.67 50.20\"\n Z=\"1\"\n InterpretChemically=\"no\"\n CaptionLineHeight=\"1\"\n LineHeight=\"1\"\n><s font=\"21\" size=\"16.5\" color=\"0\" face=\"1\">FPh / OMe</s></t></page></CDXML>",
+      "native_svg_sha256": "91bad59a92bc7591bd4bb59953fa1c3e0b9ddc39b3be9153381e9e43e4a39456"
+    },
+    {
+      "id": 14,
+      "family": "AppleSDGothicNeo-Bold",
+      "charset": null,
+      "face": "0",
+      "native_fonts": [
+        {
+          "height": -44,
+          "weight": 400,
+          "family": "Arial"
+        }
+      ],
+      "bmp_sha256": "14e4107df1963d88a05a3fd706b72a0970a9ca1bbd4812e557752b7fe3e5c7a4",
+      "producer_xml": "<?xml version='1.0' encoding='utf-8'?>\n<CDXML CreationProgram=\"Chemvas font representative\" bgcolor=\"2\"><fonttable><font id=\"0\" name=\"AppleSDGothicNeo-Bold\" /></fonttable><colortable><color r=\"1\" g=\"1\" b=\"1\" /><color r=\"0\" g=\"0\" b=\"0\" /></colortable><page id=\"1\" BoundingBox=\"0 0 250 100\"><t id=\"2\" p=\"30 50\" Justification=\"Left\" InterpretChemically=\"no\" CaptionLineHeight=\"1\"><s font=\"0\" size=\"16.5\" color=\"0\" face=\"0\">FPh / OMe</s></t></page></CDXML>",
+      "native_xml": "<?xml version=\"1.0\" encoding=\"UTF-8\" ?>\n<!DOCTYPE CDXML SYSTEM \"https://static.chemistry.revvitycloud.com/cdxml/CDXML.dtd\" >\n<CDXML\n CreationProgram=\"ChemDraw 25.0.2.14\"\n Name=\"native.cdxml\"\n BoundingBox=\"30 36.06 109.77 50.20\"\n WindowPosition=\"-1610612736 -1610612736\"\n WindowSize=\"1610612736 1610612736\"\n FractionalWidths=\"yes\"\n InterpretChemically=\"yes\"\n ShowAtomQuery=\"yes\"\n ShowAtomStereo=\"no\"\n ShowAtomEnhancedStereo=\"yes\"\n ShowAtomNumber=\"no\"\n ShowResidueID=\"no\"\n ShowBondQuery=\"yes\"\n ShowBondRxn=\"yes\"\n ShowBondStereo=\"no\"\n ShowTerminalCarbonLabels=\"no\"\n ShowNonTerminalCarbonLabels=\"no\"\n HideImplicitHydrogens=\"no\"\n LabelFont=\"3\"\n LabelSize=\"10\"\n LabelFace=\"96\"\n CaptionFont=\"3\"\n CaptionSize=\"10\"\n HashSpacing=\"2.50\"\n MarginWidth=\"1.60\"\n LineWidth=\"0.60\"\n BoldWidth=\"2\"\n BondLength=\"14.40\"\n BondSpacing=\"18\"\n ChainAngle=\"120\"\n LabelJustification=\"Auto\"\n CaptionJustification=\"Left\"\n AminoAcidTermini=\"HOH\"\n ShowSequenceTermini=\"yes\"\n ShowSequenceBonds=\"yes\"\n ShowSequenceUnlinkedBranches=\"no\"\n ShowPrimeLabels=\"no\"\n ResidueWrapCount=\"40\"\n PrintMargins=\"36 36 36 36\"\n MacPrintInfo=\"0003000001200120000000000B6608A0FF84FF880BE309180367052703FC0002000001200120000000000B6608A0000100000064000000010001010100000001270F000100010000000000000000000000000002001901900000000000600000000000000000000100000000000000000000000000000000\"\n ChemPropName=\"\"\n ChemPropFormula=\"Chemical Formula: \"\n ChemPropExactMass=\"Exact Mass: \"\n ChemPropMolWt=\"Molecular Weight: \"\n ChemPropMOverZ=\"m/z: \"\n ChemPropAnalysis=\"Elemental Analysis: \"\n ChemPropBoilingPt=\"Boiling Point: \"\n ChemPropMeltingPt=\"Melting Point: \"\n ChemPropCritTemp=\"Critical Temp: \"\n ChemPropCritPres=\"Critical Pres: \"\n ChemPropCritVol=\"Critical Vol: \"\n ChemPropGibbs=\"Gibbs Energy: \"\n ChemPropLogP=\"Log P: \"\n ChemPropMR=\"MR: \"\n ChemPropHenry=\"Henry&apos;s Law: \"\n ChemPropEForm=\"Heat of Form: \"\n ChemProptPSA=\"tPSA: \"\n ChemPropCLogP=\"CLogP: \"\n ChemPropCMR=\"CMR: \"\n ChemPropLogS=\"LogS: \"\n ChemPropPKa=\"pKa: \"\n ChemPropID=\"\"\n ChemPropFragmentLabel=\"\"\n color=\"0\"\n bgcolor=\"1\"\n RxnAutonumberStart=\"1\"\n RxnAutonumberConditions=\"no\"\n RxnAutonumberStyle=\"Roman\"\n RxnAutonumberFormat=\"(#)\"\n><colortable>\n<color r=\"1\" g=\"1\" b=\"1\"/>\n<color r=\"0\" g=\"0\" b=\"0\"/>\n</colortable><fonttable>\n<font id=\"3\" charset=\"iso-8859-1\" name=\"Arial\"/>\n<font id=\"21\" charset=\"iso-8859-1\" name=\"Arial\"/>\n</fonttable><page\n id=\"4\"\n BoundingBox=\"0 0 540 719.75\"\n HeaderPosition=\"36\"\n FooterPosition=\"36\"\n PrintTrimMarks=\"yes\"\n HeightPages=\"1\"\n WidthPages=\"1\"\n><t\n id=\"2\"\n p=\"30 50\"\n BoundingBox=\"30 36.06 109.77 50.20\"\n Z=\"1\"\n InterpretChemically=\"no\"\n CaptionLineHeight=\"1\"\n LineHeight=\"1\"\n><s font=\"21\" size=\"16.5\" color=\"0\">FPh / OMe</s></t></page></CDXML>",
+      "native_svg_sha256": "e9e901659b87afc0877fc00079ca15fad13510f0e6fec1fc4839e4d3d663db8b"
+    },
+    {
+      "id": 15,
+      "family": "AppleSDGothicNeo-Bold",
+      "charset": null,
+      "face": "1",
+      "native_fonts": [
+        {
+          "height": -44,
+          "weight": 700,
+          "family": "Arial"
+        }
+      ],
+      "bmp_sha256": "6c5d9064e788890bb6692d7c40668a5691a274fb0440756ee7059e5e10f3eb4a",
+      "producer_xml": "<?xml version='1.0' encoding='utf-8'?>\n<CDXML CreationProgram=\"Chemvas font representative\" bgcolor=\"2\"><fonttable><font id=\"0\" name=\"AppleSDGothicNeo-Bold\" /></fonttable><colortable><color r=\"1\" g=\"1\" b=\"1\" /><color r=\"0\" g=\"0\" b=\"0\" /></colortable><page id=\"1\" BoundingBox=\"0 0 250 100\"><t id=\"2\" p=\"30 50\" Justification=\"Left\" InterpretChemically=\"no\" CaptionLineHeight=\"1\"><s font=\"0\" size=\"16.5\" color=\"0\" face=\"1\">FPh / OMe</s></t></page></CDXML>",
+      "native_xml": "<?xml version=\"1.0\" encoding=\"UTF-8\" ?>\n<!DOCTYPE CDXML SYSTEM \"https://static.chemistry.revvitycloud.com/cdxml/CDXML.dtd\" >\n<CDXML\n CreationProgram=\"ChemDraw 25.0.2.14\"\n Name=\"native.cdxml\"\n BoundingBox=\"30 36.06 110.67 50.20\"\n WindowPosition=\"-1610612736 -1610612736\"\n WindowSize=\"1610612736 1610612736\"\n FractionalWidths=\"yes\"\n InterpretChemically=\"yes\"\n ShowAtomQuery=\"yes\"\n ShowAtomStereo=\"no\"\n ShowAtomEnhancedStereo=\"yes\"\n ShowAtomNumber=\"no\"\n ShowResidueID=\"no\"\n ShowBondQuery=\"yes\"\n ShowBondRxn=\"yes\"\n ShowBondStereo=\"no\"\n ShowTerminalCarbonLabels=\"no\"\n ShowNonTerminalCarbonLabels=\"no\"\n HideImplicitHydrogens=\"no\"\n LabelFont=\"3\"\n LabelSize=\"10\"\n LabelFace=\"96\"\n CaptionFont=\"3\"\n CaptionSize=\"10\"\n HashSpacing=\"2.50\"\n MarginWidth=\"1.60\"\n LineWidth=\"0.60\"\n BoldWidth=\"2\"\n BondLength=\"14.40\"\n BondSpacing=\"18\"\n ChainAngle=\"120\"\n LabelJustification=\"Auto\"\n CaptionJustification=\"Left\"\n AminoAcidTermini=\"HOH\"\n ShowSequenceTermini=\"yes\"\n ShowSequenceBonds=\"yes\"\n ShowSequenceUnlinkedBranches=\"no\"\n ShowPrimeLabels=\"no\"\n ResidueWrapCount=\"40\"\n PrintMargins=\"36 36 36 36\"\n MacPrintInfo=\"0003000001200120000000000B6608A0FF84FF880BE309180367052703FC0002000001200120000000000B6608A0000100000064000000010001010100000001270F000100010000000000000000000000000002001901900000000000600000000000000000000100000000000000000000000000000000\"\n ChemPropName=\"\"\n ChemPropFormula=\"Chemical Formula: \"\n ChemPropExactMass=\"Exact Mass: \"\n ChemPropMolWt=\"Molecular Weight: \"\n ChemPropMOverZ=\"m/z: \"\n ChemPropAnalysis=\"Elemental Analysis: \"\n ChemPropBoilingPt=\"Boiling Point: \"\n ChemPropMeltingPt=\"Melting Point: \"\n ChemPropCritTemp=\"Critical Temp: \"\n ChemPropCritPres=\"Critical Pres: \"\n ChemPropCritVol=\"Critical Vol: \"\n ChemPropGibbs=\"Gibbs Energy: \"\n ChemPropLogP=\"Log P: \"\n ChemPropMR=\"MR: \"\n ChemPropHenry=\"Henry&apos;s Law: \"\n ChemPropEForm=\"Heat of Form: \"\n ChemProptPSA=\"tPSA: \"\n ChemPropCLogP=\"CLogP: \"\n ChemPropCMR=\"CMR: \"\n ChemPropLogS=\"LogS: \"\n ChemPropPKa=\"pKa: \"\n ChemPropID=\"\"\n ChemPropFragmentLabel=\"\"\n color=\"0\"\n bgcolor=\"1\"\n RxnAutonumberStart=\"1\"\n RxnAutonumberConditions=\"no\"\n RxnAutonumberStyle=\"Roman\"\n RxnAutonumberFormat=\"(#)\"\n><colortable>\n<color r=\"1\" g=\"1\" b=\"1\"/>\n<color r=\"0\" g=\"0\" b=\"0\"/>\n</colortable><fonttable>\n<font id=\"3\" charset=\"iso-8859-1\" name=\"Arial\"/>\n<font id=\"21\" charset=\"iso-8859-1\" name=\"Arial\"/>\n</fonttable><page\n id=\"4\"\n BoundingBox=\"0 0 540 719.75\"\n HeaderPosition=\"36\"\n FooterPosition=\"36\"\n PrintTrimMarks=\"yes\"\n HeightPages=\"1\"\n WidthPages=\"1\"\n><t\n id=\"2\"\n p=\"30 50\"\n BoundingBox=\"30 36.06 110.67 50.20\"\n Z=\"1\"\n InterpretChemically=\"no\"\n CaptionLineHeight=\"1\"\n LineHeight=\"1\"\n><s font=\"21\" size=\"16.5\" color=\"0\" face=\"1\">FPh / OMe</s></t></page></CDXML>",
+      "native_svg_sha256": "91bad59a92bc7591bd4bb59953fa1c3e0b9ddc39b3be9153381e9e43e4a39456"
+    },
+    {
+      "id": 16,
+      "family": "Arial",
+      "charset": "utf-8",
+      "face": "0",
+      "native_fonts": [
+        {
+          "height": -44,
+          "weight": 400,
+          "family": "Arial"
+        }
+      ],
+      "bmp_sha256": "14e4107df1963d88a05a3fd706b72a0970a9ca1bbd4812e557752b7fe3e5c7a4",
+      "producer_xml": "<?xml version='1.0' encoding='utf-8'?>\n<CDXML CreationProgram=\"Chemvas font representative\" bgcolor=\"2\"><fonttable><font id=\"0\" charset=\"utf-8\" name=\"Arial\" /></fonttable><colortable><color r=\"1\" g=\"1\" b=\"1\" /><color r=\"0\" g=\"0\" b=\"0\" /></colortable><page id=\"1\" BoundingBox=\"0 0 250 100\"><t id=\"2\" p=\"30 50\" Justification=\"Left\" InterpretChemically=\"no\" CaptionLineHeight=\"1\"><s font=\"0\" size=\"16.5\" color=\"0\" face=\"0\">FPh / OMe</s></t></page></CDXML>",
+      "native_xml": "<?xml version=\"1.0\" encoding=\"UTF-8\" ?>\n<!DOCTYPE CDXML SYSTEM \"https://static.chemistry.revvitycloud.com/cdxml/CDXML.dtd\" >\n<CDXML\n CreationProgram=\"ChemDraw 25.0.2.14\"\n Name=\"native.cdxml\"\n BoundingBox=\"30 36.06 109.77 50.20\"\n WindowPosition=\"-1610612736 -1610612736\"\n WindowSize=\"1610612736 1610612736\"\n FractionalWidths=\"yes\"\n InterpretChemically=\"yes\"\n ShowAtomQuery=\"yes\"\n ShowAtomStereo=\"no\"\n ShowAtomEnhancedStereo=\"yes\"\n ShowAtomNumber=\"no\"\n ShowResidueID=\"no\"\n ShowBondQuery=\"yes\"\n ShowBondRxn=\"yes\"\n ShowBondStereo=\"no\"\n ShowTerminalCarbonLabels=\"no\"\n ShowNonTerminalCarbonLabels=\"no\"\n HideImplicitHydrogens=\"no\"\n LabelFont=\"3\"\n LabelSize=\"10\"\n LabelFace=\"96\"\n CaptionFont=\"3\"\n CaptionSize=\"10\"\n HashSpacing=\"2.50\"\n MarginWidth=\"1.60\"\n LineWidth=\"0.60\"\n BoldWidth=\"2\"\n BondLength=\"14.40\"\n BondSpacing=\"18\"\n ChainAngle=\"120\"\n LabelJustification=\"Auto\"\n CaptionJustification=\"Left\"\n AminoAcidTermini=\"HOH\"\n ShowSequenceTermini=\"yes\"\n ShowSequenceBonds=\"yes\"\n ShowSequenceUnlinkedBranches=\"no\"\n ShowPrimeLabels=\"no\"\n ResidueWrapCount=\"40\"\n PrintMargins=\"36 36 36 36\"\n MacPrintInfo=\"0003000001200120000000000B6608A0FF84FF880BE309180367052703FC0002000001200120000000000B6608A0000100000064000000010001010100000001270F000100010000000000000000000000000002001901900000000000600000000000000000000100000000000000000000000000000000\"\n ChemPropName=\"\"\n ChemPropFormula=\"Chemical Formula: \"\n ChemPropExactMass=\"Exact Mass: \"\n ChemPropMolWt=\"Molecular Weight: \"\n ChemPropMOverZ=\"m/z: \"\n ChemPropAnalysis=\"Elemental Analysis: \"\n ChemPropBoilingPt=\"Boiling Point: \"\n ChemPropMeltingPt=\"Melting Point: \"\n ChemPropCritTemp=\"Critical Temp: \"\n ChemPropCritPres=\"Critical Pres: \"\n ChemPropCritVol=\"Critical Vol: \"\n ChemPropGibbs=\"Gibbs Energy: \"\n ChemPropLogP=\"Log P: \"\n ChemPropMR=\"MR: \"\n ChemPropHenry=\"Henry&apos;s Law: \"\n ChemPropEForm=\"Heat of Form: \"\n ChemProptPSA=\"tPSA: \"\n ChemPropCLogP=\"CLogP: \"\n ChemPropCMR=\"CMR: \"\n ChemPropLogS=\"LogS: \"\n ChemPropPKa=\"pKa: \"\n ChemPropID=\"\"\n ChemPropFragmentLabel=\"\"\n color=\"0\"\n bgcolor=\"1\"\n RxnAutonumberStart=\"1\"\n RxnAutonumberConditions=\"no\"\n RxnAutonumberStyle=\"Roman\"\n RxnAutonumberFormat=\"(#)\"\n><colortable>\n<color r=\"1\" g=\"1\" b=\"1\"/>\n<color r=\"0\" g=\"0\" b=\"0\"/>\n</colortable><fonttable>\n<font id=\"3\" charset=\"iso-8859-1\" name=\"Arial\"/>\n</fonttable><page\n id=\"4\"\n BoundingBox=\"0 0 540 719.75\"\n HeaderPosition=\"36\"\n FooterPosition=\"36\"\n PrintTrimMarks=\"yes\"\n HeightPages=\"1\"\n WidthPages=\"1\"\n><t\n id=\"2\"\n p=\"30 50\"\n BoundingBox=\"30 36.06 109.77 50.20\"\n Z=\"1\"\n InterpretChemically=\"no\"\n CaptionLineHeight=\"1\"\n LineHeight=\"1\"\n><s font=\"3\" size=\"16.5\" color=\"0\">FPh / OMe</s></t></page></CDXML>",
+      "native_svg_sha256": "e9e901659b87afc0877fc00079ca15fad13510f0e6fec1fc4839e4d3d663db8b"
+    },
+    {
+      "id": 17,
+      "family": "Arial",
+      "charset": "utf-8",
+      "face": "1",
+      "native_fonts": [
+        {
+          "height": -44,
+          "weight": 700,
+          "family": "Arial"
+        }
+      ],
+      "bmp_sha256": "6c5d9064e788890bb6692d7c40668a5691a274fb0440756ee7059e5e10f3eb4a",
+      "producer_xml": "<?xml version='1.0' encoding='utf-8'?>\n<CDXML CreationProgram=\"Chemvas font representative\" bgcolor=\"2\"><fonttable><font id=\"0\" charset=\"utf-8\" name=\"Arial\" /></fonttable><colortable><color r=\"1\" g=\"1\" b=\"1\" /><color r=\"0\" g=\"0\" b=\"0\" /></colortable><page id=\"1\" BoundingBox=\"0 0 250 100\"><t id=\"2\" p=\"30 50\" Justification=\"Left\" InterpretChemically=\"no\" CaptionLineHeight=\"1\"><s font=\"0\" size=\"16.5\" color=\"0\" face=\"1\">FPh / OMe</s></t></page></CDXML>",
+      "native_xml": "<?xml version=\"1.0\" encoding=\"UTF-8\" ?>\n<!DOCTYPE CDXML SYSTEM \"https://static.chemistry.revvitycloud.com/cdxml/CDXML.dtd\" >\n<CDXML\n CreationProgram=\"ChemDraw 25.0.2.14\"\n Name=\"native.cdxml\"\n BoundingBox=\"30 36.06 110.67 50.20\"\n WindowPosition=\"-1610612736 -1610612736\"\n WindowSize=\"1610612736 1610612736\"\n FractionalWidths=\"yes\"\n InterpretChemically=\"yes\"\n ShowAtomQuery=\"yes\"\n ShowAtomStereo=\"no\"\n ShowAtomEnhancedStereo=\"yes\"\n ShowAtomNumber=\"no\"\n ShowResidueID=\"no\"\n ShowBondQuery=\"yes\"\n ShowBondRxn=\"yes\"\n ShowBondStereo=\"no\"\n ShowTerminalCarbonLabels=\"no\"\n ShowNonTerminalCarbonLabels=\"no\"\n HideImplicitHydrogens=\"no\"\n LabelFont=\"3\"\n LabelSize=\"10\"\n LabelFace=\"96\"\n CaptionFont=\"3\"\n CaptionSize=\"10\"\n HashSpacing=\"2.50\"\n MarginWidth=\"1.60\"\n LineWidth=\"0.60\"\n BoldWidth=\"2\"\n BondLength=\"14.40\"\n BondSpacing=\"18\"\n ChainAngle=\"120\"\n LabelJustification=\"Auto\"\n CaptionJustification=\"Left\"\n AminoAcidTermini=\"HOH\"\n ShowSequenceTermini=\"yes\"\n ShowSequenceBonds=\"yes\"\n ShowSequenceUnlinkedBranches=\"no\"\n ShowPrimeLabels=\"no\"\n ResidueWrapCount=\"40\"\n PrintMargins=\"36 36 36 36\"\n MacPrintInfo=\"0003000001200120000000000B6608A0FF84FF880BE309180367052703FC0002000001200120000000000B6608A0000100000064000000010001010100000001270F000100010000000000000000000000000002001901900000000000600000000000000000000100000000000000000000000000000000\"\n ChemPropName=\"\"\n ChemPropFormula=\"Chemical Formula: \"\n ChemPropExactMass=\"Exact Mass: \"\n ChemPropMolWt=\"Molecular Weight: \"\n ChemPropMOverZ=\"m/z: \"\n ChemPropAnalysis=\"Elemental Analysis: \"\n ChemPropBoilingPt=\"Boiling Point: \"\n ChemPropMeltingPt=\"Melting Point: \"\n ChemPropCritTemp=\"Critical Temp: \"\n ChemPropCritPres=\"Critical Pres: \"\n ChemPropCritVol=\"Critical Vol: \"\n ChemPropGibbs=\"Gibbs Energy: \"\n ChemPropLogP=\"Log P: \"\n ChemPropMR=\"MR: \"\n ChemPropHenry=\"Henry&apos;s Law: \"\n ChemPropEForm=\"Heat of Form: \"\n ChemProptPSA=\"tPSA: \"\n ChemPropCLogP=\"CLogP: \"\n ChemPropCMR=\"CMR: \"\n ChemPropLogS=\"LogS: \"\n ChemPropPKa=\"pKa: \"\n ChemPropID=\"\"\n ChemPropFragmentLabel=\"\"\n color=\"0\"\n bgcolor=\"1\"\n RxnAutonumberStart=\"1\"\n RxnAutonumberConditions=\"no\"\n RxnAutonumberStyle=\"Roman\"\n RxnAutonumberFormat=\"(#)\"\n><colortable>\n<color r=\"1\" g=\"1\" b=\"1\"/>\n<color r=\"0\" g=\"0\" b=\"0\"/>\n</colortable><fonttable>\n<font id=\"3\" charset=\"iso-8859-1\" name=\"Arial\"/>\n</fonttable><page\n id=\"4\"\n BoundingBox=\"0 0 540 719.75\"\n HeaderPosition=\"36\"\n FooterPosition=\"36\"\n PrintTrimMarks=\"yes\"\n HeightPages=\"1\"\n WidthPages=\"1\"\n><t\n id=\"2\"\n p=\"30 50\"\n BoundingBox=\"30 36.06 110.67 50.20\"\n Z=\"1\"\n InterpretChemically=\"no\"\n CaptionLineHeight=\"1\"\n LineHeight=\"1\"\n><s font=\"3\" size=\"16.5\" color=\"0\" face=\"1\">FPh / OMe</s></t></page></CDXML>",
+      "native_svg_sha256": "91bad59a92bc7591bd4bb59953fa1c3e0b9ddc39b3be9153381e9e43e4a39456"
+    },
+    {
+      "id": 18,
+      "family": "Arial",
+      "charset": "iso-8859-1",
+      "face": "0",
+      "native_fonts": [
+        {
+          "height": -44,
+          "weight": 400,
+          "family": "Arial"
+        }
+      ],
+      "bmp_sha256": "14e4107df1963d88a05a3fd706b72a0970a9ca1bbd4812e557752b7fe3e5c7a4",
+      "producer_xml": "<?xml version='1.0' encoding='utf-8'?>\n<CDXML CreationProgram=\"Chemvas font representative\" bgcolor=\"2\"><fonttable><font id=\"0\" charset=\"iso-8859-1\" name=\"Arial\" /></fonttable><colortable><color r=\"1\" g=\"1\" b=\"1\" /><color r=\"0\" g=\"0\" b=\"0\" /></colortable><page id=\"1\" BoundingBox=\"0 0 250 100\"><t id=\"2\" p=\"30 50\" Justification=\"Left\" InterpretChemically=\"no\" CaptionLineHeight=\"1\"><s font=\"0\" size=\"16.5\" color=\"0\" face=\"0\">FPh / OMe</s></t></page></CDXML>",
+      "native_xml": "<?xml version=\"1.0\" encoding=\"UTF-8\" ?>\n<!DOCTYPE CDXML SYSTEM \"https://static.chemistry.revvitycloud.com/cdxml/CDXML.dtd\" >\n<CDXML\n CreationProgram=\"ChemDraw 25.0.2.14\"\n Name=\"native.cdxml\"\n BoundingBox=\"30 36.06 109.77 50.20\"\n WindowPosition=\"-1610612736 -1610612736\"\n WindowSize=\"1610612736 1610612736\"\n FractionalWidths=\"yes\"\n InterpretChemically=\"yes\"\n ShowAtomQuery=\"yes\"\n ShowAtomStereo=\"no\"\n ShowAtomEnhancedStereo=\"yes\"\n ShowAtomNumber=\"no\"\n ShowResidueID=\"no\"\n ShowBondQuery=\"yes\"\n ShowBondRxn=\"yes\"\n ShowBondStereo=\"no\"\n ShowTerminalCarbonLabels=\"no\"\n ShowNonTerminalCarbonLabels=\"no\"\n HideImplicitHydrogens=\"no\"\n LabelFont=\"3\"\n LabelSize=\"10\"\n LabelFace=\"96\"\n CaptionFont=\"3\"\n CaptionSize=\"10\"\n HashSpacing=\"2.50\"\n MarginWidth=\"1.60\"\n LineWidth=\"0.60\"\n BoldWidth=\"2\"\n BondLength=\"14.40\"\n BondSpacing=\"18\"\n ChainAngle=\"120\"\n LabelJustification=\"Auto\"\n CaptionJustification=\"Left\"\n AminoAcidTermini=\"HOH\"\n ShowSequenceTermini=\"yes\"\n ShowSequenceBonds=\"yes\"\n ShowSequenceUnlinkedBranches=\"no\"\n ShowPrimeLabels=\"no\"\n ResidueWrapCount=\"40\"\n PrintMargins=\"36 36 36 36\"\n MacPrintInfo=\"0003000001200120000000000B6608A0FF84FF880BE309180367052703FC0002000001200120000000000B6608A0000100000064000000010001010100000001270F000100010000000000000000000000000002001901900000000000600000000000000000000100000000000000000000000000000000\"\n ChemPropName=\"\"\n ChemPropFormula=\"Chemical Formula: \"\n ChemPropExactMass=\"Exact Mass: \"\n ChemPropMolWt=\"Molecular Weight: \"\n ChemPropMOverZ=\"m/z: \"\n ChemPropAnalysis=\"Elemental Analysis: \"\n ChemPropBoilingPt=\"Boiling Point: \"\n ChemPropMeltingPt=\"Melting Point: \"\n ChemPropCritTemp=\"Critical Temp: \"\n ChemPropCritPres=\"Critical Pres: \"\n ChemPropCritVol=\"Critical Vol: \"\n ChemPropGibbs=\"Gibbs Energy: \"\n ChemPropLogP=\"Log P: \"\n ChemPropMR=\"MR: \"\n ChemPropHenry=\"Henry&apos;s Law: \"\n ChemPropEForm=\"Heat of Form: \"\n ChemProptPSA=\"tPSA: \"\n ChemPropCLogP=\"CLogP: \"\n ChemPropCMR=\"CMR: \"\n ChemPropLogS=\"LogS: \"\n ChemPropPKa=\"pKa: \"\n ChemPropID=\"\"\n ChemPropFragmentLabel=\"\"\n color=\"0\"\n bgcolor=\"1\"\n RxnAutonumberStart=\"1\"\n RxnAutonumberConditions=\"no\"\n RxnAutonumberStyle=\"Roman\"\n RxnAutonumberFormat=\"(#)\"\n><colortable>\n<color r=\"1\" g=\"1\" b=\"1\"/>\n<color r=\"0\" g=\"0\" b=\"0\"/>\n</colortable><fonttable>\n<font id=\"3\" charset=\"iso-8859-1\" name=\"Arial\"/>\n</fonttable><page\n id=\"4\"\n BoundingBox=\"0 0 540 719.75\"\n HeaderPosition=\"36\"\n FooterPosition=\"36\"\n PrintTrimMarks=\"yes\"\n HeightPages=\"1\"\n WidthPages=\"1\"\n><t\n id=\"2\"\n p=\"30 50\"\n BoundingBox=\"30 36.06 109.77 50.20\"\n Z=\"1\"\n InterpretChemically=\"no\"\n CaptionLineHeight=\"1\"\n LineHeight=\"1\"\n><s font=\"3\" size=\"16.5\" color=\"0\">FPh / OMe</s></t></page></CDXML>",
+      "native_svg_sha256": "e9e901659b87afc0877fc00079ca15fad13510f0e6fec1fc4839e4d3d663db8b"
+    },
+    {
+      "id": 19,
+      "family": "Arial",
+      "charset": "iso-8859-1",
+      "face": "1",
+      "native_fonts": [
+        {
+          "height": -44,
+          "weight": 700,
+          "family": "Arial"
+        }
+      ],
+      "bmp_sha256": "6c5d9064e788890bb6692d7c40668a5691a274fb0440756ee7059e5e10f3eb4a",
+      "producer_xml": "<?xml version='1.0' encoding='utf-8'?>\n<CDXML CreationProgram=\"Chemvas font representative\" bgcolor=\"2\"><fonttable><font id=\"0\" charset=\"iso-8859-1\" name=\"Arial\" /></fonttable><colortable><color r=\"1\" g=\"1\" b=\"1\" /><color r=\"0\" g=\"0\" b=\"0\" /></colortable><page id=\"1\" BoundingBox=\"0 0 250 100\"><t id=\"2\" p=\"30 50\" Justification=\"Left\" InterpretChemically=\"no\" CaptionLineHeight=\"1\"><s font=\"0\" size=\"16.5\" color=\"0\" face=\"1\">FPh / OMe</s></t></page></CDXML>",
+      "native_xml": "<?xml version=\"1.0\" encoding=\"UTF-8\" ?>\n<!DOCTYPE CDXML SYSTEM \"https://static.chemistry.revvitycloud.com/cdxml/CDXML.dtd\" >\n<CDXML\n CreationProgram=\"ChemDraw 25.0.2.14\"\n Name=\"native.cdxml\"\n BoundingBox=\"30 36.06 110.67 50.20\"\n WindowPosition=\"-1610612736 -1610612736\"\n WindowSize=\"1610612736 1610612736\"\n FractionalWidths=\"yes\"\n InterpretChemically=\"yes\"\n ShowAtomQuery=\"yes\"\n ShowAtomStereo=\"no\"\n ShowAtomEnhancedStereo=\"yes\"\n ShowAtomNumber=\"no\"\n ShowResidueID=\"no\"\n ShowBondQuery=\"yes\"\n ShowBondRxn=\"yes\"\n ShowBondStereo=\"no\"\n ShowTerminalCarbonLabels=\"no\"\n ShowNonTerminalCarbonLabels=\"no\"\n HideImplicitHydrogens=\"no\"\n LabelFont=\"3\"\n LabelSize=\"10\"\n LabelFace=\"96\"\n CaptionFont=\"3\"\n CaptionSize=\"10\"\n HashSpacing=\"2.50\"\n MarginWidth=\"1.60\"\n LineWidth=\"0.60\"\n BoldWidth=\"2\"\n BondLength=\"14.40\"\n BondSpacing=\"18\"\n ChainAngle=\"120\"\n LabelJustification=\"Auto\"\n CaptionJustification=\"Left\"\n AminoAcidTermini=\"HOH\"\n ShowSequenceTermini=\"yes\"\n ShowSequenceBonds=\"yes\"\n ShowSequenceUnlinkedBranches=\"no\"\n ShowPrimeLabels=\"no\"\n ResidueWrapCount=\"40\"\n PrintMargins=\"36 36 36 36\"\n MacPrintInfo=\"0003000001200120000000000B6608A0FF84FF880BE309180367052703FC0002000001200120000000000B6608A0000100000064000000010001010100000001270F000100010000000000000000000000000002001901900000000000600000000000000000000100000000000000000000000000000000\"\n ChemPropName=\"\"\n ChemPropFormula=\"Chemical Formula: \"\n ChemPropExactMass=\"Exact Mass: \"\n ChemPropMolWt=\"Molecular Weight: \"\n ChemPropMOverZ=\"m/z: \"\n ChemPropAnalysis=\"Elemental Analysis: \"\n ChemPropBoilingPt=\"Boiling Point: \"\n ChemPropMeltingPt=\"Melting Point: \"\n ChemPropCritTemp=\"Critical Temp: \"\n ChemPropCritPres=\"Critical Pres: \"\n ChemPropCritVol=\"Critical Vol: \"\n ChemPropGibbs=\"Gibbs Energy: \"\n ChemPropLogP=\"Log P: \"\n ChemPropMR=\"MR: \"\n ChemPropHenry=\"Henry&apos;s Law: \"\n ChemPropEForm=\"Heat of Form: \"\n ChemProptPSA=\"tPSA: \"\n ChemPropCLogP=\"CLogP: \"\n ChemPropCMR=\"CMR: \"\n ChemPropLogS=\"LogS: \"\n ChemPropPKa=\"pKa: \"\n ChemPropID=\"\"\n ChemPropFragmentLabel=\"\"\n color=\"0\"\n bgcolor=\"1\"\n RxnAutonumberStart=\"1\"\n RxnAutonumberConditions=\"no\"\n RxnAutonumberStyle=\"Roman\"\n RxnAutonumberFormat=\"(#)\"\n><colortable>\n<color r=\"1\" g=\"1\" b=\"1\"/>\n<color r=\"0\" g=\"0\" b=\"0\"/>\n</colortable><fonttable>\n<font id=\"3\" charset=\"iso-8859-1\" name=\"Arial\"/>\n</fonttable><page\n id=\"4\"\n BoundingBox=\"0 0 540 719.75\"\n HeaderPosition=\"36\"\n FooterPosition=\"36\"\n PrintTrimMarks=\"yes\"\n HeightPages=\"1\"\n WidthPages=\"1\"\n><t\n id=\"2\"\n p=\"30 50\"\n BoundingBox=\"30 36.06 110.67 50.20\"\n Z=\"1\"\n InterpretChemically=\"no\"\n CaptionLineHeight=\"1\"\n LineHeight=\"1\"\n><s font=\"3\" size=\"16.5\" color=\"0\" face=\"1\">FPh / OMe</s></t></page></CDXML>",
+      "native_svg_sha256": "91bad59a92bc7591bd4bb59953fa1c3e0b9ddc39b3be9153381e9e43e4a39456"
+    },
+    {
+      "id": 20,
+      "family": "Arial",
+      "charset": "x-mac-roman",
+      "face": "0",
+      "native_fonts": [
+        {
+          "height": -44,
+          "weight": 400,
+          "family": "Arial"
+        }
+      ],
+      "bmp_sha256": "14e4107df1963d88a05a3fd706b72a0970a9ca1bbd4812e557752b7fe3e5c7a4",
+      "producer_xml": "<?xml version='1.0' encoding='utf-8'?>\n<CDXML CreationProgram=\"Chemvas font representative\" bgcolor=\"2\"><fonttable><font id=\"0\" charset=\"x-mac-roman\" name=\"Arial\" /></fonttable><colortable><color r=\"1\" g=\"1\" b=\"1\" /><color r=\"0\" g=\"0\" b=\"0\" /></colortable><page id=\"1\" BoundingBox=\"0 0 250 100\"><t id=\"2\" p=\"30 50\" Justification=\"Left\" InterpretChemically=\"no\" CaptionLineHeight=\"1\"><s font=\"0\" size=\"16.5\" color=\"0\" face=\"0\">FPh / OMe</s></t></page></CDXML>",
+      "native_xml": "<?xml version=\"1.0\" encoding=\"UTF-8\" ?>\n<!DOCTYPE CDXML SYSTEM \"https://static.chemistry.revvitycloud.com/cdxml/CDXML.dtd\" >\n<CDXML\n CreationProgram=\"ChemDraw 25.0.2.14\"\n Name=\"native.cdxml\"\n BoundingBox=\"30 36.06 109.77 50.20\"\n WindowPosition=\"-1610612736 -1610612736\"\n WindowSize=\"1610612736 1610612736\"\n FractionalWidths=\"yes\"\n InterpretChemically=\"yes\"\n ShowAtomQuery=\"yes\"\n ShowAtomStereo=\"no\"\n ShowAtomEnhancedStereo=\"yes\"\n ShowAtomNumber=\"no\"\n ShowResidueID=\"no\"\n ShowBondQuery=\"yes\"\n ShowBondRxn=\"yes\"\n ShowBondStereo=\"no\"\n ShowTerminalCarbonLabels=\"no\"\n ShowNonTerminalCarbonLabels=\"no\"\n HideImplicitHydrogens=\"no\"\n LabelFont=\"3\"\n LabelSize=\"10\"\n LabelFace=\"96\"\n CaptionFont=\"3\"\n CaptionSize=\"10\"\n HashSpacing=\"2.50\"\n MarginWidth=\"1.60\"\n LineWidth=\"0.60\"\n BoldWidth=\"2\"\n BondLength=\"14.40\"\n BondSpacing=\"18\"\n ChainAngle=\"120\"\n LabelJustification=\"Auto\"\n CaptionJustification=\"Left\"\n AminoAcidTermini=\"HOH\"\n ShowSequenceTermini=\"yes\"\n ShowSequenceBonds=\"yes\"\n ShowSequenceUnlinkedBranches=\"no\"\n ShowPrimeLabels=\"no\"\n ResidueWrapCount=\"40\"\n PrintMargins=\"36 36 36 36\"\n MacPrintInfo=\"0003000001200120000000000B6608A0FF84FF880BE309180367052703FC0002000001200120000000000B6608A0000100000064000000010001010100000001270F000100010000000000000000000000000002001901900000000000600000000000000000000100000000000000000000000000000000\"\n ChemPropName=\"\"\n ChemPropFormula=\"Chemical Formula: \"\n ChemPropExactMass=\"Exact Mass: \"\n ChemPropMolWt=\"Molecular Weight: \"\n ChemPropMOverZ=\"m/z: \"\n ChemPropAnalysis=\"Elemental Analysis: \"\n ChemPropBoilingPt=\"Boiling Point: \"\n ChemPropMeltingPt=\"Melting Point: \"\n ChemPropCritTemp=\"Critical Temp: \"\n ChemPropCritPres=\"Critical Pres: \"\n ChemPropCritVol=\"Critical Vol: \"\n ChemPropGibbs=\"Gibbs Energy: \"\n ChemPropLogP=\"Log P: \"\n ChemPropMR=\"MR: \"\n ChemPropHenry=\"Henry&apos;s Law: \"\n ChemPropEForm=\"Heat of Form: \"\n ChemProptPSA=\"tPSA: \"\n ChemPropCLogP=\"CLogP: \"\n ChemPropCMR=\"CMR: \"\n ChemPropLogS=\"LogS: \"\n ChemPropPKa=\"pKa: \"\n ChemPropID=\"\"\n ChemPropFragmentLabel=\"\"\n color=\"0\"\n bgcolor=\"1\"\n RxnAutonumberStart=\"1\"\n RxnAutonumberConditions=\"no\"\n RxnAutonumberStyle=\"Roman\"\n RxnAutonumberFormat=\"(#)\"\n><colortable>\n<color r=\"1\" g=\"1\" b=\"1\"/>\n<color r=\"0\" g=\"0\" b=\"0\"/>\n</colortable><fonttable>\n<font id=\"3\" charset=\"iso-8859-1\" name=\"Arial\"/>\n</fonttable><page\n id=\"4\"\n BoundingBox=\"0 0 540 719.75\"\n HeaderPosition=\"36\"\n FooterPosition=\"36\"\n PrintTrimMarks=\"yes\"\n HeightPages=\"1\"\n WidthPages=\"1\"\n><t\n id=\"2\"\n p=\"30 50\"\n BoundingBox=\"30 36.06 109.77 50.20\"\n Z=\"1\"\n InterpretChemically=\"no\"\n CaptionLineHeight=\"1\"\n LineHeight=\"1\"\n><s font=\"3\" size=\"16.5\" color=\"0\">FPh / OMe</s></t></page></CDXML>",
+      "native_svg_sha256": "e9e901659b87afc0877fc00079ca15fad13510f0e6fec1fc4839e4d3d663db8b"
+    },
+    {
+      "id": 21,
+      "family": "Arial",
+      "charset": "x-mac-roman",
+      "face": "1",
+      "native_fonts": [
+        {
+          "height": -44,
+          "weight": 700,
+          "family": "Arial"
+        }
+      ],
+      "bmp_sha256": "6c5d9064e788890bb6692d7c40668a5691a274fb0440756ee7059e5e10f3eb4a",
+      "producer_xml": "<?xml version='1.0' encoding='utf-8'?>\n<CDXML CreationProgram=\"Chemvas font representative\" bgcolor=\"2\"><fonttable><font id=\"0\" charset=\"x-mac-roman\" name=\"Arial\" /></fonttable><colortable><color r=\"1\" g=\"1\" b=\"1\" /><color r=\"0\" g=\"0\" b=\"0\" /></colortable><page id=\"1\" BoundingBox=\"0 0 250 100\"><t id=\"2\" p=\"30 50\" Justification=\"Left\" InterpretChemically=\"no\" CaptionLineHeight=\"1\"><s font=\"0\" size=\"16.5\" color=\"0\" face=\"1\">FPh / OMe</s></t></page></CDXML>",
+      "native_xml": "<?xml version=\"1.0\" encoding=\"UTF-8\" ?>\n<!DOCTYPE CDXML SYSTEM \"https://static.chemistry.revvitycloud.com/cdxml/CDXML.dtd\" >\n<CDXML\n CreationProgram=\"ChemDraw 25.0.2.14\"\n Name=\"native.cdxml\"\n BoundingBox=\"30 36.06 110.67 50.20\"\n WindowPosition=\"-1610612736 -1610612736\"\n WindowSize=\"1610612736 1610612736\"\n FractionalWidths=\"yes\"\n InterpretChemically=\"yes\"\n ShowAtomQuery=\"yes\"\n ShowAtomStereo=\"no\"\n ShowAtomEnhancedStereo=\"yes\"\n ShowAtomNumber=\"no\"\n ShowResidueID=\"no\"\n ShowBondQuery=\"yes\"\n ShowBondRxn=\"yes\"\n ShowBondStereo=\"no\"\n ShowTerminalCarbonLabels=\"no\"\n ShowNonTerminalCarbonLabels=\"no\"\n HideImplicitHydrogens=\"no\"\n LabelFont=\"3\"\n LabelSize=\"10\"\n LabelFace=\"96\"\n CaptionFont=\"3\"\n CaptionSize=\"10\"\n HashSpacing=\"2.50\"\n MarginWidth=\"1.60\"\n LineWidth=\"0.60\"\n BoldWidth=\"2\"\n BondLength=\"14.40\"\n BondSpacing=\"18\"\n ChainAngle=\"120\"\n LabelJustification=\"Auto\"\n CaptionJustification=\"Left\"\n AminoAcidTermini=\"HOH\"\n ShowSequenceTermini=\"yes\"\n ShowSequenceBonds=\"yes\"\n ShowSequenceUnlinkedBranches=\"no\"\n ShowPrimeLabels=\"no\"\n ResidueWrapCount=\"40\"\n PrintMargins=\"36 36 36 36\"\n MacPrintInfo=\"0003000001200120000000000B6608A0FF84FF880BE309180367052703FC0002000001200120000000000B6608A0000100000064000000010001010100000001270F000100010000000000000000000000000002001901900000000000600000000000000000000100000000000000000000000000000000\"\n ChemPropName=\"\"\n ChemPropFormula=\"Chemical Formula: \"\n ChemPropExactMass=\"Exact Mass: \"\n ChemPropMolWt=\"Molecular Weight: \"\n ChemPropMOverZ=\"m/z: \"\n ChemPropAnalysis=\"Elemental Analysis: \"\n ChemPropBoilingPt=\"Boiling Point: \"\n ChemPropMeltingPt=\"Melting Point: \"\n ChemPropCritTemp=\"Critical Temp: \"\n ChemPropCritPres=\"Critical Pres: \"\n ChemPropCritVol=\"Critical Vol: \"\n ChemPropGibbs=\"Gibbs Energy: \"\n ChemPropLogP=\"Log P: \"\n ChemPropMR=\"MR: \"\n ChemPropHenry=\"Henry&apos;s Law: \"\n ChemPropEForm=\"Heat of Form: \"\n ChemProptPSA=\"tPSA: \"\n ChemPropCLogP=\"CLogP: \"\n ChemPropCMR=\"CMR: \"\n ChemPropLogS=\"LogS: \"\n ChemPropPKa=\"pKa: \"\n ChemPropID=\"\"\n ChemPropFragmentLabel=\"\"\n color=\"0\"\n bgcolor=\"1\"\n RxnAutonumberStart=\"1\"\n RxnAutonumberConditions=\"no\"\n RxnAutonumberStyle=\"Roman\"\n RxnAutonumberFormat=\"(#)\"\n><colortable>\n<color r=\"1\" g=\"1\" b=\"1\"/>\n<color r=\"0\" g=\"0\" b=\"0\"/>\n</colortable><fonttable>\n<font id=\"3\" charset=\"iso-8859-1\" name=\"Arial\"/>\n</fonttable><page\n id=\"4\"\n BoundingBox=\"0 0 540 719.75\"\n HeaderPosition=\"36\"\n FooterPosition=\"36\"\n PrintTrimMarks=\"yes\"\n HeightPages=\"1\"\n WidthPages=\"1\"\n><t\n id=\"2\"\n p=\"30 50\"\n BoundingBox=\"30 36.06 110.67 50.20\"\n Z=\"1\"\n InterpretChemically=\"no\"\n CaptionLineHeight=\"1\"\n LineHeight=\"1\"\n><s font=\"3\" size=\"16.5\" color=\"0\" face=\"1\">FPh / OMe</s></t></page></CDXML>",
+      "native_svg_sha256": "91bad59a92bc7591bd4bb59953fa1c3e0b9ddc39b3be9153381e9e43e4a39456"
+    },
+    {
+      "id": 22,
+      "family": "Arial",
+      "charset": null,
+      "face": "0",
+      "native_fonts": [
+        {
+          "height": -44,
+          "weight": 400,
+          "family": "Arial"
+        }
+      ],
+      "bmp_sha256": "14e4107df1963d88a05a3fd706b72a0970a9ca1bbd4812e557752b7fe3e5c7a4",
+      "producer_xml": "<?xml version='1.0' encoding='utf-8'?>\n<CDXML CreationProgram=\"Chemvas font representative\" bgcolor=\"2\"><fonttable><font id=\"0\" name=\"Arial\" /></fonttable><colortable><color r=\"1\" g=\"1\" b=\"1\" /><color r=\"0\" g=\"0\" b=\"0\" /></colortable><page id=\"1\" BoundingBox=\"0 0 250 100\"><t id=\"2\" p=\"30 50\" Justification=\"Left\" InterpretChemically=\"no\" CaptionLineHeight=\"1\"><s font=\"0\" size=\"16.5\" color=\"0\" face=\"0\">FPh / OMe</s></t></page></CDXML>",
+      "native_xml": "<?xml version=\"1.0\" encoding=\"UTF-8\" ?>\n<!DOCTYPE CDXML SYSTEM \"https://static.chemistry.revvitycloud.com/cdxml/CDXML.dtd\" >\n<CDXML\n CreationProgram=\"ChemDraw 25.0.2.14\"\n Name=\"native.cdxml\"\n BoundingBox=\"30 36.06 109.77 50.20\"\n WindowPosition=\"-1610612736 -1610612736\"\n WindowSize=\"1610612736 1610612736\"\n FractionalWidths=\"yes\"\n InterpretChemically=\"yes\"\n ShowAtomQuery=\"yes\"\n ShowAtomStereo=\"no\"\n ShowAtomEnhancedStereo=\"yes\"\n ShowAtomNumber=\"no\"\n ShowResidueID=\"no\"\n ShowBondQuery=\"yes\"\n ShowBondRxn=\"yes\"\n ShowBondStereo=\"no\"\n ShowTerminalCarbonLabels=\"no\"\n ShowNonTerminalCarbonLabels=\"no\"\n HideImplicitHydrogens=\"no\"\n LabelFont=\"3\"\n LabelSize=\"10\"\n LabelFace=\"96\"\n CaptionFont=\"3\"\n CaptionSize=\"10\"\n HashSpacing=\"2.50\"\n MarginWidth=\"1.60\"\n LineWidth=\"0.60\"\n BoldWidth=\"2\"\n BondLength=\"14.40\"\n BondSpacing=\"18\"\n ChainAngle=\"120\"\n LabelJustification=\"Auto\"\n CaptionJustification=\"Left\"\n AminoAcidTermini=\"HOH\"\n ShowSequenceTermini=\"yes\"\n ShowSequenceBonds=\"yes\"\n ShowSequenceUnlinkedBranches=\"no\"\n ShowPrimeLabels=\"no\"\n ResidueWrapCount=\"40\"\n PrintMargins=\"36 36 36 36\"\n MacPrintInfo=\"0003000001200120000000000B6608A0FF84FF880BE309180367052703FC0002000001200120000000000B6608A0000100000064000000010001010100000001270F000100010000000000000000000000000002001901900000000000600000000000000000000100000000000000000000000000000000\"\n ChemPropName=\"\"\n ChemPropFormula=\"Chemical Formula: \"\n ChemPropExactMass=\"Exact Mass: \"\n ChemPropMolWt=\"Molecular Weight: \"\n ChemPropMOverZ=\"m/z: \"\n ChemPropAnalysis=\"Elemental Analysis: \"\n ChemPropBoilingPt=\"Boiling Point: \"\n ChemPropMeltingPt=\"Melting Point: \"\n ChemPropCritTemp=\"Critical Temp: \"\n ChemPropCritPres=\"Critical Pres: \"\n ChemPropCritVol=\"Critical Vol: \"\n ChemPropGibbs=\"Gibbs Energy: \"\n ChemPropLogP=\"Log P: \"\n ChemPropMR=\"MR: \"\n ChemPropHenry=\"Henry&apos;s Law: \"\n ChemPropEForm=\"Heat of Form: \"\n ChemProptPSA=\"tPSA: \"\n ChemPropCLogP=\"CLogP: \"\n ChemPropCMR=\"CMR: \"\n ChemPropLogS=\"LogS: \"\n ChemPropPKa=\"pKa: \"\n ChemPropID=\"\"\n ChemPropFragmentLabel=\"\"\n color=\"0\"\n bgcolor=\"1\"\n RxnAutonumberStart=\"1\"\n RxnAutonumberConditions=\"no\"\n RxnAutonumberStyle=\"Roman\"\n RxnAutonumberFormat=\"(#)\"\n><colortable>\n<color r=\"1\" g=\"1\" b=\"1\"/>\n<color r=\"0\" g=\"0\" b=\"0\"/>\n</colortable><fonttable>\n<font id=\"3\" charset=\"iso-8859-1\" name=\"Arial\"/>\n</fonttable><page\n id=\"4\"\n BoundingBox=\"0 0 540 719.75\"\n HeaderPosition=\"36\"\n FooterPosition=\"36\"\n PrintTrimMarks=\"yes\"\n HeightPages=\"1\"\n WidthPages=\"1\"\n><t\n id=\"2\"\n p=\"30 50\"\n BoundingBox=\"30 36.06 109.77 50.20\"\n Z=\"1\"\n InterpretChemically=\"no\"\n CaptionLineHeight=\"1\"\n LineHeight=\"1\"\n><s font=\"3\" size=\"16.5\" color=\"0\">FPh / OMe</s></t></page></CDXML>",
+      "native_svg_sha256": "e9e901659b87afc0877fc00079ca15fad13510f0e6fec1fc4839e4d3d663db8b"
+    },
+    {
+      "id": 23,
+      "family": "Arial",
+      "charset": null,
+      "face": "1",
+      "native_fonts": [
+        {
+          "height": -44,
+          "weight": 700,
+          "family": "Arial"
+        }
+      ],
+      "bmp_sha256": "6c5d9064e788890bb6692d7c40668a5691a274fb0440756ee7059e5e10f3eb4a",
+      "producer_xml": "<?xml version='1.0' encoding='utf-8'?>\n<CDXML CreationProgram=\"Chemvas font representative\" bgcolor=\"2\"><fonttable><font id=\"0\" name=\"Arial\" /></fonttable><colortable><color r=\"1\" g=\"1\" b=\"1\" /><color r=\"0\" g=\"0\" b=\"0\" /></colortable><page id=\"1\" BoundingBox=\"0 0 250 100\"><t id=\"2\" p=\"30 50\" Justification=\"Left\" InterpretChemically=\"no\" CaptionLineHeight=\"1\"><s font=\"0\" size=\"16.5\" color=\"0\" face=\"1\">FPh / OMe</s></t></page></CDXML>",
+      "native_xml": "<?xml version=\"1.0\" encoding=\"UTF-8\" ?>\n<!DOCTYPE CDXML SYSTEM \"https://static.chemistry.revvitycloud.com/cdxml/CDXML.dtd\" >\n<CDXML\n CreationProgram=\"ChemDraw 25.0.2.14\"\n Name=\"native.cdxml\"\n BoundingBox=\"30 36.06 110.67 50.20\"\n WindowPosition=\"-1610612736 -1610612736\"\n WindowSize=\"1610612736 1610612736\"\n FractionalWidths=\"yes\"\n InterpretChemically=\"yes\"\n ShowAtomQuery=\"yes\"\n ShowAtomStereo=\"no\"\n ShowAtomEnhancedStereo=\"yes\"\n ShowAtomNumber=\"no\"\n ShowResidueID=\"no\"\n ShowBondQuery=\"yes\"\n ShowBondRxn=\"yes\"\n ShowBondStereo=\"no\"\n ShowTerminalCarbonLabels=\"no\"\n ShowNonTerminalCarbonLabels=\"no\"\n HideImplicitHydrogens=\"no\"\n LabelFont=\"3\"\n LabelSize=\"10\"\n LabelFace=\"96\"\n CaptionFont=\"3\"\n CaptionSize=\"10\"\n HashSpacing=\"2.50\"\n MarginWidth=\"1.60\"\n LineWidth=\"0.60\"\n BoldWidth=\"2\"\n BondLength=\"14.40\"\n BondSpacing=\"18\"\n ChainAngle=\"120\"\n LabelJustification=\"Auto\"\n CaptionJustification=\"Left\"\n AminoAcidTermini=\"HOH\"\n ShowSequenceTermini=\"yes\"\n ShowSequenceBonds=\"yes\"\n ShowSequenceUnlinkedBranches=\"no\"\n ShowPrimeLabels=\"no\"\n ResidueWrapCount=\"40\"\n PrintMargins=\"36 36 36 36\"\n MacPrintInfo=\"0003000001200120000000000B6608A0FF84FF880BE309180367052703FC0002000001200120000000000B6608A0000100000064000000010001010100000001270F000100010000000000000000000000000002001901900000000000600000000000000000000100000000000000000000000000000000\"\n ChemPropName=\"\"\n ChemPropFormula=\"Chemical Formula: \"\n ChemPropExactMass=\"Exact Mass: \"\n ChemPropMolWt=\"Molecular Weight: \"\n ChemPropMOverZ=\"m/z: \"\n ChemPropAnalysis=\"Elemental Analysis: \"\n ChemPropBoilingPt=\"Boiling Point: \"\n ChemPropMeltingPt=\"Melting Point: \"\n ChemPropCritTemp=\"Critical Temp: \"\n ChemPropCritPres=\"Critical Pres: \"\n ChemPropCritVol=\"Critical Vol: \"\n ChemPropGibbs=\"Gibbs Energy: \"\n ChemPropLogP=\"Log P: \"\n ChemPropMR=\"MR: \"\n ChemPropHenry=\"Henry&apos;s Law: \"\n ChemPropEForm=\"Heat of Form: \"\n ChemProptPSA=\"tPSA: \"\n ChemPropCLogP=\"CLogP: \"\n ChemPropCMR=\"CMR: \"\n ChemPropLogS=\"LogS: \"\n ChemPropPKa=\"pKa: \"\n ChemPropID=\"\"\n ChemPropFragmentLabel=\"\"\n color=\"0\"\n bgcolor=\"1\"\n RxnAutonumberStart=\"1\"\n RxnAutonumberConditions=\"no\"\n RxnAutonumberStyle=\"Roman\"\n RxnAutonumberFormat=\"(#)\"\n><colortable>\n<color r=\"1\" g=\"1\" b=\"1\"/>\n<color r=\"0\" g=\"0\" b=\"0\"/>\n</colortable><fonttable>\n<font id=\"3\" charset=\"iso-8859-1\" name=\"Arial\"/>\n</fonttable><page\n id=\"4\"\n BoundingBox=\"0 0 540 719.75\"\n HeaderPosition=\"36\"\n FooterPosition=\"36\"\n PrintTrimMarks=\"yes\"\n HeightPages=\"1\"\n WidthPages=\"1\"\n><t\n id=\"2\"\n p=\"30 50\"\n BoundingBox=\"30 36.06 110.67 50.20\"\n Z=\"1\"\n InterpretChemically=\"no\"\n CaptionLineHeight=\"1\"\n LineHeight=\"1\"\n><s font=\"3\" size=\"16.5\" color=\"0\" face=\"1\">FPh / OMe</s></t></page></CDXML>",
+      "native_svg_sha256": "91bad59a92bc7591bd4bb59953fa1c3e0b9ddc39b3be9153381e9e43e4a39456"
+    }
+  ]
+}

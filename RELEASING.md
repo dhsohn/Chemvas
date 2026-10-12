@@ -4,9 +4,9 @@
 
 Chemvas packages are published to [PyPI](https://pypi.org/project/chemvas/) via GitHub Actions using Trusted Publishing (OIDC). Pushing a `v*` tag triggers [`.github/workflows/release.yml`](.github/workflows/release.yml) to build and upload wheels and sdist.
 
-Built distribution artifacts (wheels and sdist) contain the desktop Qt application and headless CLI only. The frozen application spec declares the same Qt-only boundary. Experimental browser editor files are excluded from packages by `setup.py` and `MANIFEST.in`, and from frozen bundles by `packaging/chemvas.spec` (`chemvas.bootstrap.web_adapter` and `chemvas.bootstrap.web_drafts` excluded), while preserving Qt, optional RDKit, icons, and license data. GitHub release tag source archives retain repository files for development, but do not constitute a released web product.
+Built distribution artifacts (wheels and sdist) contain the desktop Qt application and headless CLI only. The frozen application spec declares the same Qt-only boundary. Experimental browser editor files are excluded from packages by `setup.py` and `MANIFEST.in`, and from frozen bundles by `packaging/chemvas.spec` (`chemvas.bootstrap.web_adapter` and `chemvas.bootstrap.web_drafts` excluded), while preserving Qt, icons, and license data. There is no chemistry extra to bundle. GitHub release tag source archives retain repository files for development, but do not constitute a released web product.
 
-Version number is sourced from `chemvas.__version__` in [`app/chemvas/__init__.py`](app/chemvas/__init__.py).
+Version number is sourced from `chemvas.__version__` in [`app/chemvas/__init__.py`](app/chemvas/__init__.py). The unpublished candidate may be `0.25.0.dev0`. A Windows bundle and a `v*` tag require a numeric `major.minor.patch` value; `packaging/chemvas.spec` rejects any other form on Windows. Setting that number and moving the changelog section prepares a release. Tagging and publishing are a later step.
 
 ## Release Steps
 
@@ -25,15 +25,15 @@ Version number is sourced from `chemvas.__version__` in [`app/chemvas/__init__.p
 
 ```bash
 git checkout main && git pull
-git tag -a v0.24.0 -m "Chemvas 0.24.0"
-git push origin v0.24.0
+git tag -a v0.25.0 -m "Chemvas 0.25.0"
+git push origin v0.25.0
 ```
 
 5. Verify the published package in a clean environment:
 
 ```bash
 python -m venv .release-check
-.release-check/bin/python -m pip install "chemvas==0.24.0"
+.release-check/bin/python -m pip install "chemvas==0.25.0"
 .release-check/bin/chemvas --version
 .release-check/bin/chemvas
 ```

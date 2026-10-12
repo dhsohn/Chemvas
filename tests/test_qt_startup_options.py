@@ -94,7 +94,6 @@ def _desktop_process(
         from types import SimpleNamespace
         from PyQt6.QtWidgets import QApplication
         from chemvas.bootstrap import application, file_open, window_registry
-        from chemvas.core import rdkit_adapter
         from chemvas.ui.session import session_recovery_service
         expected = json.loads(os.environ['EXPECTED_DOCUMENTS'])
         opened = []
@@ -112,7 +111,6 @@ def _desktop_process(
         file_open.open_document = opened.append
         session_recovery_service.create_session_recovery_service = lambda **_: SimpleNamespace(
             restore_previous=lambda window: None, start=lambda app: None)
-        rdkit_adapter.warm_rdkit_in_background = lambda: None
         application.main()
     """)
     env = os.environ.copy()

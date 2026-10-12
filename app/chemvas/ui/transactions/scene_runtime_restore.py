@@ -841,19 +841,6 @@ def restore_scene_runtime(
                 ),
                 errors=errors,
             )
-        if snapshot.selection_info_state is not None:
-            for attribute, value in snapshot.selection_info_values.items():
-                _run_suppressed_restore_step(
-                    original_error,
-                    f"restoring selection-info field {attribute}",
-                    partial(
-                        setattr,
-                        snapshot.selection_info_state,
-                        attribute,
-                        value,
-                    ),
-                    errors=errors,
-                )
     finally:
         # Ring attach/remove callbacks refresh surviving bond primitives in
         # place and can fail after a partial mutation. The exact raw graphics

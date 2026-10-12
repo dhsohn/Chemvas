@@ -4,13 +4,9 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from chemvas.features.insertion import (
-    SmilesCommitPlan,
     TemplateInsertPlan,
     TemplateInsertRequest,
     TemplateInsertResolution,
-)
-from chemvas.ui.insert.insert_smiles_commit_service import (
-    apply_smiles_commit_plan as _apply_smiles_commit_plan,
 )
 from chemvas.ui.insert.insert_template_commit_service import (
     apply_template_commit_resolution as _apply_template_commit_resolution,
@@ -28,12 +24,6 @@ if TYPE_CHECKING:
 class InsertCommitService:
     canvas: CanvasView
     bond_exists: Callable[[int, int], bool] | None = None
-
-    def apply_smiles_commit(self, plan: SmilesCommitPlan | None) -> bool:
-        return _apply_smiles_commit_plan(
-            self.canvas,
-            plan,
-        )
 
     def apply_template_commit(
         self,

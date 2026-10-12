@@ -20,7 +20,15 @@ def _action(window, name):
     return next(a for a in menu.actions() if a.text() == name)
 
 
-def _smiles_with_drawing(drawing):
+def _atom_field(window):
+    _tool(window, "text")
+    field = window.findChild(QLineEdit, "atomInput")
+    assert field is not None and field.isVisible()
+    field.setText("")
+    return field
+
+
+def _field_with_drawing(drawing):
     window, canvas = drawing
     _tool(window, "bond")
     _click(canvas, QPointF(70, -35))
@@ -29,16 +37,16 @@ def _smiles_with_drawing(drawing):
     _key(canvas, Qt.Key.Key_A, Qt.KeyboardModifier.ControlModifier)
     assert canvas.scene().selectedItems()
     baseline = canvas.services.canvas_document_session_service.snapshot_state()
-    field = window.findChild(QLineEdit, "contextSmilesInput")
+    field = _atom_field(window)
     field.setFocus()
     QTest.keyClicks(field, "CCN")
     assert field.hasFocus()
     return field, baseline
 
 
-def test_smiles_menu_cut_copy_paste_and_select_all_keep_drawing(drawing):
+def test_atom_field_menu_cut_copy_paste_and_select_all_keep_drawing(drawing):
     window, canvas = drawing
-    field, baseline = _smiles_with_drawing(drawing)
+    field, baseline = _field_with_drawing(drawing)
     field.setSelection(2, 1)
     _action(window, "Copy").trigger()
     assert QApplication.clipboard().text() == "N"
@@ -52,9 +60,9 @@ def test_smiles_menu_cut_copy_paste_and_select_all_keep_drawing(drawing):
     assert canvas.services.canvas_document_session_service.snapshot_state() == baseline
 
 
-def test_smiles_menu_undo_redo_uses_text_history_then_canvas_history(drawing):
+def test_atom_field_menu_undo_redo_uses_text_history_then_canvas_history(drawing):
     window, canvas = drawing
-    field, baseline = _smiles_with_drawing(drawing)
+    field, baseline = _field_with_drawing(drawing)
     undo = _action(window, "Undo")
     assert undo.isEnabled()
     undo.trigger()
@@ -73,9 +81,9 @@ def test_smiles_menu_undo_redo_uses_text_history_then_canvas_history(drawing):
     assert canvas.services.canvas_document_session_service.snapshot_state() == baseline
 
 
-def test_empty_drawing_enables_menu_undo_for_typed_smiles(drawing):
+def test_empty_drawing_enables_menu_undo_for_typed_atom_label(drawing):
     window, _canvas = drawing
-    field = window.findChild(QLineEdit, "contextSmilesInput")
+    field = _atom_field(window)
     field.setFocus()
     QTest.keyClicks(field, "CCN")
     assert not history_service_for_window(window).can_undo()
@@ -89,7 +97,7 @@ def test_empty_drawing_enables_menu_undo_for_typed_smiles(drawing):
 @pytest.mark.parametrize("action", ["Copy", "Cut"])
 def test_empty_text_selection_does_not_use_selected_canvas_objects(drawing, action):
     window, canvas = drawing
-    field, baseline = _smiles_with_drawing(drawing)
+    field, baseline = _field_with_drawing(drawing)
     assert not field.hasSelectedText()
     QApplication.clipboard().setText("previous clipboard")
     _action(window, action).trigger()
@@ -101,7 +109,7 @@ def test_empty_text_selection_does_not_use_selected_canvas_objects(drawing, acti
 @pytest.mark.parametrize("action", ["Cut", "Paste", "Undo", "Redo"])
 def test_read_only_text_field_does_not_edit_drawing(drawing, action):
     window, canvas = drawing
-    field, baseline = _smiles_with_drawing(drawing)
+    field, baseline = _field_with_drawing(drawing)
     field.setReadOnly(True)
     field.selectAll()
     _action(window, action).trigger()
@@ -168,7 +176,7 @@ def test_text_target_is_owned_by_action_window(drawing):
     second.show()
     second.activateWindow()
     try:
-        field = second.findChild(QLineEdit, "contextSmilesInput")
+        field = _atom_field(second)
         field.setFocus()
         QTest.keyClicks(field, "CCN")
         field.selectAll()

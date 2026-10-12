@@ -11,7 +11,7 @@ from PyQt6.QtTest import QTest
 from PyQt6.QtWidgets import QApplication
 
 from chemvas.ui.molecule.structure_payload_access import (
-    build_selected_3d_conversion_payload_for,
+    build_selected_mol_export_payload_for,
 )
 from chemvas.ui.selection.selection_queries import selected_ids_for
 from tests.canvas_factory import build_canvas_view
@@ -95,7 +95,7 @@ def test_bond_hotkey_undo_redo_retains_ring_selection_and_export(
         for selected_only in (False, True):
             session.export_mol(str(path), selected_only=selected_only)
             assert path.read_bytes() == original_mol
-        model, annotations = build_selected_3d_conversion_payload_for(canvas)
+        model, annotations = build_selected_mol_export_payload_for(canvas)
         assert len(model.atoms) == 6
         assert len(model.bonds) == 6
         assert sorted(bond.order for bond in model.bonds) == [1, 1, 1, 2, 2, 2]
@@ -149,18 +149,26 @@ def test_failed_bond_replay_restores_selection_and_document(
     history.verify_stack_snapshot(stacks)
 
 
-def test_undo_keeps_benzene_in_exported_mol_and_selected_identifiers(canvas, tmp_path):
-    pytest.importorskip("rdkit")
-    from rdkit import Chem
-    from rdkit.Chem import rdMolDescriptors
+def test_undo_keeps_benzene_ring_connectivity_and_orders_in_exported_mol(
+    canvas, tmp_path
+):
+    from chemvas.core.molfile import parse_molfile
 
     assert canvas.services.selection.select_all()
+    selection = selected_ids_for(canvas)
+    expected = sorted(
+        (min(b.a, b.b), max(b.a, b.b), b.order) for b in canvas.model.bonds
+    )
     canvas.services.scene_transform_controller.apply_bond_style(0, "triple", 3)
     canvas.services.history_service.undo()
     path = tmp_path / "benzene.mol"
-    canvas.services.canvas_document_session_service.export_mol(str(path))
-    molecule = Chem.MolFromMolBlock(path.read_text())
-    assert molecule is not None
-    assert rdMolDescriptors.CalcMolFormula(molecule) == "C6H6"
-    assert Chem.MolToSmiles(molecule) == "c1ccccc1"
-    assert Chem.AddHs(molecule).GetNumAtoms() == 12
+    canvas.services.canvas_document_session_service.export_mol(
+        str(path), selected_only=True
+    )
+    model = parse_molfile(path.read_text())
+    assert len(model.atoms) == 6
+    assert {atom.element for atom in model.atoms.values()} == {"C"}
+    assert (
+        sorted((min(b.a, b.b), max(b.a, b.b), b.order) for b in model.bonds) == expected
+    )
+    assert selected_ids_for(canvas) == selection

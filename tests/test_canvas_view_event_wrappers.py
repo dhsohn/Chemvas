@@ -62,11 +62,8 @@ class CanvasViewEventWrapperTest(unittest.TestCase):
         view.services.input_controller.hover = hover_controller
         insert_controller = SimpleNamespace(
             render_template_preview=mock.Mock(),
-            render_smiles_preview=mock.Mock(),
             commit_template_insert=mock.Mock(),
-            commit_smiles_insert=mock.Mock(),
             clear_template_preview=mock.Mock(),
-            clear_smiles_preview=mock.Mock(),
         )
         view.services.insert_controller = insert_controller
         view.runtime_state.input_view_state.base_transform = QTransform().translate(
@@ -93,7 +90,7 @@ class CanvasViewEventWrapperTest(unittest.TestCase):
         )
         return view
 
-    def test_mouse_press_event_handles_template_smiles_and_tool_branches(self) -> None:
+    def test_mouse_press_event_handles_template_and_tool_branches(self) -> None:
         press_event = _FakeEvent(button=Qt.MouseButton.LeftButton)
 
         template_view = self._new_view(
@@ -117,24 +114,6 @@ class CanvasViewEventWrapperTest(unittest.TestCase):
             template_view.services.tool_controller.active.on_mouse_press.call_count, 0
         )
 
-        smiles_view = self._new_view(
-            tool_active=SimpleNamespace(
-                on_mouse_press=mock.Mock(
-                    side_effect=AssertionError("tool should not run")
-                )
-            )
-        )
-        smiles_view.runtime_state.insert_state.smiles_active = True
-        CanvasView.mousePressEvent(smiles_view, press_event)
-        self.assertEqual(
-            smiles_view.services.insert_controller.commit_smiles_insert.call_count,
-            1,
-        )
-        self.assertEqual(smiles_view.services.hover.clear_hover_highlight.call_count, 1)
-        self.assertEqual(
-            smiles_view.services.tool_controller.active.on_mouse_press.call_count, 0
-        )
-
         tool = SimpleNamespace(
             on_mouse_press=mock.Mock(return_value=True),
         )
@@ -144,10 +123,6 @@ class CanvasViewEventWrapperTest(unittest.TestCase):
         self.assertEqual(tool_view.services.hover.clear_hover_highlight.call_count, 1)
         self.assertEqual(
             tool_view.services.insert_controller.commit_template_insert.call_count,
-            0,
-        )
-        self.assertEqual(
-            tool_view.services.insert_controller.commit_smiles_insert.call_count,
             0,
         )
 
@@ -204,17 +179,7 @@ class CanvasViewEventWrapperTest(unittest.TestCase):
         template_view.services.insert_controller.render_template_preview.assert_called_once_with(
             QPointF(4.0, 5.0)
         )
-        template_view.services.insert_controller.render_smiles_preview.assert_not_called()
         template_view.services.hover.update_hover_highlight.assert_not_called()
-
-        smiles_view = self._new_view()
-        smiles_view.runtime_state.insert_state.smiles_active = True
-        CanvasView.mouseMoveEvent(smiles_view, move_event)
-        smiles_view.services.insert_controller.render_smiles_preview.assert_called_once_with(
-            QPointF(4.0, 5.0)
-        )
-        smiles_view.services.insert_controller.render_template_preview.assert_not_called()
-        smiles_view.services.hover.update_hover_highlight.assert_not_called()
 
         hover_view = self._new_view()
         hover_event = QMouseEvent(
@@ -330,7 +295,7 @@ class CanvasViewEventWrapperTest(unittest.TestCase):
                 self.assertEqual(tool.activate.call_count, 0 if name == "select" else 1)
                 view.services.hover.update_hover_highlight.assert_not_called()
 
-        for kind in ("template", "smiles"):
+        for kind in ("template",):
             with self.subTest(insert=kind):
                 tool = SimpleNamespace(name="select", on_mouse_move=mock.Mock())
                 view = self._new_view(tool_active=tool)
@@ -574,11 +539,10 @@ class CanvasViewEventWrapperTest(unittest.TestCase):
                 self.assertEqual(base_event.call_count, 1)
 
     def test_real_viewport_mouse_move_dispatches_preview_and_hover_once(self) -> None:
-        for mode in ("template", "smiles", "hover", "drag"):
+        for mode in ("template", "hover", "drag"):
             with self.subTest(mode=mode):
                 view = self._new_view()
                 view.runtime_state.insert_state.template_active = mode == "template"
-                view.runtime_state.insert_state.smiles_active = mode == "smiles"
                 event = QMouseEvent(
                     QEvent.Type.MouseMove,
                     QPointF(10, 10),
@@ -592,7 +556,6 @@ class CanvasViewEventWrapperTest(unittest.TestCase):
                 CanvasView.viewportEvent(view, event)
                 callback = {
                     "template": view.services.insert_controller.render_template_preview,
-                    "smiles": view.services.insert_controller.render_smiles_preview,
                     "hover": view.services.hover.update_hover_highlight,
                     "drag": view.services.hover.clear_hover_highlight,
                 }[mode]

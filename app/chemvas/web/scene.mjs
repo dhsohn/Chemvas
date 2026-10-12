@@ -545,12 +545,14 @@ export function valenceWarningMarkup(document, ids, drawing, style, scale, viewp
 
 // One planner primitive inside a bond group that supplies stroke width and colour.
 function bondPrimitiveMarkup(primitive, color) {
+  // A native joined stroke retains its chemical centerline for selection and
+  // editing, while the planner's polygon owns the visible ink.
+  if (primitive.polygon) return `<polygon points="${primitive.polygon.map(p => p.map(number).join(',')).join(' ')}" fill="${color}" ${primitive.outlined ? '' : 'stroke="none"'}/>`;
   if (primitive.line) {
     const [x1, y1, x2, y2] = primitive.line;
     return x1 !== x2 || y1 !== y2 ? line(x1, y1, x2, y2) : '';
   }
   if (primitive.dots) return primitive.dots.map(([x, y]) => `<circle cx="${number(x)}" cy="${number(y)}" r="${number(primitive.radius)}" fill="${color}" stroke="none"/>`).join('');
-  if (primitive.polygon) return `<polygon points="${primitive.polygon.map(p => p.map(number).join(',')).join(' ')}" fill="${color}" ${primitive.outlined ? '' : 'stroke="none"'}/>`;
   return '';
 }
 
@@ -745,20 +747,6 @@ export function sceneMarkup(document, {selection = new Set(), components = [], p
   if (overlays) parts.push('<g id="rotation-handle"></g>');
   finishLayer(30);
   return layers.sort((a, b) => a.z - b.z || a.order - b.order).map(layer => layer.html).join('');
-}
-
-// Display only the inserted part of a server candidate. Geometry and chemistry
-// still come from the existing renderer; the committed scene is never replaced.
-// One group opacity composites overlaps once, as the native preview picture does.
-export function smilesPreviewMarkup(candidate, committed, opacity) {
-  const source = candidate.document.state, original = committed.state;
-  const state = {...source, model: {...source.model,
-    atoms: Object.fromEntries(Object.entries(source.model.atoms).filter(([id]) => !Object.hasOwn(original.model.atoms, id))),
-    bonds: source.model.bonds.map((bond, index) => index < original.model.bonds.length ? null : bond),
-  }, arrows: [], ring_fills: []};
-  const drawing = {...candidate.drawing, images: [], shapes: [], arrows: [], arrow_labels: [], notes: [], orbitals: [], brackets: [],
-    marks: (candidate.drawing.marks ?? []).filter(mark => mark.id >= (original.marks ?? []).length)};
-  return `<g opacity="${number(opacity)}">${sceneMarkup({...candidate.document, state}, {drawing, overlays: false, showMarkOwners: false})}</g>`;
 }
 
 // QGraphicsView's rubber band intersects item shapes; SVG owns the same

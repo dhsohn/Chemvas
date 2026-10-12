@@ -117,9 +117,7 @@ class CanvasViewEventFallthroughTest(unittest.TestCase):
         view.services.input_controller.hover = hover_controller
         insert_controller = SimpleNamespace(
             render_template_preview=mock.Mock(),
-            render_smiles_preview=mock.Mock(),
             commit_template_insert=mock.Mock(),
-            commit_smiles_insert=mock.Mock(),
         )
         view.services.insert_controller = insert_controller
         hit_testing_service = SimpleNamespace(

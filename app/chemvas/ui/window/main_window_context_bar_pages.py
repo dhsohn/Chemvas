@@ -25,7 +25,6 @@ from chemvas.ui.window.main_window_context_bar_page_factories import (
     build_template_page,
     build_text_page,
 )
-from chemvas.ui.window.main_window_context_bar_widgets import smiles_entry
 from chemvas.ui.window.main_window_ports import (
     align_selection_for_window,
     bond_length_px_for_window,
@@ -67,7 +66,6 @@ class ContextBarPages:
     bracket_buttons: dict[str, QToolButton]
     atom_input: QLineEdit | None
     bond_length_spin: BondLengthSpinBox | None
-    smiles_entry: QWidget
 
 
 class MainWindowContextBarPageBuilder:
@@ -195,11 +193,6 @@ class MainWindowContextBarPageBuilder:
             bracket_buttons=bracket_page.buttons,
             atom_input=atom_page.atom_input,
             bond_length_spin=bond_page.length_spin,
-            smiles_entry=smiles_entry(
-                lambda text: insert_controller_for_window(window).begin_smiles_insert(
-                    text
-                )
-            ),
         )
 
 

@@ -4,7 +4,6 @@ from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QColor, QPainter
 from PyQt6.QtWidgets import QGraphicsScene, QGraphicsView
 
-from chemvas.core.rdkit_adapter import RDKitAdapter
 from chemvas.domain.document import MoleculeModel
 from chemvas.ui.canvas.canvas_runtime_state import attach_canvas_runtime_state
 from chemvas.ui.canvas.canvas_services import (
@@ -30,7 +29,6 @@ def initialize_canvas_view(canvas, *, renderer) -> None:
     canvas.setBackgroundBrush(QColor("#e7e7e4"))
     canvas.model = MoleculeModel()
     canvas.renderer = renderer
-    canvas.rdkit = RDKitAdapter()
     # The runtime container owns the sheet state, so it has to exist before the
     # setup writes one; otherwise the write lands on the bare canvas and the
     # container builds a second, never-read copy beside it.

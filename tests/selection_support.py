@@ -144,7 +144,7 @@ def _canvas_runtime_state():
         group_state=CanvasGroupState(),
         rotation_state=CanvasRotationState(),
         scene_items_state=CanvasSceneItemsState(),
-        selection_info_state=SelectionInfoState.create(),
+        selection_info_state=SelectionInfoState(),
         selection_state=SelectionState(),
         text_style_state=CanvasTextStyleState(),
     )
@@ -190,10 +190,6 @@ def _make_canvas(**overrides):
         atom_dots={},
         bond_items={},
         model=MoleculeModel(atoms={}, bonds=[]),
-        rdkit=SimpleNamespace(
-            is_unavailable=mock.Mock(return_value=True),
-            is_loaded=mock.Mock(return_value=False),
-        ),
         renderer=SimpleNamespace(
             style=SimpleNamespace(bond_line_width=1.0, bond_length_px=20.0)
         ),

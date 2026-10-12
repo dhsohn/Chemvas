@@ -256,11 +256,11 @@ def test_label_merge_publication_failure_restores_group_and_previous_redo(
 
 @pytest.mark.parametrize("kind", ["plus", "minus", "radical"])
 def test_explicit_group_mark_survives_merge_as_valid_document_item(drawing, kind):
-    from chemvas.ui.scene.scene_decoration_access import materialize_mark_for_atom_for
+    from chemvas.ui.scene.scene_decoration_access import add_mark_for_atom_for
 
     _window, canvas = drawing
     _populate(canvas, overlap=True, grouping="same")
-    mark = materialize_mark_for_atom_for(canvas, 2, QPointF(5, 5), kind=kind)
+    mark = add_mark_for_atom_for(canvas, 2, QPointF(5, 5), kind=kind)
     assert mark is not None
     group = next(iter(canvas.runtime_state.group_state.groups.values()))
     group.item_ids.append(require_scene_record_id(mark))

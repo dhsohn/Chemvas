@@ -1,20 +1,15 @@
 import os
 import unittest
-from types import SimpleNamespace
-from unittest.mock import patch
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from PyQt6.QtCore import QPointF, QRectF, QSize
-from PyQt6.QtGui import QColor, QImage, QPainter, QPen, QPicture
+from PyQt6.QtCore import QPointF
+from PyQt6.QtGui import QColor, QPainter, QPen, QPicture
 from PyQt6.QtWidgets import QApplication, QGraphicsScene
 
-from chemvas.features.hover import PREVIEW_OPACITY
 from chemvas.features.insertion import TemplatePreviewGeometry
 from chemvas.ui.insert.preview_scene_renderer import (
-    add_smiles_preview_item,
     apply_template_preview_geometry,
-    clear_scene_items,
     clear_template_preview,
 )
 
@@ -40,93 +35,6 @@ class PreviewSceneRendererTest(unittest.TestCase):
     def setUp(self) -> None:
         self.scene = QGraphicsScene()
         self.base_pen = QPen(QColor("#123456"))
-
-    def test_clear_smiles_preview_ignores_items_from_other_scenes(self) -> None:
-        foreign_item = SimpleNamespace(scene=lambda: object())
-        broken_item = SimpleNamespace(
-            scene=lambda: (_ for _ in ()).throw(RuntimeError("disposed"))
-        )
-
-        self.assertEqual(clear_scene_items(self.scene, [foreign_item, broken_item]), [])
-
-    def test_add_smiles_preview_item_replays_the_picture_without_hit_testing(
-        self,
-    ) -> None:
-        picture = _crossed_strokes_picture()
-
-        item = add_smiles_preview_item(self.scene, picture)
-
-        self.assertIs(item.scene(), self.scene)
-        self.assertIs(item.picture(), picture)
-        self.assertTrue(item.boundingRect().contains(QRectF(picture.boundingRect())))
-        # The ghost is never picked: hover and clicks reach the drawing
-        # underneath it.
-        self.assertTrue(item.shape().isEmpty())
-        self.assertEqual(self.scene.items(QPointF(0.0, 0.0)), [])
-        self.assertEqual(clear_scene_items(self.scene, [item]), [])
-        self.assertIsNone(item.scene())
-
-    def test_smiles_preview_item_blends_overlapping_strokes_once(self) -> None:
-        # Per-primitive opacity would paint the crossing of two strokes
-        # darker than either arm; the ghost blends the whole picture once.
-        add_smiles_preview_item(self.scene, _crossed_strokes_picture())
-        image = QImage(40, 40, QImage.Format.Format_ARGB32)
-        image.fill(QColor("white"))
-        painter = QPainter(image)
-        self.scene.render(
-            painter, QRectF(0.0, 0.0, 40.0, 40.0), QRectF(-20.0, -20.0, 40.0, 40.0)
-        )
-        painter.end()
-
-        crossing = QColor(image.pixel(20, 20))
-        arm = QColor(image.pixel(28, 20))
-
-        self.assertEqual(crossing.red(), arm.red())
-        self.assertAlmostEqual(arm.red(), round(255 * (1 - PREVIEW_OPACITY)), delta=2)
-
-    def test_smiles_preview_item_composites_only_the_exposed_region(self) -> None:
-        # A structure much larger than the viewport must not allocate a layer
-        # the size of the whole transformed picture; the layer follows the
-        # exposed rectangle and the visible part still paints the same.
-        picture = QPicture()
-        painter = QPainter(picture)
-        pen = QPen(QColor("black"))
-        pen.setWidthF(4.0)
-        painter.setPen(pen)
-        painter.drawLine(QPointF(-1000.0, 0.0), QPointF(1000.0, 0.0))
-        painter.end()
-        add_smiles_preview_item(self.scene, picture)
-
-        def render(source: QRectF) -> QImage:
-            image = QImage(
-                int(source.width()), int(source.height()), QImage.Format.Format_ARGB32
-            )
-            image.fill(QColor("white"))
-            image_painter = QPainter(image)
-            self.scene.render(
-                image_painter,
-                QRectF(0.0, 0.0, source.width(), source.height()),
-                source,
-            )
-            image_painter.end()
-            return image
-
-        layer_sizes: list[QSize] = []
-
-        class _SpyImage(QImage):
-            def __init__(self, size, image_format) -> None:
-                layer_sizes.append(QSize(size))
-                super().__init__(size, image_format)
-
-        with patch("chemvas.ui.insert.preview_scene_renderer.QImage", _SpyImage):
-            window = render(QRectF(-20.0, -20.0, 40.0, 40.0))
-        self.assertTrue(layer_sizes)
-        # The exposed 40-unit window plus pixel alignment, never the 2000-unit
-        # picture.
-        self.assertTrue(all(size.width() <= 48 for size in layer_sizes), layer_sizes)
-
-        whole = render(QRectF(-1010.0, -20.0, 2020.0, 40.0))
-        self.assertEqual(window, whole.copy(990, 0, 40, 40))
 
     def test_apply_template_preview_geometry_reuses_existing_items_on_update(
         self,

@@ -36,14 +36,13 @@ def test_retired_archive_rejects_compact_huge_numbers_before_expansion():
             "-c",
             """
 from chemvas.domain.document.retired_endpoint_data import (
-    canonicalize_precomplex_state, precomplex_state_from_json,
+    canonicalize_precomplex_state,
 )
 from chemvas.domain.json_io import strict_json_loads
 for token in ("1e1000000000", "-1e1000000000", "1e4096", "1e309"):
     payload = '{"kind":"candidate_ensemble","opaque":{"values":[' + token + ']}}'
     for read in (
-        precomplex_state_from_json,
-        lambda text: canonicalize_precomplex_state(strict_json_loads(text)),
+            lambda text: canonicalize_precomplex_state(strict_json_loads(text)),
     ):
         try:
             read(payload)
@@ -52,10 +51,11 @@ for token in ("1e1000000000", "-1e1000000000", "1e4096", "1e309"):
         else:
             raise AssertionError("Huge archived number was accepted")
 ordinary = '{"kind":"candidate_ensemble","values":[1e3,1.25,0e1000000000]}'
-value = precomplex_state_from_json(ordinary)
+import json
+value = json.loads(canonicalize_precomplex_state(strict_json_loads(ordinary))[1])
 assert value["values"] == [1000.0, 1.25, 0.0]
 assert all(type(item) is float for item in value["values"])
-assert precomplex_state_from_json(canonicalize_precomplex_state(value)[1]) == value
+assert json.loads(canonicalize_precomplex_state(value)[1]) == value
 """,
         ],
         env={

@@ -13,7 +13,7 @@ README, 가이드 문서 및 소셜 프리뷰에 사용되는 미디어 자산 �
 | `walkthrough-drawing.gif` | 드로잉 레퍼런스: 결합 그리기, 단축키, 전하 및 축합 고리 |
 | `walkthrough-arrows.gif` | 화살표 레퍼런스: 반응, 평형, 곡선 화살표 및 반응 경로 프로파일 |
 | `walkthrough-editing.gif` | 편집 레퍼런스: 이동, 회전, 뒤집기, 정렬 및 균등 분배 |
-| `walkthrough-chemistry.gif` | 화학 기능: molfile 불러오기, Molecule Info 패널, 3D XYZ 내보내기 |
+| `walkthrough-chemistry.gif` | 제거된 Molecule Info와 3D XYZ 내보내기의 과거 녹화. 현재 기능이 아닙니다. |
 | `walkthrough-images.gif` | 이미지 객체: PNG 이미지 삽입, 크기 조정 및 속성 변경 |
 | `cli-*.png` | CLI 명령 및 배치 기능 시각화 예시 이미지 |
 | `examples/publication-*.png` | 예제 갤러리에 사용되는 고해상도 출판용 그림 |
@@ -25,7 +25,7 @@ README, 가이드 문서 및 소셜 프리뷰에 사용되는 미디어 자산 �
 메인 데모 워크스루 캡처:
 
 ```bash
-python -m pip install -e ".[dev,rdkit]"
+python -m pip install -e ".[dev]"
 QT_QPA_PLATFORM=offscreen python scripts/capture_first_scheme.py --output-dir /tmp/chemvas-demo-capture
 ```
 

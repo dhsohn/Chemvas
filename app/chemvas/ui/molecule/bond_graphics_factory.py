@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import override
+
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QBrush, QColor, QPainterPath, QPen, QPolygonF
 
@@ -8,6 +10,47 @@ from chemvas.ui.canvas.graphics_items import (
     NoSelectPathItem,
     NoSelectPolygonItem,
 )
+
+
+class BondStrokeItem(NoSelectLineItem):
+    """A bond centerline with its shared, explicitly joined paint silhouette."""
+
+    def __init__(self, x1, y1, x2, y2):
+        self._stroke_polygon: QPolygonF | None = None
+        super().__init__(x1, y1, x2, y2)
+
+    def set_stroke_polygon(self, polygon: QPolygonF | None) -> None:
+        self.prepareGeometryChange()
+        self._stroke_polygon = None if polygon is None else QPolygonF(polygon)
+        self.update()
+
+    def stroke_polygon(self) -> QPolygonF | None:
+        return self._stroke_polygon
+
+    @override
+    def boundingRect(self):
+        if self._stroke_polygon is not None:
+            return self._stroke_polygon.boundingRect()
+        return super().boundingRect()
+
+    @override
+    def shape(self):
+        if self._stroke_polygon is None:
+            return super().shape()
+        path = QPainterPath()
+        path.addPolygon(self._stroke_polygon)
+        path.closeSubpath()
+        return path
+
+    @override
+    def paint(self, painter, option, widget=None):
+        if self._stroke_polygon is None:
+            return super().paint(painter, option, widget)
+        painter.save()
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(self.pen().color())
+        painter.drawPolygon(self._stroke_polygon)
+        painter.restore()
 
 
 class BondGraphicsFactory:
@@ -27,7 +70,7 @@ class BondGraphicsFactory:
         *,
         dotted: bool = False,
     ) -> NoSelectLineItem:
-        item = NoSelectLineItem(x1, y1, x2, y2)
+        item = BondStrokeItem(x1, y1, x2, y2)
         pen = self.renderer.dotted_bond_pen() if dotted else self.renderer.bond_pen()
         item.setPen(pen)
         return item

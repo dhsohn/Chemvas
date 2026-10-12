@@ -41,7 +41,6 @@ from chemvas.bootstrap.web_drafts import (
 )
 from chemvas.core.history import HistoryCommand
 from chemvas.core.molfile import export_molfile_block
-from chemvas.core.rdkit_adapter import RDKitAdapter
 from chemvas.domain.document import (
     ARROW_LABEL_SIDES,
     CANVAS_FILE_VERSION,
@@ -144,6 +143,7 @@ from chemvas.features.annotations import (
     SUB_SCALE,
     arrow_label_html,
     arrow_label_position,
+    atom_label_baseline_offset,
     atom_label_presentation,
     bracket_path_commands,
     bracket_rect_from_points,
@@ -201,18 +201,13 @@ from chemvas.features.hover import (
     PREVIEW_OPACITY,
 )
 from chemvas.features.insertion import (
-    MAX_SMILES_INPUT_LENGTH,
-    SMILES_RENDER_ERROR,
-    build_3d_conversion_payload,
     build_atom_annotations,
-    normalized_smiles_input,
+    build_mol_export_payload,
     opposite_charge_mark,
     plan_mark_rebind,
-    plan_smiles_commit,
     plan_template_commit,
     plan_template_preview,
     plan_template_preview_update,
-    smiles_preview_center,
 )
 from chemvas.features.rendering import (
     ENDPOINT_SNAP_SCREEN_PX,
@@ -337,7 +332,6 @@ from chemvas.ui.insert.insert_mode_logic import (
     begin_template_insert,
     build_template_insert_request,
 )
-from chemvas.ui.insert.insert_smiles_commit_service import apply_smiles_commit_plan
 from chemvas.ui.insert.template_commit_logic import commit_template_ring
 from chemvas.ui.insert.template_geometry_resolver_service import (
     TemplateGeometryResolverService,
@@ -463,11 +457,9 @@ from chemvas.ui.window.main_window_config import (
     IMAGE_PROPERTIES_SPEC,
     LINE_KIND_SPECS,
     MARK_TOOL_ACTION_SPECS,
-    MOLECULE_INFO_TITLE,
     MORE_ARROW_KINDS,
     ORBITAL_MO_TEXT,
     ORBITAL_PHASE_SPECS,
-    REACTION_MAPPING_TITLE,
     RING_FILL_GUIDANCE,
     RING_FILL_TOOL_ACTION_SPEC,
     ROTATE_ANGLE_DEFAULT,
@@ -478,7 +470,6 @@ from chemvas.ui.window.main_window_config import (
     SHAPE_KIND_SPECS,
     SHAPE_STROKE_SPECS,
     SHIFT_TOOL_HOTKEYS,
-    SMILES_ENTRY_SPEC,
     TEMPLATE_ENTRY_SPECS,
     TEXT_FORMAT_ACTION_GROUPS,
     TEXT_FORMAT_TARGET_MESSAGE,
@@ -805,11 +796,6 @@ def ui_spec() -> dict[str, Any]:
         "drag_distance": 10,
         "max_document_bytes": MAX_OPEN_BYTES,
         "max_clipboard_bytes": MAX_CLIPBOARD_SELECTION_PAYLOAD_BYTES,
-        "smiles": {
-            **SMILES_ENTRY_SPEC,
-            "maximum_length": MAX_SMILES_INPUT_LENGTH,
-            "preview_opacity": PREVIEW_OPACITY,
-        },
         # The desktop status bar: tool names and hints, and the window title.
         "tool_names": {
             key: tool_display_name(key)
@@ -921,13 +907,6 @@ def ui_spec() -> dict[str, Any]:
             **ATOM_INPUT_SPEC,
             "value": CanvasToolSettingsState().atom_symbol,
         },
-        "panels": [
-            {"key": key, "label": label, "icon": design_icon_svg(key)}
-            for key, label in (
-                ("molecule_info", MOLECULE_INFO_TITLE),
-                ("reaction_mapping", REACTION_MAPPING_TITLE),
-            )
-        ],
     }
 
 
@@ -1128,6 +1107,8 @@ def place_browser_labels(
     size: int,
     labels: list[tuple[str, str | None, bool, bool | None]],
     measurements: dict[str, dict[str, Any]],
+    *,
+    atom_baseline: bool = True,
 ) -> list[dict[str, Any]]:
     """Adapt measured font metrics to the existing native run placer, at origin."""
     if not labels:
@@ -1166,6 +1147,14 @@ def place_browser_labels(
                 anchor_width = measure(anchor, size)
                 center_x = (
                     layout.width - anchor_width / 2 if at_end else anchor_width / 2
+                )
+        if atom_baseline:
+            # The desktop anchors the normal run's baseline to the atom using
+            # the painted em/descent, rather than the text document's center.
+            normal = next((run for run in layout.runs if run.role == "normal"), None)
+            if normal is not None:
+                center_y = normal.baseline - atom_label_baseline_offset(
+                    browser_font_pixels(size), float(font["descent"])
                 )
         height = (
             layout.height
@@ -1623,7 +1612,7 @@ def browser_scene_rect(
     rects = list(drawing.get("atom_hit_rects", {}).values())
     for primitives in drawing["bonds"].values():
         for primitive in primitives:
-            if "line" in primitive:
+            if "line" in primitive and "polygon" not in primitive:
                 x1, y1, x2, y2 = primitive["line"]
                 rects.append(
                     arrow_frame_bounds(
@@ -2050,6 +2039,7 @@ def drawing_geometry(
         renderer=rendering,
     )
     lines = BondLineGeometryService(context, point_factory=point)
+    geometry.line_geometry = lines
     ring_lines = BondRingDoubleGeometryService(context, renderer=geometry)
     for name in (
         "parallel_bond_segments",
@@ -2080,7 +2070,15 @@ def drawing_geometry(
         result[str(index)] = []
         for item in primitives:
             if isinstance(item, BondLinePrimitive):
-                result[str(index)].append({"line": item.segment})
+                result[str(index)].append(
+                    {
+                        "line": item.segment,
+                        "polygon": list(cast("Any", item.outline)),
+                        "outlined": False,
+                    }
+                    if item.outline is not None
+                    else {"line": item.segment}
+                )
             elif isinstance(item, BondPolygonPrimitive):
                 result[str(index)].append(
                     {
@@ -2731,7 +2729,7 @@ class BrowserFontMeasurements:
         spec["arrow_labels"] = rich_labels
         notes = browser_notes(state)
         spec["notes"] = notes
-        mark_labels = [
+        mark_labels: list[tuple[str, str | None, bool, bool | None]] = [
             (
                 mark.get("text")
                 if mark.get("text") is not None
@@ -2782,6 +2780,17 @@ class BrowserFontMeasurements:
             zip(
                 labels,
                 place_browser_labels(spec["size"], labels, self.metrics),
+                strict=True,
+            )
+        )
+        # Free charge symbols retain their document-centered placement. They
+        # can share text with an atom label, so keep the two origins separate.
+        relative_marks = dict(
+            zip(
+                mark_labels,
+                place_browser_labels(
+                    spec["size"], mark_labels, self.metrics, atom_baseline=False
+                ),
                 strict=True,
             )
         )
@@ -2867,9 +2876,9 @@ class BrowserFontMeasurements:
             if kind in {"plus", "minus"}:
                 text = mark.get("text")
                 text = ("+" if kind == "plus" else "-") if text is None else text
-                runs = relative[(text, None, False, None)]["runs"] if text else []
+                runs = relative_marks[(text, None, False, None)]["runs"] if text else []
                 if text:
-                    bx, by, bw, bh = relative[(text, None, False, None)]["rect"]
+                    bx, by, bw, bh = relative_marks[(text, None, False, None)]["rect"]
                 else:
                     height = float(self.metrics[f"{spec['size']}:H"]["line_height"])
                     margin = ATOM_LABEL_DOCUMENT_MARGIN
@@ -3204,7 +3213,10 @@ class BrowserStructureAdapter:
             state.get("perspective")
         )
         # document_info materializes the complete SVG after the build commits.
-        self.bond_renderer = SimpleNamespace(add_bond_graphics=lambda _bond_id: None)
+        self.bond_renderer = SimpleNamespace(
+            add_bond_graphics=lambda _bond_id: None,
+            update_bond_geometry=lambda _bond_id, **_kwargs: None,
+        )
         self.runtime_state = SimpleNamespace(
             tool_settings_state=CanvasToolSettingsState(
                 grid_snap_enabled=grid != "none",
@@ -4226,68 +4238,6 @@ class BrowserStructureAdapter:
         record = new_arrow_record(first, last, kind)
         self.document_state["arrows"].append(arrow_to_state(record))
         return marks
-
-    def insert_smiles(
-        self,
-        edit: dict[str, Any],
-        model: MoleculeModel | None,
-        *,
-        font: BrowserFontMeasurements | None,
-        preview: bool,
-    ) -> None:
-        if set(edit) != {"kind", "smiles", "x", "y"}:
-            raise ValueError("Expected SMILES text and a placement position.")
-        model = model or prepared_smiles_model(
-            edit["smiles"], self.renderer.style.bond_length_px
-        )
-        x, y = float(edit["x"]), float(edit["y"])
-        self.require_sheet_position(x, y)
-        plan = plan_smiles_commit(model, smiles_preview_center(model), (x, y))
-        pending_marks: list[tuple[int, BrowserPoint, str, BrowserMarkItem]] = []
-
-        def materialize_mark(
-            atom_id: int, point: BrowserPoint, *, kind: str
-        ) -> BrowserMarkItem:
-            atom = self.model.atoms[atom_id]
-            # Collect the complete font request before label-aware placement.
-            # These provisional offsets exist only in a disposable preview.
-            item = self.add_mark_record(
-                kind,
-                atom_id,
-                point.x(),
-                point.y(),
-                point.x() - atom.x,
-                point.y() - atom.y,
-                synchronize_annotation=False,
-            )
-            pending_marks.append((atom_id, point, kind, item))
-            return item
-
-        self.services.canvas_mark_scene_service = SimpleNamespace(
-            materialize_mark_for_atom=materialize_mark
-        )
-        self.candidate_accepted = apply_smiles_commit_plan(
-            cast("Any", self), plan, point_factory=BrowserPoint, record=False
-        )
-        if not self.candidate_accepted:
-            raise ValueError("Could not place this SMILES structure.")
-        self.publish_model()
-        if pending_marks:
-            font = font or BrowserFontMeasurements(
-                {"family": ACS1996Style().font_family, "metrics": {}, "ink": {}}
-            )
-            drawing = font.drawing(self.document_state)
-            if drawing.get("needs_measurements"):
-                if preview:
-                    return
-                raise ValueError("SMILES placement needs completed font measurements.")
-            for atom_id, point, kind, item in pending_marks:
-                dx, dy = self.mark_offset(
-                    atom_id, point.x(), point.y(), kind, drawing, font
-                )
-                atom = self.model.atoms[atom_id]
-                item.set_center(BrowserPoint(atom.x + dx, atom.y + dy))
-                item.record.update(dx=dx, dy=dy)
 
     def insert_bond(self, start: list[float], end: list[float], style: str) -> None:
         if any(
@@ -6068,8 +6018,6 @@ class BrowserStructureAdapter:
         y: float,
         dx: float | None,
         dy: float | None,
-        *,
-        synchronize_annotation: bool = True,
     ) -> BrowserMarkItem:
         record = {
             "kind": kind,
@@ -6085,7 +6033,6 @@ class BrowserStructureAdapter:
         self.mark_items.append(item)
         if owner_id is not None:
             self.runtime_state.mark_registry.add_for_atom(owner_id, item)
-        if owner_id is not None and synchronize_annotation:
             annotations = build_atom_annotations(
                 {owner_id},
                 {owner_id: owner_id},
@@ -6687,13 +6634,20 @@ def move_endpoint_reach(edit: dict[str, Any]) -> float | None:
     return ENDPOINT_SNAP_SCREEN_PX / validated_drawing_scale(edit["scale"])
 
 
+RETAINED_CALCULATION_PLAN_EDIT_ERROR = (
+    "This document contains a calculation plan from an earlier version of "
+    "Chemvas. Chemvas keeps that plan unchanged but can no longer edit it, and "
+    "this edit would change the atoms or connections it refers to, so the edit "
+    "was not applied."
+)
+
+
 def edit_document(
     request: object,
     *,
     font: BrowserFontMeasurements | None = None,
     preview: bool = False,
     mark_order: dict[int, list[int]] | None = None,
-    smiles_model: MoleculeModel | None = None,
     paste_source: tuple[str | None, int] = (None, 0),
 ) -> dict[str, Any]:
     """Only connected Chemvas operations can publish a validated candidate.
@@ -6865,9 +6819,6 @@ def edit_document(
     elif kind in (
         record_edits := dict[str, "Callable[[dict[str, Any]], object]"](
             {
-                "smiles": lambda value: adapter.insert_smiles(
-                    value, smiles_model, font=font, preview=preview
-                ),
                 "orbital": adapter.insert_orbital,
                 "ts_bracket": adapter.insert_bracket,
                 "orbital_handle": adapter.move_orbital_handle,
@@ -6904,14 +6855,15 @@ def edit_document(
     if adapter.candidate_accepted:
         adapter.publish_perspective()
         adapter.publish_groups()
-        # Like a desktop snapshot, keep the plan only while it matches the graph;
-        # Undo returns the document that still carries it.
-        plan_warning = calculation_plan_save_warning(
-            adapter.model, candidate.get("calculation_plan")
-        )
-        if plan_warning is not None:
-            del candidate["calculation_plan"]
-            edit_notice = plan_warning
+        # A plan from an earlier release is kept exactly as loaded. An edit
+        # whose graph no longer matches it is refused rather than dropping it.
+        if (
+            calculation_plan_save_warning(
+                adapter.model, candidate.get("calculation_plan")
+            )
+            is not None
+        ):
+            raise ValueError(RETAINED_CALCULATION_PLAN_EDIT_ERROR)
     mark_indices = {id(item): index for index, item in enumerate(adapter.mark_items)}
     next_mark_order = {
         atom_id: [mark_indices[id(item)] for item in items]
@@ -7025,26 +6977,6 @@ def selection_presentation(
     )
 
 
-def prepared_smiles_model(text: object, bond_length: float) -> MoleculeModel:
-    """The native optional parser, bounded before conversion and publication."""
-    if not isinstance(text, str):
-        raise ValueError("SMILES must be text.")
-    text = normalized_smiles_input(text)
-    if not text:
-        raise ValueError("Enter a SMILES string to preview.")
-    backend = RDKitAdapter()
-    model = backend.smiles_to_2d(text, scale=bond_length)
-    if model is None:
-        raise ValueError(backend.last_error or SMILES_RENDER_ERROR)
-    if len(model.atoms) > 2000 or len(model.bonds) > 3000:
-        raise ValueError(
-            "The browser adapter supports up to 2,000 atoms and 3,000 bonds."
-        )
-    if smiles_preview_center(model) is None:
-        raise ValueError(SMILES_RENDER_ERROR)
-    return model
-
-
 def selected_molfile(document: dict[str, Any], selection: object) -> str:
     """File > Export MOL: the desktop's selected-only export, as MDL text.
 
@@ -7077,7 +7009,7 @@ def selected_molfile(document: dict[str, Any], selection: object) -> str:
         },
         order=list(range(len(records))),
     )
-    model, atom_annotations = build_3d_conversion_payload(
+    model, atom_annotations = build_mol_export_payload(
         adapter.model,
         atom_ids,
         bond_ids,
@@ -7085,9 +7017,7 @@ def selected_molfile(document: dict[str, Any], selection: object) -> str:
         # The MOL payload keeps no structure bounds.
         bounds_getter=lambda *_args, **_kwargs: (0.0, 0.0, 0.0, 0.0),
     )
-    return export_molfile_block(
-        model, atom_annotations=atom_annotations, rdkit=RDKitAdapter()
-    )
+    return export_molfile_block(model, atom_annotations=atom_annotations)
 
 
 FIGURE_EXPORT_TIMEOUT_SECONDS = 120
@@ -7189,9 +7119,6 @@ class BrowserSession:
         # The document as opened; a recovered draft has none and stays unsaved.
         self.saved: str | None = json.dumps(self.info["document"], sort_keys=True)
         self.name = "Canvas 1.chemvas"
-        # One parsed insertion, independent of document/history. Pointer previews
-        # and measurement retries reuse it instead of rerunning RDKit.
-        self.smiles_cache: tuple[str, float, MoleculeModel] | None = None
         # The desktop canvas's paste cascade: the payload the next paste
         # offsets from and how many pastes it has seen. Not document data.
         self.paste_source: str | None = None
@@ -7220,7 +7147,6 @@ class BrowserSession:
         """
         previous = self.draft_id
         self.history.clear()
-        self.smiles_cache = None
         self.paste_source, self.paste_count = None, 0
         self.name = name
         self.info = info
@@ -7415,22 +7341,6 @@ class BrowserSession:
             drafts.release(draft_id, self, to=holder)
             raise DraftError(DAMAGED_DRAFT) from None
         self.replace_document(info, name, saved=False, draft_id=draft_id)
-
-    def prepared_smiles_for_edit(self, edit: object) -> MoleculeModel | None:
-        if not isinstance(edit, dict) or edit.get("kind") != "smiles":
-            return None
-        if set(edit) != {"kind", "smiles", "x", "y"}:
-            raise ValueError("Expected SMILES text and a placement position.")
-        validated_edit_fields(edit)
-        if not isinstance(edit["smiles"], str):
-            raise ValueError("SMILES must be text.")
-        text = normalized_smiles_input(edit["smiles"])
-        length = float(self.info["document"]["state"]["settings"]["bond_length_px"])
-        if self.smiles_cache is not None and self.smiles_cache[:2] == (text, length):
-            return self.smiles_cache[2]
-        model = prepared_smiles_model(text, length)
-        self.smiles_cache = (text, length, model)
-        return model
 
     def image_source(self, ref: str) -> tuple[bytes, str] | None:
         with self.lock:
@@ -7732,7 +7642,6 @@ class BrowserSession:
                     font=font,
                     mark_order=self.info["mark_order"],
                     preview=True,
-                    smiles_model=self.prepared_smiles_for_edit(request["edit"]),
                 )
                 if "edit" in request
                 else document_info(
@@ -7752,7 +7661,6 @@ class BrowserSession:
                 font=self.font,
                 mark_order=self.info["mark_order"],
                 preview=True,
-                smiles_model=self.prepared_smiles_for_edit(request["edit"]),
             )
         elif action in {"load", "recover_draft"}:
             self.open_document(request)
@@ -7761,7 +7669,6 @@ class BrowserSession:
                 {"document": self.info["document"], "edit": request["edit"]},
                 font=self.font,
                 mark_order=self.info["mark_order"],
-                smiles_model=self.prepared_smiles_for_edit(request["edit"]),
                 paste_source=(self.paste_source, self.paste_count),
             )
             shortcut_tool = candidate.pop("shortcut_tool", None)

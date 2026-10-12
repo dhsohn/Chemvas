@@ -335,6 +335,29 @@ def bond_sets_for_atom_ids(
     return internal, boundary
 
 
+def geometry_bond_sets_for_atom_ids(
+    atom_ids: set[int],
+    atom_bond_ids: MutableMapping[int, set[int]],
+    bonds: Sequence[BondLike | None],
+    *,
+    bond_for_id: Callable[[int], BondLike | None],
+) -> tuple[set[int], set[int]]:
+    """Separate rigid edges from joins affected at either boundary endpoint."""
+    internal, boundary = bond_sets_for_atom_ids(
+        atom_ids, atom_bond_ids, bonds, bond_for_id=bond_for_id
+    )
+    junction_atoms: set[int] = set()
+    for bond_id in boundary:
+        bond = bond_for_id(bond_id)
+        if bond is not None:
+            junction_atoms.update((bond.a, bond.b))
+    adjacent_internal, adjacent_boundary = bond_sets_for_atom_ids(
+        junction_atoms, atom_bond_ids, bonds, bond_for_id=bond_for_id
+    )
+    dependent = boundary | adjacent_internal | adjacent_boundary
+    return internal - dependent, dependent
+
+
 def cached_bond_in_cycle(
     graph: CanvasGraphState,
     bond_id: int,
@@ -395,6 +418,7 @@ __all__ = [
     "ensure_neighbor_entry",
     "find_rings",
     "first_matching_bond_id",
+    "geometry_bond_sets_for_atom_ids",
     "preferred_rotation_side_for_bond_policy",
     "reachable_component_without_edge",
     "reachable_from",

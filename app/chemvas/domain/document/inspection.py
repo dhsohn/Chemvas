@@ -1,7 +1,7 @@
-"""Shared graph and electronic-annotation inspection, independent of calculations.
+"""Shared graph and electronic-annotation inspection.
 
 Native schema validation stays in state.py. These semantic checks are used by
-composition, patching and calculation preparation, not by document opening:
+composition, patching and retained-plan validation, not by document opening:
 an editable drawing may still need repair before its chemistry can be used.
 Inventories own detached, request-local models; never cache them across edits.
 """
@@ -152,7 +152,7 @@ def _resolve_annotations(
         ) != normalized_model.get(atom_id, {}):
             raise ValueError(
                 "Conflicting charge/radical annotations for Chemvas atom "
-                f"{atom_id}; repair the document before calculation export."
+                f"{atom_id}; repair the document's charge and radical marks."
             )
 
     resolved: dict[int, dict[str, int]] = {}

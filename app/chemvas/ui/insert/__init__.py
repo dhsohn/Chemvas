@@ -1,1 +1,1 @@
-"""SMILES and template insertion previews and commits."""
+"""Template insertion previews and commits."""

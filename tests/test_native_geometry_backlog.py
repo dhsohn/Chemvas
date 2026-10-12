@@ -13,7 +13,6 @@ from PyQt6.QtGui import QColor
 from PyQt6.QtTest import QTest
 from PyQt6.QtWidgets import QApplication
 
-from chemvas.core.rdkit_adapter import RDKitAdapter
 from chemvas.ui.canvas.canvas_document_metadata_state import (
     document_is_dirty_for,
     mark_document_clean_for,
@@ -382,26 +381,4 @@ def test_shared_interior_ring_edge_refuses_fusion_on_two_occupied_sides(canvas):
     before = canvas.services.canvas_document_session_service.snapshot_state()
     assert regular_ring_points_for_bond_for(canvas, 4, 1, QPointF()) is None
     canvas.services.structure_build_service.fuse_regular_ring_to_bond(1, 4)
-    assert canvas.services.canvas_document_session_service.snapshot_state() == before
-
-
-@pytest.mark.parametrize("smiles", ["C1CCCCC1", "C1CCNC1", "c1ccccc1"])
-def test_actual_smiles_imported_ring_can_be_filled_without_graph_change(canvas, smiles):
-    pytest.importorskip("rdkit")
-    model = RDKitAdapter().smiles_to_2d(smiles, scale=20)
-    assert model is not None
-    canvas.model = model
-    canvas.services.structure_build_service.render_model()
-    canvas.services.selection.select_all()
-    assert canvas.runtime_state.ring_items() == []
-    before = canvas.services.canvas_document_session_service.snapshot_state()
-    canvas.services.canvas_color_mutation_service.apply_ring_fill_color_to_items(
-        canvas.scene().selectedItems(), QColor("#ffff00")
-    )
-    assert len(canvas.runtime_state.ring_items()) == 1
-    assert (
-        canvas.services.canvas_document_session_service.snapshot_state()["model"]
-        == before["model"]
-    )
-    canvas.runtime_state.history_service.undo()
     assert canvas.services.canvas_document_session_service.snapshot_state() == before

@@ -10,7 +10,6 @@ import sys
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 import pytest
-from PyQt6.QtCore import QPointF
 from PyQt6.QtWidgets import QApplication
 
 from chemvas.bootstrap.document_cli_shared import offscreen_canvas
@@ -18,7 +17,6 @@ from chemvas.domain.document import MoleculeModel
 from chemvas.features.document_composition import compose_document_state
 from chemvas.features.insertion import (
     annotation_mark_direction,
-    plan_smiles_commit,
 )
 from chemvas.ui.export.layout_qa_service import check_canvas_layout
 from tests.subprocess_support import source_subprocess_env
@@ -61,17 +59,6 @@ def nitro_composition():
             {"a": 1, "b": 3, "order": 1},
         ],
     }
-
-
-def empty_state():
-    return compose_document_state(
-        {
-            "format": "chemvas-document-composition",
-            "version": 1,
-            "atoms": [],
-            "bonds": [],
-        }
-    )
 
 
 def ammonium_composition():
@@ -144,36 +131,6 @@ def test_compose_then_check_layout_public_cli_accepts_default_charges(tmp_path, 
     assert source.read_bytes() == original
 
 
-@pytest.mark.parametrize(
-    "smiles", ["O=[N+]([O-])c1ccccc1", "C[N+](=O)[O-]", "C[N+](C)(C)C"]
-)
-def test_smiles_charge_avoids_bonds_and_exact_undo_redo(smiles):
-    pytest.importorskip("rdkit")
-    with offscreen_canvas(empty_state(), command="test-smiles-mark-placement") as (
-        canvas,
-        session,
-    ):
-        before = session.snapshot_state()
-        controller = canvas.services.insert_controller
-        controller.begin_smiles_insert(smiles)
-        controller.commit_smiles_insert(QPointF(50.0, 60.0))
-        after = session.snapshot_state()
-        assert after["model"]["atoms"]
-        assert after["marks"]
-        assert check_canvas_layout(canvas)["counts"]["charge-bond-overlap"] == 0
-        canvas.services.history_service.undo()
-        assert session.snapshot_state() == before
-        canvas.services.history_service.redo()
-        assert session.snapshot_state() == after
-        # Existing, manually moved mark state is restoration data, not a new default.
-        moved = copy.deepcopy(after)
-        moved["marks"][0].update(dx=41.25, dy=-37.75)
-        atom = moved["model"]["atoms"][moved["marks"][0]["atom_id"]]
-        moved["marks"][0].update(x=atom["x"] + 41.25, y=atom["y"] - 37.75)
-        session.apply_state(moved)
-        assert session.snapshot_state()["marks"] == moved["marks"]
-
-
 def test_default_directions_are_distinct_and_ignore_bond_storage_order():
     model = MoleculeModel()
     center = model.add_atom("N", 0.0, 0.0)
@@ -189,8 +146,6 @@ def test_default_directions_are_distinct_and_ignore_bond_storage_order():
     assert len(set(directions)) == 8
     assert directions[0][0] > 0 and directions[0][1] == 0
     assert all(math.hypot(x, y) == pytest.approx(math.sqrt(2)) for x, y in directions)
-    plan = plan_smiles_commit(model, (0.0, 0.0), (0.0, 0.0))
-    assert [(mark.x, mark.y) for mark in plan.marks] == directions
     assert model == before
     model.bonds.reverse()
     assert [

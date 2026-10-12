@@ -18,7 +18,6 @@ from chemvas.ui.annotations.projections import (
     resolve_projection,
     restore_active_projection,
 )
-from chemvas.ui.canvas.canvas_calculation_plan_state import set_calculation_plan_for
 from chemvas.ui.canvas.canvas_callback_state import (
     run_scene_selection_group_callback_for,
 )
@@ -436,12 +435,9 @@ class CanvasHistoryOperations(HistoryTransactionOperations[DocumentSavepoint]):
             self.__canvas.model.atom_annotations.pop(atom_id, None)
         else:
             self.__canvas.model.atom_annotations[atom_id] = dict(annotation)
-        # The selection formula readout reflects annotations; mark replay has
+        # Selection-derived window chrome reflects annotations; mark replay has
         # already refreshed it from the value this replaces.
         emit_selection_info_for(self.__canvas)
-
-    def set_calculation_plan(self, state: dict[str, object] | None) -> None:
-        set_calculation_plan_for(self.__canvas, state)
 
     def restore_atom_label(
         self, atom_id: int, element: str, explicit_label: bool

@@ -40,7 +40,7 @@ class MainWindowCanvasLogicTest(unittest.TestCase):
                 operations, history_state, replay_context=nullcontext
             ),
             callback_state=CanvasCallbackState(),
-            selection_info_state=SelectionInfoState.create(),
+            selection_info_state=SelectionInfoState(),
         )
         return canvas
 

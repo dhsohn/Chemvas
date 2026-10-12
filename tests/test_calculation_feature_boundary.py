@@ -8,8 +8,6 @@ import subprocess
 import sys
 from pathlib import Path
 
-import pytest
-
 ROOT = Path(__file__).resolve().parents[1]
 
 _LIFECYCLE = r"""
@@ -101,19 +99,3 @@ def test_drawing_lifecycle_preserves_plan_without_calculation_operations(tmp_pat
     # Two normal runs establish repeatability before the unavailable-feature
     # run is compared: both saved document bytes and rendered pixels agree.
     assert outputs[0] == outputs[1] == outputs[2]
-
-
-@pytest.mark.usefixtures("qt_application")
-def test_calculation_toolbar_dispatches_to_its_panel(monkeypatch):
-    from chemvas.bootstrap.main_window import build_main_window
-    from chemvas.ui.dialogs import calculation_plan_actions
-
-    window = build_main_window()
-    calls = []
-    monkeypatch.setattr(
-        calculation_plan_actions, "open_calculation_panel_for_window", calls.append
-    )
-    window.ui_references.reaction_mapping_action.trigger()
-    assert calls == [window]
-    assert "Reaction Mapping" not in [a.text() for a in window.menuBar().actions()]
-    window.deleteLater()

@@ -22,7 +22,6 @@ from chemvas.ui.canvas.canvas_tool_settings_state import CanvasToolSettingsState
 from chemvas.ui.canvas.canvas_view import CanvasView
 from chemvas.ui.scene.scene_decoration_access import (
     add_mark_for_atom_for,
-    materialize_mark_for_atom_for,
 )
 from chemvas.ui.selection.selection_info_state import SelectionInfoState
 from tests.mark_support import seed_mark_items
@@ -81,30 +80,6 @@ class CanvasMarkSceneServiceTest(unittest.TestCase):
         )
         service.mark_offset_from_click = mock.Mock(return_value=QPointF(1.5, -2.5))
         return service, canvas, scene_decoration_service
-
-    def test_materialize_mark_for_atom_forwards_offset_without_history_or_sync(
-        self,
-    ) -> None:
-        service, _canvas, scene_decoration_service = (
-            self._service_with_mocked_add_mark()
-        )
-
-        service.sync_marks_for_atom = mock.Mock()
-        item = service.materialize_mark_for_atom(7, QPointF(12.0, 14.0), kind="minus")
-
-        self.assertEqual(item, "mark-item")
-        service.mark_offset_from_click.assert_called_once_with(
-            7, QPointF(12.0, 14.0), kind="minus"
-        )
-        scene_decoration_service.add_mark.assert_called_once_with(
-            QPointF(11.5, 17.5),
-            kind="minus",
-            atom_id=7,
-            offset=QPointF(1.5, -2.5),
-            record=False,
-        )
-        # The model already holds the annotation a materialized mark shows.
-        service.sync_marks_for_atom.assert_not_called()
 
     def test_add_mark_for_atom_records_history_and_syncs_the_annotation(self) -> None:
         canvas = CanvasView(renderer=Renderer())
@@ -250,13 +225,13 @@ class CanvasMarkSceneServiceTest(unittest.TestCase):
         canvas.model.set_atom_annotation(
             atom_id, {"formal_charge": 1, "radical_electrons": 1}
         )
-        plus = materialize_mark_for_atom_for(
+        plus = add_mark_for_atom_for(
             canvas,
             atom_id,
             QPointF(10.0, -10.0),
             kind="plus",
         )
-        radical = materialize_mark_for_atom_for(
+        radical = add_mark_for_atom_for(
             canvas,
             atom_id,
             QPointF(-10.0, -10.0),

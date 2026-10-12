@@ -31,10 +31,11 @@ prior converter source exists; only output evidence at 170 mm page width.
 
 4. **Native fragment/node/bond for pure elements.** Atom labels map to
    `<n Element=Z>` only when the label is a recognized element symbol with a
-   known atomic number. Alias labels (including Ac and Ts, which collide
-   with acetyl and tosyl abbreviations), multi-element abbreviations, and
-   any label not in the periodic table refuse with
-   `CdxmlUnsupportedObjectError`.
+   known atomic number and an unambiguous meaning. Alias labels (including
+   Ac and Ts, which collide with acetyl and tosyl abbreviations) other than
+   the verified group labels of decision 17, multi-element abbreviations,
+   raw `Ar` and identifier hydrogens without a typed binding, and any label
+   not in the periodic table refuse with `CdxmlUnsupportedObjectError`.
 
 5. **Bond style/order consistency.** Supported bonds include single/1,
    double_center/2 (`DoublePosition="Center"`), side-placed double/2
@@ -111,20 +112,37 @@ prior converter source exists; only output evidence at 170 mm page width.
     intersect the exported items' `data(3)` record ids refuse; groups
     whose items are entirely outside the export scope are ignored.
 
-13. **Z-order.** Every page child carries a `Z` attribute with monotonically
-    increasing integers. Sort order uses `scene.items(AscendingOrder)` rank,
+13. **Z-order.** `Z` (CDX ZOrder, INT16) is written only on the objects the
+    ZOrder property lists among those exported: every `n`, `b`, `t` and
+    `graphic`, never on `group`, `fragment` or `page` (a missing `Z` is 0 and
+    zeros are ordered arbitrarily). Values are unique positive integers from
+    1; each page object takes one contiguous block, and inside a fragment the
+    atoms and bonds follow their own scene paint order (a node, then its
+    contracted group, then its label). An atom or bond whose items are split
+    by another in z-order, or more than 32767 such elements, is refused
+    before output. Page order uses `scene.items(AscendingOrder)` rank,
     which reflects actual scene stacking including z-value ties. Fragment
     layer interleaving (a non-fragment item whose scene rank falls between a
     fragment's lowest and highest item, overlapping spatially) and two
     overlapping fragments that interleave in z-order are both refused.
+    Spatial overlap is bounding-rect intersection, except for a square TS
+    bracket: its exact painted stroke rectangles (flat ends, mitre-filled
+    corners, each free end lengthened by half the width for a consumer
+    square cap) are tested against the fragment items' bounding rects, and
+    touching counts. A bracket whose painted geometry cannot be fixed (not a
+    right-angle M/L polyline, a transform other than uniform scale plus
+    offset, or painted bounds that differ from those rectangles) and dagger
+    brackets keep the bounding-rect test.
 
 14. **Atom labels.** Label baseline and x-coordinate are read from the
     actual glyph origin: `item.sceneTransform()` applied to
     `layout.position() + line.x()` for x, and `layout.position() + line.y()
     + line.ascent()` for the baseline y. Missing owner, layout, or record
     refuses. Font family is the resolved `QFontInfo(atom_font()).family()`.
-    Hydrogen counts are not emitted; `InterpretChemically="yes"` on the root
-    delegates inference to the consumer. This is documented as unproved.
+    Hydrogen counts are not emitted on element nodes; `InterpretChemically="yes"`
+    on the root delegates inference to the consumer. This is documented as
+    unproved. The internal carbons of a nickname (decision 17) carry explicit
+    `NumHydrogens`.
 
 15. **Empty page refusal.** Serialization refuses if the page would contain
     zero children (e.g. a bond-only selection with no atoms).
@@ -133,6 +151,44 @@ prior converter source exists; only output evidence at 170 mm page width.
     "CDXML - ChemDraw XML (not verified in ChemDraw)". The vendor DTD has
     known lexical limitations (`AS` attribute type for `NMTOKEN` values).
     This export does not claim DTD validity.
+
+17. **Typed atom label semantics (amended 2026-10-06).** A label's chemistry
+    comes only from a typed source; text, colour, neighbours and legends are
+    never used to guess it, and the drawn label (exact Unicode text, resolved
+    font, size, colour, glyph-origin baseline) is written unchanged.
+    - `Me`, `Ph` and `tBu` have exporter-owned fragment definitions whose
+      carbon valences are checked at import. Each exports as
+      `NodeType="Nickname"` holding an inner `<fragment>` with the group's
+      carbons, explicit `NumHydrogens`, Kekulé bond orders for phenyl, and one
+      `NodeType="ExternalConnectionPoint"` node on the outside neighbour's
+      position. The outside bond keeps its native `B`/`E` order and ends on
+      the nickname node. Only one ordinary single attachment is accepted
+      (style `single`, order 1). Zero or several attachments, double, triple,
+      wedge or hash attachments, and charge or radical annotations on the
+      group refuse; the connection point is never guessed. `Atom_BondOrdering`
+      is not emitted because it only matters with more than one attachment,
+      which is refused.
+    - Raw `Ar` refuses as ambiguous. Identifier hydrogens (`H` followed by
+      superscript lowercase letters) refuse unless typed; digits and signs
+      are never accepted, so an identifier is never read as an isotope or
+      charge.
+    - `CdxmlLabelBinding` is an exporter-level, keyword-only input
+      (`label_bindings={atom_id: binding}`) for `preflight_cdxml` and
+      `serialize_cdxml`: `element_identity(symbol)` (exact symbol, or `H`
+      with an identifier label, emitting `Element="1"` without `Isotope`),
+      `generic_aryl()` (`NodeType="GenericNickname"`,
+      `GenericNickname="Ar"`, no inner graph), and `aryl_fragment("Ph")`
+      (phenyl nickname graph under the `Ar` label). Each meaning takes
+      exactly its own field as an exact `str`; an extra or conflicting field,
+      a missing or non-`str` value, or an unknown meaning is refused, never
+      dropped or converted. Bindings cannot override
+      the alias registry, must name an atom in the document, and are not a
+      document schema field: they are neither stored in nor read from
+      `.chemvas`. No GUI or CLI caller passes them yet.
+    - Generic groups are documented as a class statement, not a concrete
+      molecular graph. This decision does not change marks, dashed or other
+      refused lines, brackets, plots, note scripts or rotation, groups or
+      images: they still refuse.
 
 ## Scope and consequences
 
@@ -152,10 +208,11 @@ element carries `FractionalWidths="yes"`.
 
 | Area      | Emitted                                               |
 |-----------|-------------------------------------------------------|
-| Atoms     | Pure elements, colour, explicit C, Charge annotation  |
+| Atoms     | Pure elements, colour, explicit C, Charge annotation; `Me`/`Ph`/`tBu` as Nickname with inner graph; typed `Ar` (argon, generic aryl, phenyl) and identifier hydrogens through `CdxmlLabelBinding` |
 | Bonds     | single/1, double_center/2, side-placed double/2 (Left/Right from drawn lines), triple/3 (including order 2/3 with single style), wedge/1 (WedgeBegin), hash/1 (WedgedHashBegin) narrow at begin atom |
-| Lines     | Headless solid lines, endpoint-order BoundingBox      |
+| Lines     | Headless solid lines; dashed lines as `LineType="Dashed"` (consumer dash pattern); endpoint-order BoundingBox |
 | Arrows    | Arrow as grouped line components (M/L only, no Head3D)|
+| TS brackets | `square_pair`/`square_left` as grouped Line graphics on the `bracket_path_commands` M/L vertices; `dagger`/`double_dagger` as one `<t>` with the exact glyph at the `bracket_symbol_layout` anchor |
 | Shapes    | rect, circle; stroke-only, fill-only, or same colour; bond_color emitted for stroke-only |
 | Notes     | Per-line `<t>` with per-run resolved family, size, bold, color |
 | Other     | Unpainted ring records ignored                        |
@@ -164,14 +221,15 @@ element carries `FractionalWidths="yes"`.
 
 | Area      | Refused                                                |
 |-----------|--------------------------------------------------------|
-| Atoms     | Aliases (incl. Ac/Ts), radicals, any scene mark; hidden atoms are excluded and bonds to them are refused |
+| Atoms     | Other aliases (incl. Ac/Ts), untyped raw `Ar` and identifier hydrogens, group labels without exactly one plain single attachment or with charge/radical, radicals, any scene mark; hidden atoms are excluded and bonds to them are refused |
 | Bonds     | Bold, dotted, double_outer, double_either; unverified side line or stereo narrow orientation; mismatched style/order |
-| Lines     | Dashed, wavy, bold lines; mirrored lines               |
+| Lines     | Wavy, bold lines; mirrored lines                       |
+| TS brackets | Parentheses, braces (cubic strokes); transformed, translucent or outlined items; items not painting their record; dagger glyph fallback |
 | Arrows    | Curved, double, other kinds, labels, mirrored; non-M/L path commands |
 | Shapes    | Ellipse, rounded_rect, dashed/dotted stroke, translucent fill, mixed colours |
 | Notes     | Italic, underline (all styles), overline, strikeout, scripts, non-mixed-case capitalization, custom word spacing, non-default font stretch, lists, tables, rotation (m12/m21 != 0), non-400/700 weights, non-left alignment, boxes/borders, glyph fallback fonts |
-| Stacking  | Fragment layer interleaving, overlapping interleaved fragments |
-| Other     | Visible ring fills, brackets, images, orbitals, perspective, groups, empty pages |
+| Stacking  | Fragment layer interleaving (notes, lines, dashed lines, arrows, shapes, TS brackets; square brackets by painted strokes), overlapping interleaved fragments |
+| Other     | Visible ring fills, images, orbitals, perspective, groups, empty pages |
 
 ### Unproved / consumer-dependent
 
@@ -187,11 +245,24 @@ element carries `FractionalWidths="yes"`.
   with non-ASCII text is unproved.
 - **`InterpretChemically="no"` on node labels under a root `"yes"`**:
   consumer behaviour is unproved.
+- **`LineType="Dashed"`**: the CDX `Line_Type` property has values Solid,
+  Dashed, Bold and Wavy and no dash length or gap, so the consumer chooses
+  the dash pattern. The exported line is dashed; its pattern is unproved.
+- **Square bracket corners**: the Line graphics carry the exact M/L
+  vertices and width; joins and end caps are drawn by the consumer, while
+  the scene uses flat caps and mitre joins.
 - **U+2028 soft breaks**: may appear inside `<s>` text; consumer behaviour
   is unproved.
 - **Tab characters**: may appear inside `<s>` text; the tab advance width
   is consumer-dependent and unproved.
 - **Round caps and joins**: CDXML defaults may differ from the scene
   rendering; consumer interpretation is unproved.
+- **Nickname / GenericNickname / ExternalConnectionPoint**: written from the
+  public CDX specification mirror (Node, Node_Type, Atom_GenericNickname,
+  Atom_NumHydrogens); internal coordinates, label display, expansion and
+  reconnection in ChemDraw or other consumers are unverified. No consumer or
+  roundtrip PASS is claimed.
+- **Behaviour change**: a raw `Ar` label that exported as `Element="18"`
+  before this amendment now refuses until a caller supplies a typed binding.
 - **No DOCTYPE**: the output has no DOCTYPE declaration; DTD validity is
   not claimed.

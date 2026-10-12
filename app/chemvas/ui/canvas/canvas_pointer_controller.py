@@ -116,7 +116,6 @@ class CanvasPointerController:
         base_event,
         allow_select_tool: bool,
     ) -> None:
-        self.canvas.runtime_state.selection_info_state.touch_interaction()
         if event.button() == Qt.MouseButton.LeftButton:
             self._offsheet_gesture_notified = False
         if event.button() == Qt.MouseButton.RightButton and (
@@ -137,20 +136,6 @@ class CanvasPointerController:
                 self._accept_event(event)
                 return
             self.insert_controller.commit_template_insert(scene_pos)
-            self.hover.clear_hover_highlight()
-            return
-        if (
-            self.insert_state.smiles_active
-            and event.button() == Qt.MouseButton.LeftButton
-        ):
-            scene_pos = self.hit_testing_service.scene_pos_from_event(event)
-            if self._outside_sheet(scene_pos):
-                self._clear_insert_preview("smiles")
-                self.hover.clear_hover_highlight()
-                self._notify_offsheet_gesture()
-                self._accept_event(event)
-                return
-            self.insert_controller.commit_smiles_insert(scene_pos)
             self.hover.clear_hover_highlight()
             return
         active_tool = getattr(self.tool_controller, "active", None)
@@ -279,15 +264,10 @@ class CanvasPointerController:
         )
 
     def mouse_move_event(self, event, *, base_mouse_move_event) -> None:
-        self.canvas.runtime_state.selection_info_state.touch_interaction()
         scene_pos = self.hit_testing_service.scene_pos_from_event(event)
         if self._outside_sheet(scene_pos):
             if self.insert_state.template_active:
                 self._clear_insert_preview("template")
-                self.hover.clear_hover_highlight()
-                return
-            if self.insert_state.smiles_active:
-                self._clear_insert_preview("smiles")
                 self.hover.clear_hover_highlight()
                 return
             active_tool = getattr(self.tool_controller, "active", None)
@@ -305,9 +285,6 @@ class CanvasPointerController:
         if self.insert_state.template_active:
             self.insert_controller.render_template_preview(scene_pos)
             return
-        if self.insert_state.smiles_active:
-            self.insert_controller.render_smiles_preview(scene_pos)
-            return
         if event.buttons() == Qt.MouseButton.NoButton:
             self.hover.update_hover_highlight(scene_pos)
         else:
@@ -318,7 +295,6 @@ class CanvasPointerController:
         base_mouse_move_event(event)
 
     def mouse_release_event(self, event, *, base_mouse_release_event) -> None:
-        self.canvas.runtime_state.selection_info_state.touch_interaction()
         active_tool = getattr(self.tool_controller, "active", None)
         if active_tool and self._tool_draws_on_sheet(active_tool):
             scene_pos = self.hit_testing_service.scene_pos_from_event(event)
@@ -342,7 +318,6 @@ class CanvasPointerController:
         return base_viewport_event(event)
 
     def wheel_event(self, event, *, base_wheel_event) -> None:
-        self.canvas.runtime_state.selection_info_state.touch_interaction()
         if event.modifiers() & Qt.KeyboardModifier.ControlModifier:
             angle = event.angleDelta().y()
             if angle:

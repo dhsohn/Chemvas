@@ -9,10 +9,8 @@ from chemvas.features.rendering import (
     DOUBLE_STYLE_OUTER,
     normalize_3d,
     normalized_plain_double_style,
-    trim_segment,
 )
 from chemvas.features.selection import translate_projected_point_3d
-from chemvas.ui.molecule.bond_line_geometry_service import double_short_trim
 
 if TYPE_CHECKING:
     from PyQt6.QtCore import QPointF
@@ -128,110 +126,63 @@ class BondRingDoubleGeometryService:
         outer_a = project(base_a3)
         outer_b = project(base_b3)
         base_outer = (outer_a[0], outer_a[1], outer_b[0], outer_b[1])
-        base_dx = base_outer[2] - base_outer[0]
-        base_dy = base_outer[3] - base_outer[1]
-        inner_length = math.hypot(base_dx, base_dy) or 1.0
-        inner_trim = double_short_trim(
-            inner_length, has_label=self._has_label(a_id, b_id)
-        )
-        trim_ratio = min(0.45, inner_trim / inner_length)
-        trimmed_vec3 = (
-            base_b3[0] - base_a3[0],
-            base_b3[1] - base_a3[1],
-            base_b3[2] - base_a3[2],
-        )
         spacing = self.context.renderer.bond_spacing() * 1.1
-        inner_full_a3 = (
-            base_a3[0] + inward_unit3[0] * spacing,
-            base_a3[1] + inward_unit3[1] * spacing,
-            base_a3[2] + inward_unit3[2] * spacing,
-        )
-        inner_full_b3 = (
-            base_b3[0] + inward_unit3[0] * spacing,
-            base_b3[1] + inward_unit3[1] * spacing,
-            base_b3[2] + inward_unit3[2] * spacing,
-        )
-        inner_a3 = (
-            base_a3[0] + trimmed_vec3[0] * trim_ratio + inward_unit3[0] * spacing,
-            base_a3[1] + trimmed_vec3[1] * trim_ratio + inward_unit3[1] * spacing,
-            base_a3[2] + trimmed_vec3[2] * trim_ratio + inward_unit3[2] * spacing,
-        )
-        inner_b3 = (
-            base_b3[0] - trimmed_vec3[0] * trim_ratio + inward_unit3[0] * spacing,
-            base_b3[1] - trimmed_vec3[1] * trim_ratio + inward_unit3[1] * spacing,
-            base_b3[2] - trimmed_vec3[2] * trim_ratio + inward_unit3[2] * spacing,
-        )
-        outer_a3 = (
-            base_a3[0] + trimmed_vec3[0] * trim_ratio,
-            base_a3[1] + trimmed_vec3[1] * trim_ratio,
-            base_a3[2] + trimmed_vec3[2] * trim_ratio,
-        )
-        outer_b3 = (
-            base_b3[0] - trimmed_vec3[0] * trim_ratio,
-            base_b3[1] - trimmed_vec3[1] * trim_ratio,
-            base_b3[2] - trimmed_vec3[2] * trim_ratio,
-        )
-        inner_full_a = project(inner_full_a3)
-        inner_full_b = project(inner_full_b3)
-        inner_a = project(inner_a3)
-        inner_b = project(inner_b3)
         variant = normalized_plain_double_style(style, 2)
-        outer_seg = base_outer
-        inner_seg = (inner_a[0], inner_a[1], inner_b[0], inner_b[1])
-        if variant == "double_center":
-            inner_seg = (
-                inner_full_a[0],
-                inner_full_a[1],
-                inner_full_b[0],
-                inner_full_b[1],
-            )
-        elif variant == DOUBLE_STYLE_OUTER:
-            outer_trim_a = project(outer_a3)
-            outer_trim_b = project(outer_b3)
-            outer_seg = (
-                outer_trim_a[0],
-                outer_trim_a[1],
-                outer_trim_b[0],
-                outer_trim_b[1],
-            )
-            inner_seg = (
-                inner_full_a[0],
-                inner_full_a[1],
-                inner_full_b[0],
-                inner_full_b[1],
-            )
-        # Foreshortening can make a nominal inset pass the nearest point to the
-        # ring center. Limit that screen offset without changing line length or
-        # direction, so narrow rings keep an inward second stroke.
-        outer_mid = (
-            (outer_seg[0] + outer_seg[2]) * 0.5,
-            (outer_seg[1] + outer_seg[3]) * 0.5,
+        fractions = (
+            (-0.5, 0.5)
+            if variant == "double_center"
+            else (0.0, -1.0)
+            if variant == DOUBLE_STYLE_OUTER
+            else (0.0, 1.0)
         )
-        inset = (
-            (inner_seg[0] + inner_seg[2]) * 0.5 - outer_mid[0],
-            (inner_seg[1] + inner_seg[3]) * 0.5 - outer_mid[1],
+        screen_dx, screen_dy = (
+            base_outer[2] - base_outer[0],
+            base_outer[3] - base_outer[1],
         )
-        squared = inset[0] ** 2 + inset[1] ** 2
-        toward = (center.x() - outer_mid[0]) * inset[0] + (
-            center.y() - outer_mid[1]
-        ) * inset[1]
-        if 0.0 < toward < squared:
-            correction = toward / squared - 1.0
-            inner_seg = (
-                inner_seg[0] + correction * inset[0],
-                inner_seg[1] + correction * inset[1],
-                inner_seg[2] + correction * inset[0],
-                inner_seg[3] + correction * inset[1],
-            )
-        offset_x = (inner_seg[0] + inner_seg[2]) * 0.5 - outer_mid[0]
-        offset_y = (inner_seg[1] + inner_seg[3]) * 0.5 - outer_mid[1]
-        offset_len = math.hypot(offset_x, offset_y)
-        if offset_len <= 1e-9:
+        screen_length = math.hypot(screen_dx, screen_dy) or 1.0
+        spans = []
+        for fraction in fractions:
+            points = []
+            for point, other, atom_id, other_id, direction in (
+                (base_a3, base_b3, a_id, b_id, 1),
+                (base_b3, base_a3, b_id, a_id, -1),
+            ):
+                shifted = tuple(
+                    point[i] + inward_unit3[i] * spacing * fraction for i in range(3)
+                )
+                x, y = project(shifted)
+                px, py = project(point)
+                projected_spacing = math.hypot(x - px, y - py)
+                inset = 0.0
+                if projected_spacing > 1e-9:
+                    cot = (
+                        self.renderer.line_geometry._double_endpoint_cotangent(
+                            atom_id,
+                            other_id,
+                            screen_dx * direction,
+                            screen_dy * direction,
+                            (x - px) / projected_spacing,
+                            (y - py) / projected_spacing,
+                        )
+                        or 0.0
+                    )
+                    inset = min(0.45, projected_spacing * cot / screen_length)
+                trimmed = tuple(
+                    shifted[i] + (other[i] - point[i]) * inset for i in range(3)
+                )
+                points.append(project(trimmed))
+            spans.append((*points[0], *points[1]))
+        offset_x = (spans[1][0] + spans[1][2] - spans[0][0] - spans[0][2]) * 0.5
+        offset_y = (spans[1][1] + spans[1][3] - spans[0][1] - spans[0][3]) * 0.5
+        offset_length = math.hypot(offset_x, offset_y)
+        if offset_length <= 1e-9:
             return None
+        # Return the inward normal independently of the selected outside stroke.
+        sign = -1 if variant == DOUBLE_STYLE_OUTER else 1
         return (
-            outer_seg,
-            inner_seg,
-            (offset_x / offset_len, offset_y / offset_len),
+            spans[0],
+            spans[1],
+            (sign * offset_x / offset_length, sign * offset_y / offset_length),
         )
 
     def ring_double_segments(
@@ -264,8 +215,6 @@ class BondRingDoubleGeometryService:
         dx = b.x - a.x
         dy = b.y - a.y
         length = math.hypot(dx, dy) or 1.0
-        ux = dx / length
-        uy = dy / length
         nx = -dy / length
         ny = dx / length
         offset_unit = None
@@ -294,38 +243,13 @@ class BondRingDoubleGeometryService:
                 nx = -nx
                 ny = -ny
 
-        spacing = self.context.renderer.bond_spacing() * 1.1
-        t0, t1 = self.renderer.trim_line_for_labels(
-            a_id, b_id, a.x, a.y, b.x, b.y, ((0.0, 0.0), (nx * spacing, ny * spacing))
+        return self.renderer.line_geometry.native_double_segments(
+            a.x,
+            a.y,
+            b.x,
+            b.y,
+            style=style,
+            normal=(nx, ny),
+            a_id=a_id,
+            b_id=b_id,
         )
-        base_bx1 = a.x + dx * t0
-        base_by1 = a.y + dy * t0
-        base_bx2 = a.x + dx * t1
-        base_by2 = a.y + dy * t1
-
-        inner_length = math.hypot(base_bx2 - base_bx1, base_by2 - base_by1) or 1.0
-        inner_trim = double_short_trim(
-            inner_length, has_label=self._has_label(a_id, b_id)
-        )
-        inner_full_seg = (
-            base_bx1 + nx * spacing,
-            base_by1 + ny * spacing,
-            base_bx2 + nx * spacing,
-            base_by2 + ny * spacing,
-        )
-        inner_short_seg = (
-            base_bx1 + ux * inner_trim + nx * spacing,
-            base_by1 + uy * inner_trim + ny * spacing,
-            base_bx2 - ux * inner_trim + nx * spacing,
-            base_by2 - uy * inner_trim + ny * spacing,
-        )
-        outer_seg = (base_bx1, base_by1, base_bx2, base_by2)
-        variant = normalized_plain_double_style(style, 2)
-        if variant == "double_center":
-            return outer_seg, inner_full_seg, (nx, ny)
-        if variant == DOUBLE_STYLE_OUTER:
-            return trim_segment(outer_seg, inner_trim), inner_full_seg, (nx, ny)
-        return outer_seg, inner_short_seg, (nx, ny)
-
-
-__all__ = ["BondRingDoubleGeometryService"]

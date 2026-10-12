@@ -35,7 +35,6 @@ if TYPE_CHECKING:
     )
 
     from chemvas.adapters.qt.renderer import Renderer
-    from chemvas.core.rdkit_adapter import RDKitAdapter
     from chemvas.domain.document import MoleculeModel
     from chemvas.ui.canvas.canvas_runtime_services import CanvasRuntimeServices
     from chemvas.ui.canvas.canvas_runtime_state import CanvasRuntimeState
@@ -59,7 +58,6 @@ class CanvasView(QGraphicsView):
     # Created once by ``initialize_canvas_view``; read directly by editor code.
     model: MoleculeModel
     renderer: Renderer
-    rdkit: RDKitAdapter
     runtime_state: CanvasRuntimeState
     render_context: SceneRenderContext
     bond_renderer: BondRenderer

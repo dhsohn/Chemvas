@@ -125,9 +125,10 @@ def strip_corners(
     base_width: float,
     bold_width: float,
 ) -> tuple[Point2D, Point2D, Point2D, Point2D]:
-    half_base = base_width / 2.0
-    inner_offset = half_base + max(0.0, bold_width - base_width)
-    outer_offset = -half_base
+    # Both persisted single-Bold tokens use the same centered native stroke.
+    # Keep base_width only as the minimum width, not a one-sided anchor.
+    inner_offset = max(base_width, bold_width) / 2.0
+    outer_offset = -inner_offset
     return (
         (x1 + nx * outer_offset, y1 + ny * outer_offset),
         (x2 + nx * outer_offset, y2 + ny * outer_offset),
@@ -144,12 +145,15 @@ def line_normal(
     if length < 1e-9:
         return 0.0, 0.0
     nx, ny = -dy / length, dx / length
-    if (
-        target is not None
-        and nx * (target.x() - (x1 + x2) * 0.5) + ny * (target.y() - (y1 + y2) * 0.5)
-        < 0
-    ):
-        return -nx, -ny
+    if target is not None:
+        tx = (target.x() - x1) - dx * 0.5
+        ty = (target.y() - y1) - dy * 0.5
+        distance = math.fsum((nx * tx, ny * ty))
+        # A collinear target keeps the directed left normal. Scale the tie
+        # tolerance to local geometry, so translation noise cannot choose a side.
+        tolerance = 1e-9 * max(length, math.hypot(tx, ty))
+        if distance < -tolerance:
+            return -nx, -ny
     return nx, ny
 
 

@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from chemvas.domain.document import Bond
+from chemvas.features.graph import geometry_bond_sets_for_atom_ids
 from chemvas.ui.scene.scene_graphics_operations import detach_graphics_item
 
 if TYPE_CHECKING:
@@ -135,11 +136,14 @@ class CanvasBondMutationService:
     ) -> None:
         if atom_ids:
             graph = self.context.state.graph_state
-            bond_ids = {
-                bond_id
-                for atom_id in atom_ids
-                for bond_id in graph.atom_bond_ids.get(atom_id, ())
-            }
+            model = self.context.model
+            internal, dependent = geometry_bond_sets_for_atom_ids(
+                atom_ids,
+                graph.atom_bond_ids,
+                model.bonds,
+                bond_for_id=model.bond_for_id,
+            )
+            bond_ids = internal | dependent
             # Closing/opening a cycle changes the side of double bonds even far
             # from the edited endpoints. Refresh live ring-dependent graphics;
             # creation/restoration still owns any not-yet-built bond items.

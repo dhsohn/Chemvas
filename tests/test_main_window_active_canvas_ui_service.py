@@ -26,7 +26,6 @@ class _FakeWindow:
         self.canvas_tabs.addTab(self.canvas_b, "Canvas 2")
         self.canvas_tabs.setCurrentIndex(0)
         self.runtime_state = SimpleNamespace(last_canvas_tab_index=0)
-        self.preview_3d = _FakePreview3D()
         self._atom_input = mock.Mock()
         self.tab_references = SimpleNamespace(
             canvas_tabs=self.canvas_tabs,
@@ -57,15 +56,6 @@ class _FakeWindow:
 
     def has_zoom_label(self) -> bool:
         return True
-
-
-class _FakePreview3D:
-    def __init__(self) -> None:
-        self.rdkit_adapter = None
-        self.refresh_selected_from_canvas = mock.Mock()
-
-    def set_rdkit_adapter(self, adapter) -> None:
-        self.rdkit_adapter = adapter
 
 
 class MainWindowActiveCanvasUIServiceTest(unittest.TestCase):
@@ -188,17 +178,13 @@ class MainWindowActiveCanvasUIServiceTest(unittest.TestCase):
         self.status_service.reset_mock()
         self.tool_state_service.reset_mock()
         self.action_availability_service.reset_mock()
-        self.window.preview_3d.refresh_selected_from_canvas.reset_mock()
 
-        self.window.canvas_b.runtime_state.selection_info_state.callback("H2O", "18.0")
+        self.window.canvas_b.runtime_state.selection_info_state.callback()
         self.window.canvas_b.runtime_state.callback_state.tool_change()
         self.window.canvas_b.runtime_state.callback_state.zoom(175)
         self.window.canvas_b.runtime_state.history_service.state.change_callback()
         self.window.canvas_b.runtime_state.callback_state.error("Invalid molecule")
 
-        self.window.preview_3d.refresh_selected_from_canvas.assert_called_once_with(
-            self.window.canvas_b
-        )
         self.status_service.update_selection_status_label.assert_called_once_with(
             self.window
         )
@@ -225,21 +211,20 @@ class MainWindowActiveCanvasUIServiceTest(unittest.TestCase):
 
     def test_handle_selection_info_ignores_deleted_window_canvas(self) -> None:
         class _DeletedWindow:
-            def __init__(self) -> None:
-                self.preview_3d = SimpleNamespace(
-                    refresh_selected_from_canvas=mock.Mock()
-                )
-
             @property
             def canvas(self):
                 raise RuntimeError("deleted")
 
         window = _DeletedWindow()
 
+        self.status_service.update_selection_status_label.side_effect = lambda owner: (
+            owner.canvas
+        )
         self.service.handle_selection_info(window)
 
-        window.preview_3d.refresh_selected_from_canvas.assert_not_called()
-        self.status_service.update_selection_status_label.assert_not_called()
+        self.status_service.update_selection_status_label.assert_called_once_with(
+            window
+        )
         self.action_availability_service.update_action_availability.assert_not_called()
 
     def test_handle_selection_info_ignores_deleted_qt_callback_state(self) -> None:
@@ -249,15 +234,12 @@ class MainWindowActiveCanvasUIServiceTest(unittest.TestCase):
 
         self.service.handle_selection_info(self.window)
 
-        self.window.preview_3d.refresh_selected_from_canvas.assert_called_once_with(
-            self.window.canvas_a
-        )
         self.status_service.update_selection_status_label.assert_called_once_with(
             self.window
         )
         self.action_availability_service.update_action_availability.assert_not_called()
 
-    def test_refresh_active_canvas_ui_rebinds_updates_inputs_and_refreshes_preview(
+    def test_refresh_active_canvas_ui_rebinds_updates_inputs_and_selection_status(
         self,
     ) -> None:
         self.window.canvas_tabs.setCurrentWidget(self.window.canvas_b)
@@ -270,7 +252,7 @@ class MainWindowActiveCanvasUIServiceTest(unittest.TestCase):
         ):
             self.service.refresh_active_canvas_ui(self.window)
 
-        # selection-derived UI (preview / selection status / action availability)
+        # selection-derived UI (selection status / action availability)
         # is emitted on the next event-loop turn; flush it before asserting.
         self.app.processEvents()
 
@@ -292,10 +274,6 @@ class MainWindowActiveCanvasUIServiceTest(unittest.TestCase):
             self.window
         )
         self.window.update_action_availability.assert_not_called()
-        self.window.preview_3d.refresh_selected_from_canvas.assert_called_once_with(
-            self.window.canvas_b
-        )
-        self.assertIs(self.window.preview_3d.rdkit_adapter, self.window.canvas_b.rdkit)
         self.tool_mode_controller_for_window.assert_called_once_with(self.window)
         self._assert_canvas_callbacks(self.window.canvas_a, active=False)
         self._assert_canvas_callbacks(self.window.canvas_b, active=True)

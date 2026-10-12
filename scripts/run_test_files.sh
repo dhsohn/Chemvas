@@ -52,9 +52,8 @@ echo "[tests] $# files, $jobs at a time"
 status=0
 file_count=$#
 run_files() {
-  local concurrency="$1" marker="$2" index=0 file
-  shift 2
-  export marker
+  local concurrency="$1" index=0 file
+  shift
   [[ $# -gt 0 ]] || return 0
   for file in "$@"; do
     printf '%s\0%s\0' "$index" "$file"
@@ -66,14 +65,6 @@ run_files() {
     log="$logs/$index.log"
     command=("$PYTHON")
     pytest_args=(-q -ra --capture=tee-sys "$file")
-    if [[ -n "$marker" ]]; then
-      pytest_args+=(-m "$marker")
-    fi
-    if [[ "$marker" == latency ]]; then
-      # A runner contract test can itself be measured. Its nested latency
-      # process must not inherit automatic coverage subprocess startup.
-      unset COVERAGE_PROCESS_START COVERAGE_PROCESS_CONFIG
-    fi
     if [[ -n "$coverage_dir" ]]; then
       # The runner also executes external test fixtures from their directory.
       command+=(-m coverage run --rcfile "$RUNNER_ROOT/pyproject.toml" --data-file "$coverage_dir/.coverage" --source "$RUNNER_ROOT/app/chemvas")
@@ -92,28 +83,7 @@ run_files() {
   ' _ || status=1
 }
 
-# This file has strict UI-thread latency budgets. Keep those assertions intact
-# and avoid competing with other test files, especially under instrumentation.
-parallel_files=()
-serial_files=()
-for file in "$@"; do
-  if [[ "${file##*/}" == test_ring_changing_correspondence.py ]]; then
-    serial_files+=("$file")
-  else
-    parallel_files+=("$file")
-  fi
-done
-run_files "$jobs" "" ${parallel_files[@]+"${parallel_files[@]}"}
-if [[ ${#serial_files[@]} -gt 0 ]]; then
-  echo "[tests] Timing-sensitive files: ${#serial_files[@]}, one at a time"
-  if [[ -n "$coverage_dir" ]]; then
-    run_files 1 "not latency" "${serial_files[@]}"
-    echo "[tests] Wall-clock latency tests: no coverage instrumentation"
-    coverage_dir="" run_files 1 latency "${serial_files[@]}"
-  else
-    run_files 1 "" "${serial_files[@]}"
-  fi
-fi
+run_files "$jobs" "$@"
 
 if [[ "$status" -ne 0 ]]; then
   # Every process runs, so a broken tree reports all of its failures at once

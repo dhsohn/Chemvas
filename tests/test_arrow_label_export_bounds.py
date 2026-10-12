@@ -177,16 +177,16 @@ def test_bounds_follow_later_label_font_and_text_changes():
 
 
 def test_script_baseline_uses_qt_fixed_point_rounding():
-    from chemvas.ui.canvas.graphics_items import _fragment_baseline_shift
+    from chemvas.ui.canvas.graphics_items import note_fragment_baseline_shift
 
     # Concrete Qt DejaVu Sans 11-pixel metrics. QTextLine multiplies the
     # default 1/6 subscript ratio as QFixed(10/64), not as a float 1/6.
     font = SimpleNamespace(ascent=lambda: 10.203125, descent=lambda: 2.59375)
     format_ = QTextCharFormat()
     format_.setVerticalAlignment(QTextCharFormat.VerticalAlignment.AlignSubScript)
-    assert _fragment_baseline_shift(format_, font) == 2.0
+    assert note_fragment_baseline_shift(format_, font) == 2.0
     format_.setVerticalAlignment(QTextCharFormat.VerticalAlignment.AlignSuperScript)
-    assert _fragment_baseline_shift(format_, font) == -6.40625
+    assert note_fragment_baseline_shift(format_, font) == -6.40625
 
 
 @pytest.mark.parametrize(

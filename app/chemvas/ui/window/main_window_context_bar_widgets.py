@@ -4,7 +4,7 @@ from decimal import Decimal
 from typing import override
 
 from PyQt6.QtCore import QPointF, QSize, Qt
-from PyQt6.QtGui import QColor, QFontDatabase, QPainter, QPolygonF
+from PyQt6.QtGui import QColor, QPainter, QPolygonF
 from PyQt6.QtWidgets import (
     QDoubleSpinBox,
     QFrame,
@@ -37,7 +37,6 @@ from chemvas.ui.window.main_window_config import (
     BOND_LENGTH_INPUT_SPEC,
     ROTATE_ANGLE_DEFAULT,
     ROTATE_ANGLE_RANGE,
-    SMILES_ENTRY_SPEC,
 )
 
 
@@ -130,7 +129,7 @@ def new_context_page() -> tuple[QWidget, QHBoxLayout]:
 
 
 class ToolOptionsStack(QStackedWidget):
-    """Hidden pages must not reserve space beside the shared SMILES field."""
+    """Hidden pages must not reserve space in the context bar."""
 
     def __init__(self) -> None:
         super().__init__()
@@ -204,37 +203,6 @@ class SegmentedButtonGroup(QFrame):
             + f"QToolButton:focus {{ border-color: {_P['accent']}; }}"
         )
         self.button_layout.addWidget(button)
-
-
-def smiles_entry(begin_smiles_insert) -> QWidget:
-    entry, layout = new_context_page()
-    entry.setObjectName("quickSmilesEntry")
-    entry.setSizePolicy(QSizePolicy.Policy.Maximum, QSizePolicy.Policy.Fixed)
-    layout.addWidget(hint_label(SMILES_ENTRY_SPEC["label"]))
-    input_box = QLineEdit()
-    input_box.setObjectName("contextSmilesInput")
-    input_box.setPlaceholderText(SMILES_ENTRY_SPEC["placeholder"])
-    input_box.setFont(QFontDatabase.systemFont(QFontDatabase.SystemFont.FixedFont))
-    input_box.setMinimumWidth(120)
-    input_box.setMaximumWidth(250)
-    input_box.setFixedHeight(CONTEXT_BAR_BUTTON_HEIGHT)
-    input_box.setToolTip(SMILES_ENTRY_SPEC["tooltip"])
-    input_box.setAccessibleName(SMILES_ENTRY_SPEC["label"])
-    button = action_button(
-        SMILES_ENTRY_SPEC["button_label"], SMILES_ENTRY_SPEC["button_tooltip"]
-    )
-    button.setObjectName("smiles_render_button")
-    button.setStyleSheet(
-        CONTEXT_ACTION_BUTTON_STYLE
-        + f"QToolButton {{ background: {_P['accent']}; border-color: {_P['accent']}; color: {_P['accent_contrast']}; }}"
-        + f"QToolButton:hover {{ background: {_P['accent_hover']}; }}"
-        + f"QToolButton:pressed {{ background: {_P['accent_pressed']}; }}"
-    )
-    button.clicked.connect(lambda _checked=False: begin_smiles_insert(input_box.text()))
-    input_box.returnPressed.connect(lambda: begin_smiles_insert(input_box.text()))
-    layout.addWidget(input_box)
-    layout.addWidget(button)
-    return entry
 
 
 class KindMenuButton(CornerMenuButton):

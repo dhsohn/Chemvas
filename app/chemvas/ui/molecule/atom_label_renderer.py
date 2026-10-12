@@ -124,13 +124,21 @@ class AtomLabelRenderer:
 
     def position_label(self, item, x: float, y: float) -> None:
         offset = self.context.renderer.style.atom_label_offset_px
+        atom_id = item.data(1)
+        dx, dy = (
+            self.context.bonds.line_geometry.terminal_label_offset(atom_id)
+            if isinstance(atom_id, int)
+            else (0.0, 0.0)
+        )
         center = None
-        anchor_center = getattr(item, "anchor_center", None)
+        anchor_center = getattr(item, "label_position_center", None)
+        if not callable(anchor_center):
+            anchor_center = getattr(item, "anchor_center", None)
         if callable(anchor_center):
             center = anchor_center()
         if center is None:
             center = item.boundingRect().center()
-        item.setPos(x - center.x() + offset, y - center.y() - offset)
+        item.setPos(x + dx - center.x() + offset, y + dy - center.y() - offset)
 
     @staticmethod
     def _label_presentation_signature(item: AtomLabelItem) -> tuple[object, ...]:

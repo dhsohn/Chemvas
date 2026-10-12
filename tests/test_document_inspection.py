@@ -128,30 +128,6 @@ def test_annotation_errors_keep_priority_over_unrelated_alias_errors(
     assert state == before
 
 
-def test_standalone_calculation_selection_does_not_inspect_unselected_alias():
-    from chemvas.features.calculation_bundle import select_components
-
-    model = MoleculeModel(
-        atoms={
-            0: Atom("C", 0.0, 0.0),
-            1: Atom("C", 18.0, 0.0),
-            2: Atom("PPh3", 90.0, 0.0),
-        },
-        bonds=[Bond(0, 1)],
-    )
-    state = {"model": serialize_model_state(model), "marks": []}
-    before = deepcopy(state)
-
-    with pytest.raises(ValueError, match="PPh3"):
-        inspect_components(state)
-    selection = select_components(state, [[0, 1]])
-    assert selection.atom_ids == (0, 1)
-    assert selection.formal_charge == 0
-    with pytest.raises(ValueError, match="PPh3"):
-        select_components(state, [[2]])
-    assert state == before
-
-
 def test_inventory_reuses_only_the_supplied_request_local_model():
     state = _state(("plus",), {"formal_charge": 1})
     before = deepcopy(state)

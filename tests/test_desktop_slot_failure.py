@@ -17,7 +17,6 @@ from PyQt6.QtCore import QTimer
 from PyQt6.QtGui import QAction
 from PyQt6.QtWidgets import QApplication
 from chemvas.bootstrap import application, window_registry
-from chemvas.core import rdkit_adapter
 from chemvas.ui.session import session_recovery_service
 
 if sys.platform != "win32":
@@ -43,7 +42,6 @@ window_registry.open_new_window = open_window
 session_recovery_service.create_session_recovery_service = (
     lambda **kwargs: SimpleNamespace(start=lambda app: None)
 )
-rdkit_adapter.warm_rdkit_in_background = lambda: None
 sys.argv = ["chemvas"]
 application.main()
 assert sys.excepthook is original_hook
@@ -70,7 +68,6 @@ from PyQt6 import sip
 from PyQt6.QtCore import QCoreApplication, QEvent, QTimer
 from PyQt6.QtWidgets import QApplication, QMessageBox
 from chemvas.bootstrap import application, window_registry
-from chemvas.core import rdkit_adapter
 from chemvas.shell.window_registry import open_windows
 from chemvas.ui.session import session_recovery_service
 from chemvas.ui.window.main_window_ports import active_canvas_for_window
@@ -115,7 +112,6 @@ window_registry.open_new_window = open_window
 session_recovery_service.create_session_recovery_service = (
     lambda **kwargs: SimpleNamespace(start=lambda app: None)
 )
-rdkit_adapter.warm_rdkit_in_background = lambda: None
 sys.argv = ["chemvas"]
 application.main()
 assert observed == {
@@ -148,7 +144,6 @@ from PyQt6.QtCore import QTimer
 from PyQt6.QtGui import QAction
 from PyQt6.QtWidgets import QApplication
 from chemvas.bootstrap import application, window_registry
-from chemvas.core import rdkit_adapter
 from chemvas.ui.session import session_recovery_service
 
 if sys.platform != "win32":
@@ -193,7 +188,6 @@ window_registry.open_new_window = open_window
 session_recovery_service.create_session_recovery_service = (
     lambda **kwargs: SimpleNamespace(start=lambda app: None)
 )
-rdkit_adapter.warm_rdkit_in_background = lambda: None
 sys.argv = ["chemvas"]
 application.main()
 assert observed == {

@@ -13,7 +13,7 @@ Media assets used across README, documentation, and social previews.
 | `walkthrough-drawing.gif` | Reference guide: drawing bonds, keyboard shortcuts, charges, and fused rings. |
 | `walkthrough-arrows.gif` | Reference guide: reaction arrows, equilibrium arrows, curved arrows, and profile connectors. |
 | `walkthrough-editing.gif` | Reference guide: move, rotate, flip, align, and distribute actions. |
-| `walkthrough-chemistry.gif` | Reference guide: molfile import, Molecule Info dock, and 3D XYZ export. |
+| `walkthrough-chemistry.gif` | Historical capture of removed Molecule Info and 3D XYZ export. Not a current feature. |
 | `walkthrough-images.gif` | Image objects: PNG insertion, resizing, and property adjustment. |
 | `cli-*.png` | Visual figures for CLI commands and automated layout steps. |
 | `examples/publication-*.png` | High-resolution publication figures shown in the example gallery. |
@@ -25,7 +25,7 @@ Media assets used across README, documentation, and social previews.
 Capture the main demo workflow:
 
 ```bash
-python -m pip install -e ".[dev,rdkit]"
+python -m pip install -e ".[dev]"
 QT_QPA_PLATFORM=offscreen python scripts/capture_first_scheme.py --output-dir /tmp/chemvas-demo-capture
 ```
 

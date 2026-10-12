@@ -91,10 +91,6 @@ class HistoryAtomAnnotationOperations(Protocol):
     ) -> None: ...
 
 
-class HistoryCalculationPlanOperations(Protocol):
-    def set_calculation_plan(self, state: dict[str, object] | None) -> None: ...
-
-
 class HistoryAtomLabelOperations(Protocol):
     def restore_atom_label(
         self, atom_id: int, element: str, explicit_label: bool
@@ -239,33 +235,6 @@ class SetSheetSetupCommand(HistoryCommand):
     @override
     def redo(self, operations) -> None:
         self._apply(operations, self.after)
-
-
-@dataclass
-class SetCalculationPlanCommand(HistoryCommand):
-    history_transaction_snapshot_covers_state = True
-    history_transaction_owns_exact_state = True
-
-    before_state: dict[str, object] | None
-    after_state: dict[str, object] | None
-
-    def _apply(
-        self, operations: HistoryCalculationPlanOperations, state, rollback_state
-    ) -> None:
-        with history_command_transaction(
-            operations,
-            inverse=lambda: operations.set_calculation_plan(rollback_state),
-            inverse_phase="restoring the previous calculation plan",
-        ):
-            operations.set_calculation_plan(state)
-
-    @override
-    def undo(self, operations: HistoryCalculationPlanOperations) -> None:
-        self._apply(operations, self.before_state, self.after_state)
-
-    @override
-    def redo(self, operations: HistoryCalculationPlanOperations) -> None:
-        self._apply(operations, self.after_state, self.before_state)
 
 
 @dataclass
@@ -735,7 +704,6 @@ __all__ = [
     "GroupSceneItemsCommand",
     "HistoryAtomAnnotationOperations",
     "HistoryAtomLabelOperations",
-    "HistoryCalculationPlanOperations",
     "HistoryGroupOperations",
     "HistoryMarkOperations",
     "HistorySceneCollectionOperations",
@@ -743,7 +711,6 @@ __all__ = [
     "HistorySelectionGeometryOperations",
     "SetAnnotationSettingsCommand",
     "SetAtomAnnotationCommand",
-    "SetCalculationPlanCommand",
     "SetNoteTextCommand",
     "SetSceneGeometryCommand",
     "SetSheetSetupCommand",

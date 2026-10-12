@@ -26,6 +26,9 @@ DOCUMENT_SCHEMA_READERS = {(8, 1): "0.18.0", (9, 1): "0.23.0"}
 DOCUMENT_SCHEMAS = {8: 1, 9: 1}
 
 
+# ``last_smiles_input`` and ``calculation_plan`` belong to retired features.
+# They stay in the schema only so existing documents keep opening and saving
+# under docs/DOCUMENT_COMPATIBILITY.md; nothing creates or edits them any more.
 CANVAS_STATE_KEYS = frozenset(
     (
         "model",

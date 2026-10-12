@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import os
-from types import SimpleNamespace
 
 import pytest
 
@@ -11,7 +10,7 @@ from PyQt6.QtCore import QPointF, Qt
 from PyQt6.QtGui import QColor, QFont, QImage, QPainter
 from PyQt6.QtWidgets import QApplication, QGraphicsRectItem, QGraphicsScene
 
-from chemvas.ui.canvas.graphics_items import AtomDotItem, AtomLabelItem
+from chemvas.ui.canvas.graphics_items import AtomLabelItem
 from chemvas.ui.export.export_scope import content_bounds, item_export_bounds
 from chemvas.ui.scene.scene_geometry import SceneGeometry
 
@@ -102,39 +101,6 @@ def test_parent_opacity_and_empty_label_cannot_enlarge_output():
     parent.setOpacity(1)
     label.setPlainText("")
     assert item_export_bounds(label).isNull()
-
-
-@pytest.mark.parametrize("kind", ["stacked", "dot"])
-def test_calculation_number_keeps_existing_layout_clearance(monkeypatch, kind):
-    from chemvas.ui.dialogs import calculation_mapping_highlight as module
-
-    scene = QGraphicsScene()
-    if kind == "stacked":
-        label = _label("NH", stacked=True)
-        old_bounds = label.sceneBoundingRect()
-    else:
-        label = AtomDotItem(-2, -2, 4, 4)
-        label.setBrush(QColor("black"))
-        old_bounds = label.export_scene_bounding_rect()
-    scene.addItem(label)
-    center = label.sceneBoundingRect().center()
-    monkeypatch.setattr(module, "atom_center_point_for", lambda *_: center)
-    monkeypatch.setattr(module, "atom_pick_radius_for", lambda *_: 6)
-    monkeypatch.setattr(module, "visible_atom_item_for", lambda *_: label)
-    highlighter = module.CalculationMappingHighlighter(
-        SimpleNamespace(scene=lambda: scene)
-    )
-    highlighter.show_correspondence({}, {0}, set(), [], 0)
-    number = next(
-        item
-        for item in scene.items()
-        if item.data(0) == "calculation_atom_id_label" and item.data(1) == 0
-    )
-    assert (
-        number.sceneBoundingRect().bottom()
-        == min(center.y() - 6, old_bounds.top()) - 2.5
-    )
-    highlighter.clear_all()
 
 
 @pytest.mark.parametrize("text,stacked", [("O", False), ("CO2Me", False), ("NH", True)])

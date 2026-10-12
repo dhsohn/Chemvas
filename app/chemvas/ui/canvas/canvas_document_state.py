@@ -7,7 +7,6 @@ from PyQt6.QtCore import Qt
 from chemvas.domain.document import (
     VALID_MARK_KINDS,
     arrow_to_state,
-    calculation_plan_from_state,
     calculation_plan_save_warning,
     is_hex_color,
     model_bond_pairs,
@@ -104,22 +103,28 @@ def snapshot_canvas_document_state_with_warnings(canvas) -> tuple[dict, list[str
     return state, warnings
 
 
-def savable_calculation_plan_for(canvas: CanvasView) -> dict[str, object] | None:
-    """Return the canvas plan if the document snapshot can include it.
+PRESERVED_CALCULATION_PLAN_SAVE_ERROR = (
+    "This document contains a calculation plan from an earlier version of "
+    "Chemvas. Chemvas keeps that plan unchanged but can no longer edit it, and "
+    "the drawing no longer matches the atoms and bonds it refers to, so saving "
+    "now would lose it. Undo the structure edits that changed those atoms or "
+    "bonds, then try again."
+)
 
-    Raises ``CalculationPlanGraphMismatchError`` when a graph edit left the
-    plan's component references behind, and ``ValueError`` when the plan data
-    is invalid.
+
+def require_preserved_calculation_plan_for(canvas: CanvasView) -> None:
+    """Refuse to write a document that would drop its existing calculation plan.
+
+    The document snapshot leaves out a plan whose references no longer match
+    the drawing. A file written from that snapshot would silently lose data
+    Chemvas can no longer recreate, so callers check here before writing.
+    Raises ``ValueError`` with a message for the user.
     """
-    calculation_plan = calculation_plan_for(canvas)
-    if calculation_plan is not None:
-        model = canvas.model
-        calculation_plan_from_state(
-            calculation_plan,
-            atom_ids=set(model.atoms),
-            bond_pairs=model_bond_pairs(model),
-        )
-    return calculation_plan
+    if (
+        calculation_plan_save_warning(canvas.model, calculation_plan_for(canvas))
+        is not None
+    ):
+        raise ValueError(PRESERVED_CALCULATION_PLAN_SAVE_ERROR)
 
 
 def _add_projection_state(canvas, state: dict) -> None:

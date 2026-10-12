@@ -399,7 +399,6 @@ class MainWindowToolbarActionsTest(unittest.TestCase):
             {
                 "close_after_confirmation",
                 "is_closing",
-                "preview_3d",
                 "runtime_state",
                 "services",
                 "tab_references",
