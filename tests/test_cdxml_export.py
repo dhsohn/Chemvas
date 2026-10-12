@@ -2306,11 +2306,16 @@ def test_note_fallback_matches_painted_glyphs():
 
 
 def test_refuse_glyph_zero_in_note():
-    # The visible A keeps the note in export scope. U+0378 is unassigned,
-    # unlike emoji, which installed fallback fonts can render successfully.
+    from PyQt6.QtGui import QFont
+
+    # Keep visible ink in export scope and disable fallback only in this
+    # fixture: Windows can substitute a nonzero glyph even for unassigned text.
     state = _simple_state(notes=[{"text": "A\u0378", "x": 0.0, "y": 30.0}])
     with offscreen_document_scene(state, command="test-cdxml") as context:
         note = context.state.note_items()[0]
+        font = note.document().defaultFont()
+        font.setStyleStrategy(font.styleStrategy() | QFont.StyleStrategy.NoFontMerging)
+        note.document().setDefaultFont(font)
         note.boundingRect()
         block = note.document().begin()
         glyphs = [
