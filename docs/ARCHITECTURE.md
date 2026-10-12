@@ -289,7 +289,7 @@ A plan already stored in a document is kept when it still matches the drawing. S
 
 ## Chemical & Format Constraints
 
-- **Export Scope**: Molecular exports include only chemical graph data; non-molecular annotations (arrows, brackets, text notes) are ignored. Abbreviation labels are not expanded.
+- **Export Scope**: MOL export include only chemical graph data; non-molecular annotations (arrows, brackets, text notes) are ignored. Abbreviation labels are not expanded.
 - **Supported Aliases**: Canonical aliases defined in `ATOM_ALIAS_DEFINITIONS`:
   `Me`, `Et`, `OH`, `NH2`, `SH`, `Ph`, `PPh3`, `OMe`, `Boc`, `CO2Me`, `t-Bu`, `tBu`, `i-Pr`, `CF3`, `OTs`, `Ts`, `OMs`, `Ms`, `OTf`, `Tf`, `Ns`, `OAc`, and `Ac`.
 - **Stereochemistry**: Wedge and hash stereochemistry maps only to single bonds.
@@ -351,8 +351,10 @@ process locking and envelope storage ([ADR 0032](adr/0032-browser-clipboard-and-
 - [ADR 0027: Record-based annotation transforms](adr/0027-record-based-annotation-transforms.md)
 - [ADR 0028: Configurable paper dimensions](adr/0028-configurable-paper-dimensions.md)
 - [ADR 0029: Browser presentation adapter over existing editing owners](adr/0029-browser-adapter.md)
+- [ADR 0030: CDXML export](adr/0030-cdxml-export.md)
 - [ADR 0031: Standalone contract validation](adr/0031-standalone-contract-validation.md)
 - [ADR 0032: Browser chemical clipboard and recovery drafts](adr/0032-browser-clipboard-and-drafts.md)
+- [ADR 0034: Qt-only distribution](adr/0034-qt-only-distribution.md)
 - [ADR 0035: CDXML Ph stereo nickname attachments](adr/0035-ph-stereo-nickname-attachments.md) (Proposed)
 - [ADR 0036: Bound para-fluorophenyl CDXML nickname graph](adr/0036-bound-para-fluorophenyl-cdxml.md) (Proposed)
 - [ADR 0037: Bound 4-F-Ph stereo wide-end CDXML attachment](adr/0037-bound-4f-phenyl-stereo-cdxml.md) (Proposed)

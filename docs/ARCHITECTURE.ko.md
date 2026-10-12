@@ -270,7 +270,7 @@ flowchart LR
 
 ## 화학 및 파일 형식 제약 사항
 
-- **내보내기 범위**: 분자 내보내기는 화학 그래프 데이터만 포함하며, 분자가 아닌 주석(화살표, 대괄호, 텍스트)은 제외합니다. 약어 라벨은 펼치지 않습니다.
+- **내보내기 범위**: MOL 내보내기는 화학 그래프 데이터만 포함하며, 분자가 아닌 주석(화살표, 대괄호, 텍스트)은 제외합니다. 약어 라벨은 펼치지 않습니다.
 - **지원되는 작용기 약어**: `ATOM_ALIAS_DEFINITIONS`에 정의된 정규 별칭:
   `Me`, `Et`, `OH`, `NH2`, `SH`, `Ph`, `PPh3`, `OMe`, `Boc`, `CO2Me`, `t-Bu`, `tBu`, `i-Pr`, `CF3`, `OTs`, `Ts`, `OMs`, `Ms`, `OTf`, `Tf`, `Ns`, `OAc`, `Ac`.
 - **입체화학**: 쐐기/해시 결합은 단일 결합에만 적용됩니다.
@@ -331,8 +331,10 @@ ADR을 언제 쓰는지, 작성 규칙과 템플릿은 [ADR 안내](adr/README.m
 - [ADR 0027: Record-based annotation transforms](adr/0027-record-based-annotation-transforms.md)
 - [ADR 0028: 설정 가능한 용지 크기](adr/0028-configurable-paper-dimensions.md)
 - [ADR 0029: 기존 편집 소유자 기반의 브라우저 화면 어댑터](adr/0029-browser-adapter.md)
+- [ADR 0030: CDXML export](adr/0030-cdxml-export.md)
 - [ADR 0031: 독립 계약 검증](adr/0031-standalone-contract-validation.md)
 - [ADR 0032: 브라우저 화학 클립보드와 복구 드래프트](adr/0032-browser-clipboard-and-drafts.md)
+- [ADR 0034: Qt-only distribution](adr/0034-qt-only-distribution.md)
 - [ADR 0035: CDXML Ph stereo nickname attachments](adr/0035-ph-stereo-nickname-attachments.md) (Proposed)
 - [ADR 0036: Bound para-fluorophenyl CDXML nickname graph](adr/0036-bound-para-fluorophenyl-cdxml.md) (Proposed)
 - [ADR 0037: Bound 4-F-Ph stereo wide-end CDXML attachment](adr/0037-bound-4f-phenyl-stereo-cdxml.md) (Proposed)
