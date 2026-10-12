@@ -2247,79 +2247,87 @@ def test_unrelated_group_does_not_block_export():
     assert len(fragments) >= 1
 
 
-# ── Fallback glyph refusal ──────────────────────────────────────────
+# ── Painted fallback fonts and missing glyph refusal ─────────────────
 
 
-def test_refuse_fallback_glyph_note():
-    from PyQt6.QtGui import QFontInfo, QTextLayout
+def test_note_fallback_matches_painted_glyphs():
+    from PyQt6.QtGui import QFont, QFontInfo
 
     emoji = "\U0001f600"
-    state = _simple_state(
-        notes=[{"text": emoji, "x": 0.0, "y": 30.0}],
-    )
+    state = _simple_state(notes=[{"text": emoji, "x": 0.0, "y": 30.0}])
     with offscreen_document_scene(state, command="test-cdxml") as context:
-        note_item = context.state.note_items()[0]
-        doc_font = note_item.document().defaultFont()
-        primary_family = QFontInfo(doc_font).family()
+        note = context.state.note_items()[0]
+        note.boundingRect()
+        block = note.document().begin()
+        runs = block.layout().glyphRuns(0, block.length() - 1)
+        assert len(runs) == 1
+        raw = runs[0].rawFont()
+        assert raw.isValid()
+        glyphs = list(runs[0].glyphIndexes())
+        assert len(glyphs) == 1
+        assert raw.familyName()
+        assert raw.style() == QFont.Style.StyleNormal
+        assert raw.weight() == QFont.Weight.Normal
+        assert math.isfinite(raw.pixelSize()) and raw.pixelSize() > 0
+        assert (
+            raw.familyName() != QFontInfo(note.document().defaultFont()).family()
+            or glyphs[0] == 0
+        ), "emoji must exercise an actual painted fallback or missing glyph"
 
-        layout = QTextLayout(emoji, doc_font)
-        layout.beginLayout()
-        line = layout.createLine()
-        if line.isValid():
-            line.setLineWidth(1e6)
-        layout.endLayout()
-
-        has_fallback = False
-        has_glyph_zero = False
-        for run in layout.glyphRuns():
-            raw = run.rawFont()
-            run_family = raw.familyName()
-            if run_family and run_family != primary_family:
-                has_fallback = True
-            for glyph_index in run.glyphIndexes():
-                if glyph_index == 0:
-                    has_glyph_zero = True
-
-    assert has_fallback or has_glyph_zero, (
-        f"emoji '{emoji}' should trigger either glyph fallback or glyph index 0 "
-        f"under font '{primary_family}'; if neither occurs, the test premise "
-        "is invalid on this platform"
-    )
-    with pytest.raises(CdxmlUnsupportedObjectError, match="fallback|glyph"):
-        _export_cdxml(state)
+        items, plan = _resolved_export(context)
+        assert note in items
+        preflight_cdxml(context, items, plan)
+        # Observe the same document Qt paints, not a separate QTextLayout.
+        # Windows has an outlined emoji fallback; macOS's color emoji has none.
+        if glyphs[0] == 0:
+            reason = r"painted glyph maps to index 0 \(\.notdef\)"
+        elif raw.pathForGlyph(glyphs[0]).isEmpty():
+            reason = "painted glyph outlines are unavailable"
+        else:
+            reason = None
+        if reason is not None:
+            with pytest.raises(CdxmlUnsupportedObjectError, match=reason):
+                serialize_cdxml(context, items, plan)
+        else:
+            root = _parse_cdxml(serialize_cdxml(context, items, plan))
+            fonts = {
+                font.get("id"): font.get("name")
+                for font in root.findall("./fonttable/font")
+            }
+            segments = root.findall("./page/t/s")
+            assert len(segments) == 1
+            segment = segments[0]
+            assert segment.text == emoji
+            assert fonts[segment.get("font")] == raw.familyName()
+            assert float(segment.get("size")) == pytest.approx(
+                raw.pixelSize() * plan.out_w_pt / plan.source_w, rel=0, abs=0.025
+            )
+            assert segment.get("face", "0") == "0"
 
 
 def test_refuse_glyph_zero_in_note():
-    from PyQt6.QtGui import QFontInfo, QTextLayout
-
-    test_char = "\U0001f600"
-    state = _simple_state(
-        notes=[{"text": test_char, "x": 0.0, "y": 30.0}],
-    )
+    # The visible A keeps the note in export scope. U+0378 is unassigned,
+    # unlike emoji, which installed fallback fonts can render successfully.
+    state = _simple_state(notes=[{"text": "A\u0378", "x": 0.0, "y": 30.0}])
     with offscreen_document_scene(state, command="test-cdxml") as context:
-        note_item = context.state.note_items()[0]
-        doc_font = note_item.document().defaultFont()
-
-        layout = QTextLayout(test_char, doc_font)
-        layout.beginLayout()
-        line = layout.createLine()
-        if line.isValid():
-            line.setLineWidth(1e6)
-        layout.endLayout()
-
-        has_glyph_zero = False
-        for run in layout.glyphRuns():
-            for glyph_index in run.glyphIndexes():
-                if glyph_index == 0:
-                    has_glyph_zero = True
-
-    if not has_glyph_zero:
-        pytest.skip(
-            f"font '{QFontInfo(doc_font).family()}' renders the test character "
-            "without glyph index 0; cannot test .notdef refusal on this platform"
-        )
-    with pytest.raises(CdxmlUnsupportedObjectError, match="glyph"):
-        _export_cdxml(state)
+        note = context.state.note_items()[0]
+        note.boundingRect()
+        block = note.document().begin()
+        glyphs = [
+            glyph
+            for run in block.layout().glyphRuns(0, block.length() - 1)
+            for glyph in run.glyphIndexes()
+        ]
+        assert 0 in glyphs, "fixture must contain a painted .notdef glyph"
+        assert any(glyph != 0 for glyph in glyphs)
+        items, plan = _resolved_export(context)
+        assert note in items
+        preflight_cdxml(context, items, plan)
+        with pytest.raises(
+            CdxmlUnsupportedObjectError,
+            match=r"painted glyph maps to index 0 \(\.notdef\)",
+        ):
+            serialize_cdxml(context, items, plan)
 
 
 # ── Arrow mirrored refusal ──────────────────────────────────────────
