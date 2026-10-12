@@ -1,19 +1,7 @@
 """Check actual paint damage before grab() can hide a stale foreground overlay."""
 
-import base64
-import json
-from collections import Counter
-
 import pytest
-from PyQt6.QtCore import (
-    QBuffer,
-    QEvent,
-    QIODevice,
-    QObject,
-    QPoint,
-    QPointF,
-    QRectF,
-)
+from PyQt6.QtCore import QEvent, QObject, QPoint, QPointF, QRectF
 from PyQt6.QtGui import QRegion
 from PyQt6.QtTest import QTest
 from PyQt6.QtWidgets import QApplication
@@ -55,7 +43,10 @@ def _red_pixels(canvas):
     ratio = image.devicePixelRatio()
     item = visible_atom_item_for(canvas, 0)
     bounds = item.sceneBoundingRect() if item is not None else QRectF(-3, -3, 6, 6)
-    area = canvas.viewportTransform().mapRect(bounds).adjusted(-10, -10, 10, 12)
+    bounds = canvas.viewportTransform().mapRect(bounds)
+    # The warning wave sits below the label. Exclude glyph ink, whose subpixel
+    # antialiasing can contain red fringes even when its text color is black.
+    area = QRectF(bounds.left() - 10, bounds.bottom() + 1, bounds.width() + 20, 11)
     points = set()
     for y in range(
         max(0, int(area.top() * ratio)),
@@ -71,54 +62,10 @@ def _red_pixels(canvas):
     return points
 
 
-def _pixel_diagnostics(canvas, points):
-    image = canvas.viewport().grab().toImage()
-    ratio = image.devicePixelRatio()
-    item = visible_atom_item_for(canvas, 0)
-    scene_bounds = (
-        item.sceneBoundingRect() if item is not None else QRectF(-3, -3, 6, 6)
-    )
-    bounds = canvas.viewportTransform().mapRect(scene_bounds)
-    sample = Counter(
-        image.pixelColor(round(x * ratio), round(y * ratio)).name() for x, y in points
-    )
-    crop = image.copy(
-        int((bounds.left() - 10) * ratio),
-        int((bounds.top() - 10) * ratio),
-        int((bounds.width() + 20) * ratio),
-        int((bounds.height() + 22) * ratio),
-    )
-    buffer = QBuffer()
-    buffer.open(QIODevice.OpenModeFlag.WriteOnly)
-    assert crop.save(buffer, "PNG")
-    return json.dumps(
-        {
-            "label_bounds": bounds.getRect(),
-            "wave_y": [bounds.bottom() + 3, bounds.bottom() + 5],
-            "red_bounds": [
-                min(x for x, _ in points),
-                min(y for _, y in points),
-                max(x for x, _ in points),
-                max(y for _, y in points),
-            ]
-            if points
-            else None,
-            "red_pixels": len(points),
-            "colors": sample.most_common(12),
-            "atom_color": canvas.model.atoms[0].color,
-            "font": item.font().toString() if item is not None else None,
-            "device_pixel_ratio": ratio,
-            "crop_png_base64": base64.b64encode(bytes(buffer.data())).decode(),
-        },
-        sort_keys=True,
-    )
-
-
 def _assert_feedback(canvas, expected):
     assert overvalent_atom_ids(canvas.model) == expected
     assert canvas.runtime_state.valence_warnings.warnings_for(canvas.model) == expected
-    points = _red_pixels(canvas)
-    assert bool(points) == bool(expected), _pixel_diagnostics(canvas, points)
+    assert bool(_red_pixels(canvas)) == bool(expected)
 
 
 def _repair(canvas, kind):
