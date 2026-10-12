@@ -1,6 +1,6 @@
 # ADR 0034: Qt-only distribution
 
-- Status: Partly superseded by [ADR 0035](0035-retire-rdkit-chemistry-provider.md)
+- Status: Partly superseded by [ADR 0055](0055-retire-rdkit-chemistry-provider.md)
 - Date: 2026-10-04
 - Depends on: ADR 0005 (responsibility-based editor boundaries)
 

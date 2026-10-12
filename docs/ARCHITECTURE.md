@@ -68,7 +68,7 @@ the editor, not layers below it.
 - **Document models and scene separation**: Molecular graphs and `AnnotationCollection` own document data independently of Qt. All eight annotation families use this collection for membership, order and saved values; graphics items are projections keyed by runtime ID ([ADR 0010](adr/0010-document-owned-notes-and-marks.md)).
 - **Dependency boundaries**: `domain`, `core`, and `features` remain Qt-free. Desktop Qt implementations belong in `ui`, with framework adapters in `adapters` and application wiring in `bootstrap`. Features must not depend on adapters, editor widgets, or application entry points. Cross-package eager imports remain acyclic.
 - **Recovery and rendering contracts**: Transactions and error recovery adhere to `CanvasHistoryOperations`, shared document transactions, and `SceneRenderContext` contracts.
-- **No chemistry backend**: Drawing, MOL interchange, and figure export do not call out to a chemistry library ([ADR 0035](adr/0035-retire-rdkit-chemistry-provider.md)).
+- **No chemistry backend**: Drawing, MOL interchange, and figure export do not call out to a chemistry library ([ADR 0055](adr/0055-retire-rdkit-chemistry-provider.md)).
 
 See [Contributing](../CONTRIBUTING.md#architecture-conventions) for review and test criteria.
 
@@ -285,7 +285,7 @@ flowchart LR
 Headless CLI commands (`inspect-document`, `apply-patch`, `render-document`) validate source inputs deterministically and execute without launching desktop windows or session recovery.
 
 ### Legacy calculation plans
-A plan already stored in a document is kept when it still matches the drawing. Save refuses a write that would drop it. Chemvas does not map reactions or write `machine.json` ([ADR 0035](adr/0035-retire-rdkit-chemistry-provider.md)).
+A plan already stored in a document is kept when it still matches the drawing. Save refuses a write that would drop it. Chemvas does not map reactions or write `machine.json` ([ADR 0055](adr/0055-retire-rdkit-chemistry-provider.md)).
 
 ## Chemical & Format Constraints
 
@@ -361,8 +361,17 @@ process locking and envelope storage ([ADR 0032](adr/0032-browser-clipboard-and-
 - [ADR 0039: Attached CDXML marks and bracket paint order](adr/0039-attached-marks-and-bracket-paint.md) (Proposed)
 
 - [ADR 0040: Native single bold CDXML bonds](adr/0040-native-single-bold-cdxml.md) (Proposed)
+- [ADR 0041: Experimental consumer-measured CDXML caption placement](adr/0041-consumer-measured-caption-layout.md)
+- [ADR 0042: Separate Ar display from generic aryl meaning](adr/0042-native-generic-aryl-meaning.md)
+- [ADR 0043: Preserve formal charge independently of visible atom labels](adr/0043-native-formal-charge-definitions.md)
+- [ADR 0044: Native-verified label interpretation; hydrogen normalization stays explicit](adr/0044-native-known-label-interpretation.md)
 - [ADR 0045: Native reference semantic normalization](adr/0045-native-reference-semantic-normalization.md) (Proposed)
 
+- [ADR 0046: One native bond convention for existing and new drawings](adr/0046-common-native-bond-rendering.md)
+- [ADR 0047: Native line width and effective bond-spacing validation](adr/0047-native-line-width-and-reference-spacing.md)
+- [ADR 0048: Shared compact-label anchors, native text precision and paint order](adr/0048-native-text-layout-and-paint-order.md)
+- [ADR 0049: Native baseline, shaped anchors and overlap boundaries](adr/0049-native-baseline-shaped-anchors-and-overlap-boundaries.md)
+- [ADR 0050: Literal text colors and native default scope](adr/0050-literal-text-colors-and-native-default-scope.md)
 - [ADR 0051: Measured native CDXML palette recovery](adr/0051-measured-native-cdxml-palette-recovery.md) (Proposed)
 
 - [ADR 0052: Parse and verify native palette recovery](adr/0052-parse-and-verify-native-palette-recovery.md) (Proposed)
@@ -370,4 +379,4 @@ process locking and envelope storage ([ADR 0032](adr/0032-browser-clipboard-and-
 - [ADR 0053: Reviewed desktop CDXML and script geometry](adr/0053-reviewed-desktop-cdxml-and-script-geometry.md): explicit saved-document bindings, shared annotation paint and directional label placement.
 
 - [ADR 0054: Bind CDXML meanings to a saved drawing snapshot](adr/0054-saved-cdxml-export-snapshot.md): immutable saved IDs across GUI binding validation and serialization.
-- [ADR 0035: Retire the RDKit chemistry provider](adr/0035-retire-rdkit-chemistry-provider.md)
+- [ADR 0055: Retire the RDKit chemistry provider](adr/0055-retire-rdkit-chemistry-provider.md)

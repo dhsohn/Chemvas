@@ -25,15 +25,15 @@ Chemvas는 GitHub Actions의 Trusted Publishing (OIDC)을 통해 [PyPI](https://
 
 ```bash
 git checkout main && git pull
-git tag -a v0.24.0 -m "Chemvas 0.24.0"
-git push origin v0.24.0
+git tag -a v0.25.0 -m "Chemvas 0.25.0"
+git push origin v0.25.0
 ```
 
 5. 깨끗한 가상 환경에서 배포된 패키지를 검증합니다:
 
 ```bash
 python -m venv .release-check
-.release-check/bin/python -m pip install "chemvas==0.24.0"
+.release-check/bin/python -m pip install "chemvas==0.25.0"
 .release-check/bin/chemvas --version
 .release-check/bin/chemvas
 ```

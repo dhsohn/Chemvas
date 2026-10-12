@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.25.0] - 2026-10-12
+
+### Fixed
+
 - Reuse existing vertices along additional shared edges when fusing benzene rings, preventing hidden duplicate atoms and bonds after deleting an adjacent ring. Refuse ambiguous overlaps without changing the document, including candidates discovered as both fusion paths connect.
 
 - Clear stale valence-warning underlines immediately after atom or bond edits, Undo/Redo and rollback by repainting view-only feedback after committed history changes.
@@ -59,21 +63,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Preserve full CDXML color-channel precision, preventing native consumer
   truncation of an 8-bit RGB channel when six significant digits were written.
 
-- Export native order-1 `bold_in` bonds as CDXML `Display="Bold"` with the
-  renderer’s scaled effective `BoldWidth`, retaining atom positions, connectivity
-  and colour. Consumer centring, caps, joins and label clearance can differ from
-  Qt’s one-sided strip; exact outline equivalence is not promised. Other bold
-  variants and non-integer/non-single orders remain refused.
-
 - Export existing native order-1 dotted chemical bonds as CDXML `Order="1"`
   `Display="Dash"`, separately from dashed drawing lines and explicit documentary
   graphics. Refuse bool/float and unsupported dotted orders; keep native v9,
   clipboard and existing tool contracts. Generic Ar attachment limits remain.
 
 
-The experimental browser editor runs from a source checkout only (`chemvas --ui web`) and is omitted from release distribution packages. `__version__` is `0.25.0.dev0`. That suffix is not a published release.
-
-### Fixed
+The experimental browser editor runs from a source checkout only (`chemvas --ui web`) and is omitted from release distribution packages.
 
 - The first-scheme tutorial draws each side chain as two bonds: ring to a new carbon, then that carbon to the terminal atom. The product doubles only the second bond, matching `examples/first-scheme.chemvas`.
 
@@ -118,7 +114,7 @@ The experimental browser editor runs from a source checkout only (`chemvas --ui 
   (Proposed). Not verified in ChemDraw.
 - File > Export MOL in the browser downloads the selected structure as an MDL
   Molfile through the desktop's selected-only payload and the same V2000 writer
-  and optional RDKit abbreviation fallback, without changing the document.
+  without expanding abbreviation labels or changing the document.
 - View > Valence Checking in the browser underlines the same overvalent atoms as
   the desktop from its shared warning policy, as a view-only switch that is on
   for each opened drawing and never changes, blocks or exports the document.
@@ -3050,7 +3046,8 @@ housekeeping.
   `.chemvas` document type (double-clicking a file opens it in Chemvas), and a
   Linux `.desktop` entry with an `application/x-chemvas` MIME type.
 
-[Unreleased]: https://github.com/dhsohn/Chemvas/compare/v0.24.0...HEAD
+[Unreleased]: https://github.com/dhsohn/Chemvas/compare/v0.25.0...HEAD
+[0.25.0]: https://github.com/dhsohn/Chemvas/compare/v0.24.0...v0.25.0
 [0.24.0]: https://github.com/dhsohn/Chemvas/compare/v0.23.0...v0.24.0
 [0.23.0]: https://github.com/dhsohn/Chemvas/compare/v0.22.0...v0.23.0
 [0.22.0]: https://github.com/dhsohn/Chemvas/compare/v0.21.0...v0.22.0

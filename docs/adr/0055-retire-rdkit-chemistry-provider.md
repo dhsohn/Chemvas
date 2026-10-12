@@ -1,4 +1,4 @@
-# ADR 0035: Retire the RDKit chemistry provider
+# ADR 0055: Retire the RDKit chemistry provider
 
 - Status: Accepted
 - Date: 2026-10-05

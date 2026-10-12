@@ -71,7 +71,7 @@ macOS와 네이티브 Windows에서만 지원하며, 기존 편집·텍스트·�
 | 모듈 경계·리팩터링·테스트 관례 | [CONTRIBUTING.md](CONTRIBUTING.md) 및 [ADR 0005](docs/adr/0005-responsibility-based-editor-boundaries.md) — 구조 변경 전 필독. 구조 검사는 소유권과 의존 경계 계약을 보호한다 |
 | 설계 결정 기록 — 공개 계약·메이저 버전·기능 제거·상태 소유권 이동·외부 동작 의존은 같은 PR에 ADR을 쓴다 | [ADR 안내](docs/adr/README.md) |
 | 릴리스 절차 | [RELEASING.md](RELEASING.md) |
-| 제거된 화학 provider | [ADR 0035](docs/adr/0035-retire-rdkit-chemistry-provider.md). 이 저장소는 `machine.json`을 쓰지 않고 provider 채택·core 버전·실행 승인을 기록하지 않는다 |
+| 제거된 화학 provider | [ADR 0055](docs/adr/0055-retire-rdkit-chemistry-provider.md). 이 저장소는 `machine.json`을 쓰지 않고 provider 채택·core 버전·실행 승인을 기록하지 않는다 |
 
 ## `make check`가 흡수하지 못하는 것
 

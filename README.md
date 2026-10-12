@@ -103,7 +103,7 @@ agent's report that it works:
   per-file suite.
 - Chemvas does not write `machine.json`. The calculation handoff and its
   project-local observation snapshot were removed with the chemistry backend
-  ([ADR 0035](https://github.com/dhsohn/Chemvas/blob/main/docs/adr/0035-retire-rdkit-chemistry-provider.md)).
+  ([ADR 0055](https://github.com/dhsohn/Chemvas/blob/main/docs/adr/0055-retire-rdkit-chemistry-provider.md)).
   Another project's decision to adopt a provider is outside this repository.
 - High-impact changes, such as the document format, undo and rollback, and figure
   export, get an independent adversarial review from a separate agent.

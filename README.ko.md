@@ -101,7 +101,7 @@ chemvas render-document revised.chemvas --output scheme.svg --width-mm 174
   파일마다 별도 프로세스로 실행합니다. CI도 같은 방식으로 파일별로 실행합니다.
 - Chemvas는 `machine.json`을 쓰지 않습니다. 계산 핸드오프와 프로젝트 로컬 관측
   스냅샷은 화학 백엔드와 함께 제거되었습니다
-  ([ADR 0035](https://github.com/dhsohn/Chemvas/blob/main/docs/adr/0035-retire-rdkit-chemistry-provider.md)).
+  ([ADR 0055](https://github.com/dhsohn/Chemvas/blob/main/docs/adr/0055-retire-rdkit-chemistry-provider.md)).
   다른 프로젝트가 provider를 채택하는지는 이 저장소 밖의 결정입니다.
 - 문서 형식, 실행 취소와 롤백, 그림 출력처럼 영향이 큰 변경은 별도 에이전트가 독립적으로
   적대적 리뷰를 합니다.

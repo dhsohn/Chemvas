@@ -68,7 +68,7 @@ import하며, `bootstrap`만 adapters를 알고 편집기를 조립합니다. `u
 - **문서 모델과 장면 분리**: 분자 그래프와 `AnnotationCollection`은 Qt와 독립적으로 문서 데이터를 소유합니다. 주석 8종 모두 이 컬렉션에서 존재 여부·순서·저장 값을 읽으며, 그래픽 아이템은 런타임 ID로 연결된 표시 객체입니다 ([ADR 0010](adr/0010-document-owned-notes-and-marks.md)).
 - **의존성 경계**: `domain`, `core`, `features`는 Qt-free를 유지합니다. 데스크톱 Qt 구현은 `ui`, 프레임워크 어댑터는 `adapters`, 애플리케이션 조립은 `bootstrap`에 둡니다. 기능 모듈은 어댑터, 편집기 위젯, 애플리케이션 진입점에 의존하지 않습니다. 패키지 간 비순환 import를 보장합니다.
 - **복구 및 렌더링 계약**: 트랜잭션 및 복구 작업은 `CanvasHistoryOperations`, 공통 문서 트랜잭션, `SceneRenderContext` 계약을 준수합니다.
-- **화학 백엔드 없음**: 그리기, MOL 입출력, 그림 내보내기는 화학 라이브러리를 호출하지 않습니다 ([ADR 0035](adr/0035-retire-rdkit-chemistry-provider.md)).
+- **화학 백엔드 없음**: 그리기, MOL 입출력, 그림 내보내기는 화학 라이브러리를 호출하지 않습니다 ([ADR 0055](adr/0055-retire-rdkit-chemistry-provider.md)).
 
 검토와 테스트 기준은 [기여 가이드](../CONTRIBUTING.ko.md#아키텍처-규칙)를 따릅니다.
 
@@ -266,7 +266,7 @@ flowchart LR
 헤드리스 CLI 명령(`inspect-document`, `apply-patch`, `render-document`)은 GUI 창이나 세션 복구 없이 독립적으로 소스를 검증하고 실행합니다.
 
 ### 기존 계산 계획
-문서에 이미 저장된 계획은 현재 그림과 맞을 때 유지됩니다. 그 계획이 빠지는 저장은 거부됩니다. Chemvas는 반응을 대응시키거나 `machine.json`을 쓰지 않습니다 ([ADR 0035](adr/0035-retire-rdkit-chemistry-provider.md)).
+문서에 이미 저장된 계획은 현재 그림과 맞을 때 유지됩니다. 그 계획이 빠지는 저장은 거부됩니다. Chemvas는 반응을 대응시키거나 `machine.json`을 쓰지 않습니다 ([ADR 0055](adr/0055-retire-rdkit-chemistry-provider.md)).
 
 ## 화학 및 파일 형식 제약 사항
 
@@ -341,8 +341,17 @@ ADR을 언제 쓰는지, 작성 규칙과 템플릿은 [ADR 안내](adr/README.m
 - [ADR 0039: Attached CDXML marks and bracket paint order](adr/0039-attached-marks-and-bracket-paint.md) (Proposed)
 
 - [ADR 0040: Native single bold CDXML bonds](adr/0040-native-single-bold-cdxml.md) (Proposed)
+- [ADR 0041: Experimental consumer-measured CDXML caption placement](adr/0041-consumer-measured-caption-layout.md)
+- [ADR 0042: Separate Ar display from generic aryl meaning](adr/0042-native-generic-aryl-meaning.md)
+- [ADR 0043: Preserve formal charge independently of visible atom labels](adr/0043-native-formal-charge-definitions.md)
+- [ADR 0044: Native-verified label interpretation; hydrogen normalization stays explicit](adr/0044-native-known-label-interpretation.md)
 - [ADR 0045: Native reference semantic normalization](adr/0045-native-reference-semantic-normalization.md) (Proposed)
 
+- [ADR 0046: One native bond convention for existing and new drawings](adr/0046-common-native-bond-rendering.md)
+- [ADR 0047: Native line width and effective bond-spacing validation](adr/0047-native-line-width-and-reference-spacing.md)
+- [ADR 0048: Shared compact-label anchors, native text precision and paint order](adr/0048-native-text-layout-and-paint-order.md)
+- [ADR 0049: Native baseline, shaped anchors and overlap boundaries](adr/0049-native-baseline-shaped-anchors-and-overlap-boundaries.md)
+- [ADR 0050: Literal text colors and native default scope](adr/0050-literal-text-colors-and-native-default-scope.md)
 - [ADR 0051: Measured native CDXML palette recovery](adr/0051-measured-native-cdxml-palette-recovery.md) (Proposed)
 
 - [ADR 0052: Parse and verify native palette recovery](adr/0052-parse-and-verify-native-palette-recovery.md) (Proposed)
@@ -350,4 +359,4 @@ ADR을 언제 쓰는지, 작성 규칙과 템플릿은 [ADR 안내](adr/README.m
 - [ADR 0053: Reviewed desktop CDXML and script geometry](adr/0053-reviewed-desktop-cdxml-and-script-geometry.md): explicit saved-document bindings, shared annotation paint and directional label placement.
 
 - [ADR 0054: Bind CDXML meanings to a saved drawing snapshot](adr/0054-saved-cdxml-export-snapshot.md): immutable saved IDs across GUI binding validation and serialization.
-- [ADR 0035: RDKit 화학 provider 제거](adr/0035-retire-rdkit-chemistry-provider.md)
+- [ADR 0055: RDKit 화학 provider 제거](adr/0055-retire-rdkit-chemistry-provider.md)

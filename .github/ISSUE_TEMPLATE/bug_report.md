@@ -25,7 +25,6 @@ that reproduces it — this helps a lot.
 **Environment**
 - OS: [e.g. macOS 15.5, Windows 11, Ubuntu 24.04]
 - Python version: [e.g. 3.13.2]
-- RDKit installed? [yes / no]
 - Chemvas version or commit: [e.g. 0.1.0 / git SHA]
 
 **Additional context**

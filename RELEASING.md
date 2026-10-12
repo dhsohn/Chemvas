@@ -25,15 +25,15 @@ Version number is sourced from `chemvas.__version__` in [`app/chemvas/__init__.p
 
 ```bash
 git checkout main && git pull
-git tag -a v0.24.0 -m "Chemvas 0.24.0"
-git push origin v0.24.0
+git tag -a v0.25.0 -m "Chemvas 0.25.0"
+git push origin v0.25.0
 ```
 
 5. Verify the published package in a clean environment:
 
 ```bash
 python -m venv .release-check
-.release-check/bin/python -m pip install "chemvas==0.24.0"
+.release-check/bin/python -m pip install "chemvas==0.25.0"
 .release-check/bin/chemvas --version
 .release-check/bin/chemvas
 ```
