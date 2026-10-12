@@ -70,6 +70,11 @@ class MainWindowActiveCanvasUIService:
         # History publishes after a gesture commits (or is restored on failure),
         # not during pointer movement. Recompute from persistent content only.
         refresh_canvas_scroll_range_for(active_canvas_for_window(window))
+        # View-only valence waves extend beyond the changed scene items. Their
+        # old pixels also need repainting after edits, Undo/Redo and rollback.
+        viewport = active_canvas_for_window(window).viewport()
+        if viewport is not None:
+            viewport.update()
 
     def handle_selection_info(self, window: MainWindowLike) -> None:
         try:

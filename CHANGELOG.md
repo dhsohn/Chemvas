@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- Clear stale valence-warning underlines immediately after atom or bond edits, Undo/Redo and rollback by repainting view-only feedback after committed history changes.
+
 - Preserve live sibling paint order in reviewed CDXML snapshots after Undo, without relaxing overlap or fragment-interleaving checks.
 - Keep terminal double-bond labels and inset axes on the same side after fractional translation, save/reopen and Undo/Redo by sharing a translation-stable normal tie rule.
 - Reject out-of-range native CDXML RGB channels before eight-bit comparison, returning a clear CLI input error without creating or replacing files.
