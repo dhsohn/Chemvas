@@ -289,7 +289,7 @@ A plan already stored in a document is kept when it still matches the drawing. S
 
 ## Chemical & Format Constraints
 
-- **Export Scope**: MOL export include only chemical graph data; non-molecular annotations (arrows, brackets, text notes) are ignored. Abbreviation labels are not expanded.
+- **Export Scope**: MOL export includes only chemical graph data; non-molecular annotations (arrows, brackets, text notes) are ignored. Abbreviation labels are not expanded.
 - **Supported Aliases**: Canonical aliases defined in `ATOM_ALIAS_DEFINITIONS`:
   `Me`, `Et`, `OH`, `NH2`, `SH`, `Ph`, `PPh3`, `OMe`, `Boc`, `CO2Me`, `t-Bu`, `tBu`, `i-Pr`, `CF3`, `OTs`, `Ts`, `OMs`, `Ms`, `OTf`, `Tf`, `Ns`, `OAc`, and `Ac`.
 - **Stereochemistry**: Wedge and hash stereochemistry maps only to single bonds.
