@@ -248,6 +248,7 @@ case "$platform" in
       test_arrow_labels.py
       test_atom_charge_interaction.py
       test_atom_glyph_bond_clearance.py
+      test_atom_label_service.py
       test_canvas_document_session_service.py
       test_export_readability_service.py
       test_gui_smoke.py
