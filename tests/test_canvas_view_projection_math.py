@@ -1131,9 +1131,12 @@ class CanvasViewProjectionMathTest(unittest.TestCase):
         )
 
         redraw_view = SimpleNamespace(
+            model=indexed_view.model,
             bond_renderer=SimpleNamespace(redraw_bond=mock.Mock()),
             runtime_state=canvas_runtime_state(
-                graph_state=CanvasGraphState(atom_bond_ids={1: {0}, 2: {0, 1}}),
+                graph_state=CanvasGraphState(
+                    atom_bond_ids={1: {0}, 2: {0, 1}, 3: {1, 2}, 4: {2}}
+                ),
                 mark_registry=CanvasMarkRegistry(),
             ),
         )
@@ -1146,7 +1149,7 @@ class CanvasViewProjectionMathTest(unittest.TestCase):
                 call.args[0]
                 for call in redraw_view.bond_renderer.redraw_bond.call_args_list
             },
-            {0, 1},
+            {0, 1, 2},
         )
 
         rotated = rotate_point_around_axis_for(

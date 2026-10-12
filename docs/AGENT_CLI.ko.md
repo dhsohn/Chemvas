@@ -142,11 +142,13 @@ chemvas render-document scheme.chemvas --output journal.svg --width-mm 70 --max-
 chemvas render-document scheme.chemvas --output readable.svg --width-mm 174 --min-font-pt 6
 chemvas render-document scheme.chemvas --output scheme-transparent.png \
   --background transparent
+chemvas render-document scheme.chemvas --output scheme.cdxml --cdxml-label-bindings labels.json
 ```
 
 - `--width-mm`: 논문 단 너비(1단 84 mm, 2단 174 mm 등)에 맞춰 전체 그림을 비율에 맞게 확대/축소 렌더링합니다.
 - `--min-font-pt`: 출력 크기 축소 시 첨자를 포함한 텍스트가 지정한 pt 미만으로 작아지면 출력을 방지합니다.
 - `--max-height-mm`: 허용된 세로 높이를 초과하는 그림 출력을 방지합니다.
+- `--cdxml-label-bindings`: CDXML 전용. 입력 바이트에 SHA-256으로 결속된 엄격한 JSON sidecar를 읽어 그려진 `Ar`, `Hᵃ` 라벨의 의미를 전달합니다. 자세한 내용은 [CDXML_EXPORT.ko.md](CDXML_EXPORT.ko.md)를 보세요. 형식이 잘못되었거나 결속되지 않았거나 불일치하는 바인딩은 출력 전에 거부합니다.
 
 ## Graph Patch v1
 

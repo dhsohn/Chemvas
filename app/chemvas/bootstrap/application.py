@@ -33,6 +33,7 @@ DOCUMENT_LAYOUT_COMMANDS = frozenset(("check-layout",))
 SCHEME_LAYOUT_COMMANDS = frozenset(("layout-document",))
 DOCUMENT_TEMPLATE_COMMANDS = frozenset(("insert-template",))
 DOCUMENT_RENDER_COMMANDS = frozenset(("render-document",))
+CDXML_REVIEW_COMMANDS = frozenset(("review-cdxml",))
 HEADLESS_SUBCOMMAND_HELP = (
     ("apply-patch", "validate or apply a Chemvas graph patch"),
     ("compose-document", "create a Chemvas document from a strict composition"),
@@ -41,6 +42,7 @@ HEADLESS_SUBCOMMAND_HELP = (
     ("insert-template", "insert a native ring template in a new document"),
     ("layout-document", "align structure blocks and captions in a new document"),
     ("render-document", "render a document to SVG, PNG or PDF"),
+    ("review-cdxml", "inspect native font changes and palette stability"),
 )
 
 
@@ -295,6 +297,11 @@ def main() -> None:
         with _filtered_stderr():
             result = run(sys.argv[1:])
         raise SystemExit(result)
+
+    if len(sys.argv) > 1 and sys.argv[1] in CDXML_REVIEW_COMMANDS:
+        from chemvas.bootstrap.cdxml_roundtrip import run
+
+        raise SystemExit(run(sys.argv[1:]))
 
     _validate_desktop_arguments(sys.argv[1:])
 

@@ -349,3 +349,20 @@ Qt-free record 변환을 사용하며, History의 상태 코덱은 UI 경계에 
 - [ADR 0029: 기존 편집 소유자 기반의 브라우저 화면 어댑터](adr/0029-browser-adapter.md)
 - [ADR 0031: 독립 계약 검증](adr/0031-standalone-contract-validation.md)
 - [ADR 0032: 브라우저 화학 클립보드와 복구 드래프트](adr/0032-browser-clipboard-and-drafts.md)
+- [ADR 0035: CDXML Ph stereo nickname attachments](adr/0035-ph-stereo-nickname-attachments.md) (Proposed)
+- [ADR 0036: Bound para-fluorophenyl CDXML nickname graph](adr/0036-bound-para-fluorophenyl-cdxml.md) (Proposed)
+- [ADR 0037: Bound 4-F-Ph stereo wide-end CDXML attachment](adr/0037-bound-4f-phenyl-stereo-cdxml.md) (Proposed)
+- [ADR 0038: Documentary TS contacts and unexpanded aryl labels](adr/0038-documentary-contacts-and-aryl-labels.md) (Proposed)
+
+- [ADR 0039: Attached CDXML marks and bracket paint order](adr/0039-attached-marks-and-bracket-paint.md) (Proposed)
+
+- [ADR 0040: Native single bold CDXML bonds](adr/0040-native-single-bold-cdxml.md) (Proposed)
+- [ADR 0045: Native reference semantic normalization](adr/0045-native-reference-semantic-normalization.md) (Proposed)
+
+- [ADR 0051: Measured native CDXML palette recovery](adr/0051-measured-native-cdxml-palette-recovery.md) (Proposed)
+
+- [ADR 0052: Parse and verify native palette recovery](adr/0052-parse-and-verify-native-palette-recovery.md) (Proposed)
+
+- [ADR 0053: Reviewed desktop CDXML and script geometry](adr/0053-reviewed-desktop-cdxml-and-script-geometry.md): explicit saved-document bindings, shared annotation paint and directional label placement.
+
+- [ADR 0054: Bind CDXML meanings to a saved drawing snapshot](adr/0054-saved-cdxml-export-snapshot.md): immutable saved IDs across GUI binding validation and serialization.

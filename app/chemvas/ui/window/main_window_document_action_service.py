@@ -21,6 +21,7 @@ from chemvas.features.export import (
     export_error_message,
     file_filter_for_format,
     normalize_export_path,
+    read_cdxml_label_bindings,
 )
 from chemvas.features.insertion import (
     annotation_mark_direction,
@@ -29,11 +30,16 @@ from chemvas.features.insertion import (
 )
 from chemvas.features.session import request_snapshot
 from chemvas.shell.window_registry import open_windows
+from chemvas.ui.canvas.canvas_document_metadata_state import document_is_dirty_for
 from chemvas.ui.canvas.canvas_document_state import (
     require_preserved_calculation_plan_for,
 )
 from chemvas.ui.canvas.canvas_view import CanvasView
-from chemvas.ui.selection.selection_queries import selected_structure_ids_for
+from chemvas.ui.export.reviewed_cdxml_snapshot import ReviewedCdxmlSnapshot
+from chemvas.ui.selection.selection_queries import (
+    selected_structure_ids_for,
+    selection_items_for_copy_for,
+)
 from chemvas.ui.session.open_document_lookup import (
     document_path_has_multiple_links,
     find_open_document,
@@ -380,6 +386,15 @@ class MainWindowDocumentActionService:
         ):
             return
         try:
+            binding_options = {}
+            if options.cdxml_label_bindings_path:
+                if fmt != "cdxml":
+                    raise ValueError("Label meanings apply only to CDXML export.")
+                binding_options["reviewed_cdxml_snapshot"] = (
+                    self._reviewed_cdxml_snapshot(
+                        window, options.cdxml_label_bindings_path, scope=options.scope
+                    )
+                )
             document_session_service_for_window(window).export_figure(
                 path,
                 fmt=fmt,
@@ -391,6 +406,7 @@ class MainWindowDocumentActionService:
                 target_width_mm=options.target_width_mm,
                 max_height_mm=options.max_height_mm,
                 min_font_pt=options.min_font_pt,
+                **binding_options,
             )
         except Exception as exc:
             message_box.warning(
@@ -400,6 +416,47 @@ class MainWindowDocumentActionService:
             )
             return
         status_bar_for(window).showMessage(f"Exported: {path}", 4000)
+
+    def _reviewed_cdxml_snapshot(
+        self, window: MainWindowLike, path: str, *, scope: str
+    ) -> ReviewedCdxmlSnapshot:
+        canvas = active_canvas_for_window(window)
+        metadata = canvas.runtime_state.document_metadata_state
+        source_path = self.current_file_path(window)
+        if (
+            source_path is None
+            or not is_canonical_saved_document_path(source_path)
+            or metadata.source_sha256 is None
+            or metadata.clean_digest is None
+        ):
+            raise ValueError(
+                "Save the drawing before selecting reviewed label meanings."
+            )
+        state, warnings = document_session_service_for_window(
+            window
+        ).snapshot_state_with_warnings()
+        if warnings or document_is_dirty_for(canvas, state):
+            raise ValueError(
+                "The drawing has unsaved changes. Save it and review the label "
+                "bindings for that saved version before exporting."
+            )
+        assert source_path is not None
+        saved = default_read_document(source_path)
+        if saved.source_sha256 != metadata.source_sha256:
+            raise ValueError(
+                "The saved drawing changed outside Chemvas. Reopen it and review "
+                "the label bindings before exporting."
+            )
+        bindings = read_cdxml_label_bindings(Path(path), metadata.source_sha256)
+        return ReviewedCdxmlSnapshot.capture(
+            canvas.render_context,
+            saved.state,
+            bindings,
+            scope=scope,
+            selection=selection_items_for_copy_for(canvas)
+            if scope == "selection"
+            else None,
+        )
 
     def load_canvas(
         self,

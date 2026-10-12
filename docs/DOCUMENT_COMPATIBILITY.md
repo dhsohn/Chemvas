@@ -10,6 +10,12 @@ Future Chemvas updates will continue to open supported, valid **v7 `.chemvas` do
 - **Non-destructive Opening**: Opening a document never mutates the original file.
 - **Saving**: Explicitly saving a document normalizes the data to the current format version while preserving all supported content.
 
+Rendering convention is uniform across supported versions (ADR 0046). Existing
+drawings use centered single Bold and native-style double placement when opened;
+there is no legacy appearance branch or automatic source-file rewrite. Coordinates,
+connectivity, orders, charges and labels retain their stored meaning. The new
+appearance may change crop-based figure bounds even at the same physical width.
+
 The retired `last_smiles_input` field is insertion metadata, not drawing content.
 Readers continue accepting its existing string or `null` values in v7/v8 files.
 It has no runtime or Undo state; new saves normalize it to `null`. The field stays

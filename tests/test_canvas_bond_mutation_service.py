@@ -27,6 +27,9 @@ class _FakeModel:
         self.bonds.append(Bond(a, b, order))
         return bond_id
 
+    def bond_for_id(self, bond_id):
+        return self.bonds[bond_id] if 0 <= bond_id < len(self.bonds) else None
+
 
 class _FakeScene:
     def __init__(self) -> None:

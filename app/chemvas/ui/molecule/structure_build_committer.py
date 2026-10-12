@@ -3,8 +3,12 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
-from chemvas.features.graph import first_matching_bond_id
+from chemvas.features.graph import (
+    first_matching_bond_id,
+    geometry_bond_sets_for_atom_ids,
+)
 from chemvas.ui.canvas.canvas_scene_items_state import SCENE_ITEM_COLLECTION_ATTRS
+from chemvas.ui.molecule.bond_renderer_access import update_bond_geometry_for
 from chemvas.ui.molecule.structure_mutation_access import add_bond_for
 
 if TYPE_CHECKING:
@@ -145,8 +149,26 @@ class StructureBuildCommitter:
         return first_matching_bond_id(self.canvas.model.bonds, a_id, b_id)
 
     def add_bond_graphics_range(self, start_bond_id: int) -> None:
-        for bond_id in self.canvas.model.bond_ids_from(start_bond_id):
+        model = self.canvas.model
+        atom_ids: set[int] = set()
+        for bond_id in model.bond_ids_from(start_bond_id):
             self.add_bond_graphics(bond_id)
+            bond = model.bond_for_id(bond_id)
+            if bond is not None:
+                atom_ids.update((bond.a, bond.b))
+        # Complete the whole insertion before refreshing pre-existing joins.
+        # Ring membership/fill and all new neighbours must already be present.
+        internal, dependent = geometry_bond_sets_for_atom_ids(
+            atom_ids,
+            self.canvas.runtime_state.graph_state.atom_bond_ids,
+            model.bonds,
+            bond_for_id=model.bond_for_id,
+        )
+        for bond_id in internal | dependent:
+            if bond_id < start_bond_id:
+                update_bond_geometry_for(
+                    self.canvas, bond_id, allow_topology_rebuild=True
+                )
 
     def add_atom_label(
         self,
@@ -228,9 +250,9 @@ class StructureBuildCommitter:
             if self.bond_id_between(a_id, b_id) is not None:
                 continue
             self.add_bond(a_id, b_id, order)
+        self.add_ring_fill(points, atom_ids)
         self.add_bond_graphics_range(bonds_start)
         self.label_non_carbon_atoms(atom_ids, elements or ["C"] * len(atom_ids))
-        self.add_ring_fill(points, atom_ids)
         return atom_ids
 
     def add_ring_fill(self, points, atom_ids: list[int]):
@@ -335,6 +357,7 @@ class StructureBuildCommitter:
         )
 
         context = self.canvas.render_context
+        self.canvas.services.graph_service.rebuild_bond_adjacency()
         prepare_molecule_for_scene(context.model)
         render_molecule(context)
 

@@ -65,8 +65,8 @@ def test_legacy_smiles_input_does_not_create_dirty_state_or_noop_history(
     "style,order,expected",
     [
         ("single", 1, "bold_in"),
-        ("bold_in", 1, "bold_out"),
-        ("bold_out", 1, "bold_in"),
+        ("bold_in", 1, "bold_in"),
+        ("bold_out", 1, "bold_out"),
         ("double", 2, "bold_in"),
         ("double_center", 2, "bold_center"),
         ("double_outer", 2, "bold_out"),

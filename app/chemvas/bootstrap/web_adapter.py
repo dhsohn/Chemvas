@@ -143,6 +143,7 @@ from chemvas.features.annotations import (
     SUB_SCALE,
     arrow_label_html,
     arrow_label_position,
+    atom_label_baseline_offset,
     atom_label_presentation,
     bracket_path_commands,
     bracket_rect_from_points,
@@ -1106,6 +1107,8 @@ def place_browser_labels(
     size: int,
     labels: list[tuple[str, str | None, bool, bool | None]],
     measurements: dict[str, dict[str, Any]],
+    *,
+    atom_baseline: bool = True,
 ) -> list[dict[str, Any]]:
     """Adapt measured font metrics to the existing native run placer, at origin."""
     if not labels:
@@ -1144,6 +1147,14 @@ def place_browser_labels(
                 anchor_width = measure(anchor, size)
                 center_x = (
                     layout.width - anchor_width / 2 if at_end else anchor_width / 2
+                )
+        if atom_baseline:
+            # The desktop anchors the normal run's baseline to the atom using
+            # the painted em/descent, rather than the text document's center.
+            normal = next((run for run in layout.runs if run.role == "normal"), None)
+            if normal is not None:
+                center_y = normal.baseline - atom_label_baseline_offset(
+                    browser_font_pixels(size), float(font["descent"])
                 )
         height = (
             layout.height
@@ -1601,7 +1612,7 @@ def browser_scene_rect(
     rects = list(drawing.get("atom_hit_rects", {}).values())
     for primitives in drawing["bonds"].values():
         for primitive in primitives:
-            if "line" in primitive:
+            if "line" in primitive and "polygon" not in primitive:
                 x1, y1, x2, y2 = primitive["line"]
                 rects.append(
                     arrow_frame_bounds(
@@ -2028,6 +2039,7 @@ def drawing_geometry(
         renderer=rendering,
     )
     lines = BondLineGeometryService(context, point_factory=point)
+    geometry.line_geometry = lines
     ring_lines = BondRingDoubleGeometryService(context, renderer=geometry)
     for name in (
         "parallel_bond_segments",
@@ -2058,7 +2070,15 @@ def drawing_geometry(
         result[str(index)] = []
         for item in primitives:
             if isinstance(item, BondLinePrimitive):
-                result[str(index)].append({"line": item.segment})
+                result[str(index)].append(
+                    {
+                        "line": item.segment,
+                        "polygon": list(cast("Any", item.outline)),
+                        "outlined": False,
+                    }
+                    if item.outline is not None
+                    else {"line": item.segment}
+                )
             elif isinstance(item, BondPolygonPrimitive):
                 result[str(index)].append(
                     {
@@ -2709,7 +2729,7 @@ class BrowserFontMeasurements:
         spec["arrow_labels"] = rich_labels
         notes = browser_notes(state)
         spec["notes"] = notes
-        mark_labels = [
+        mark_labels: list[tuple[str, str | None, bool, bool | None]] = [
             (
                 mark.get("text")
                 if mark.get("text") is not None
@@ -2760,6 +2780,17 @@ class BrowserFontMeasurements:
             zip(
                 labels,
                 place_browser_labels(spec["size"], labels, self.metrics),
+                strict=True,
+            )
+        )
+        # Free charge symbols retain their document-centered placement. They
+        # can share text with an atom label, so keep the two origins separate.
+        relative_marks = dict(
+            zip(
+                mark_labels,
+                place_browser_labels(
+                    spec["size"], mark_labels, self.metrics, atom_baseline=False
+                ),
                 strict=True,
             )
         )
@@ -2845,9 +2876,9 @@ class BrowserFontMeasurements:
             if kind in {"plus", "minus"}:
                 text = mark.get("text")
                 text = ("+" if kind == "plus" else "-") if text is None else text
-                runs = relative[(text, None, False, None)]["runs"] if text else []
+                runs = relative_marks[(text, None, False, None)]["runs"] if text else []
                 if text:
-                    bx, by, bw, bh = relative[(text, None, False, None)]["rect"]
+                    bx, by, bw, bh = relative_marks[(text, None, False, None)]["rect"]
                 else:
                     height = float(self.metrics[f"{spec['size']}:H"]["line_height"])
                     margin = ATOM_LABEL_DOCUMENT_MARGIN
@@ -3182,7 +3213,10 @@ class BrowserStructureAdapter:
             state.get("perspective")
         )
         # document_info materializes the complete SVG after the build commits.
-        self.bond_renderer = SimpleNamespace(add_bond_graphics=lambda _bond_id: None)
+        self.bond_renderer = SimpleNamespace(
+            add_bond_graphics=lambda _bond_id: None,
+            update_bond_geometry=lambda _bond_id, **_kwargs: None,
+        )
         self.runtime_state = SimpleNamespace(
             tool_settings_state=CanvasToolSettingsState(
                 grid_snap_enabled=grid != "none",

@@ -30,6 +30,8 @@ class BondGeometryUpdateService:
     def _apply_primitive(item, primitive) -> None:
         if isinstance(primitive, BondLinePrimitive):
             item.setLine(*primitive.segment)
+            if hasattr(item, "set_stroke_polygon"):
+                item.set_stroke_polygon(primitive.outline)
             return
         if isinstance(primitive, BondPathPrimitive):
             item.setPath(primitive.path)
@@ -52,6 +54,12 @@ class BondGeometryUpdateService:
             expected_type = expected_item_types.get(type(primitive))
             if expected_type is None or not isinstance(item, expected_type):
                 raise TypeError("bond graphics topology does not match geometry plan")
+            if (
+                isinstance(primitive, BondLinePrimitive)
+                and primitive.outline is not None
+                and not hasattr(item, "set_stroke_polygon")
+            ):
+                raise TypeError("bond stroke item cannot retain its paint outline")
 
     def topology_is_stale(self, bond_id: int) -> bool:
         """True when a fresh build would not reproduce the current item count.

@@ -24,6 +24,7 @@ if TYPE_CHECKING:
 @dataclass(frozen=True)
 class BondLinePrimitive:
     segment: LineSegment
+    outline: QPolygonF | None = None
 
 
 @dataclass(frozen=True)
@@ -55,6 +56,20 @@ class BondGeometryPlanService:
     def _line(self, segment: LineSegment) -> BondLinePrimitive:
         return BondLinePrimitive(segment)
 
+    def _native_line(self, segment, bond, a, b) -> BondLinePrimitive:
+        drawer = self.renderer.graphics_drawer
+        return BondLinePrimitive(
+            segment,
+            drawer.polygon_factory(
+                [
+                    drawer.point_factory(x, y)
+                    for x, y in self.renderer.line_geometry.bond_stroke_corners(
+                        segment, a, b, bond.a, bond.b
+                    )
+                ]
+            ),
+        )
+
     def _bold_strip(
         self,
         segment: LineSegment,
@@ -67,8 +82,11 @@ class BondGeometryPlanService:
         if bold_width <= base_width + 1e-6:
             return self._line(segment)
         a_id, b_id = endpoint_ids if endpoint_ids is not None else (None, None)
-        extension = bold_width - base_width
-        offsets = ((0.0, 0.0), (normal[0] * extension, normal[1] * extension))
+        half = bold_width / 2.0
+        offsets = (
+            (-normal[0] * half, -normal[1] * half),
+            (normal[0] * half, normal[1] * half),
+        )
         t0, t1 = self.renderer.trim_line_for_labels(a_id, b_id, *segment, offsets)
         x1, y1, x2, y2 = segment
         segment = (
@@ -234,7 +252,10 @@ class BondGeometryPlanService:
         _, (outer_segment, inner_segment, _) = self._double_segments(
             bond, a, b, style=variant
         )
-        return self._line(outer_segment), self._line(inner_segment)
+        return tuple(
+            self._native_line(segment, bond, a, b)
+            for segment in (outer_segment, inner_segment)
+        )
 
     def _parallel_primitives(self, bond, a, b) -> tuple[BondPrimitive, ...]:
         segments = self.renderer.parallel_bond_segments(
@@ -261,13 +282,16 @@ class BondGeometryPlanService:
     def _single_primitives(self, bond, a, b) -> tuple[BondPrimitive, ...]:
         t0, t1 = self.renderer.trim_line_for_labels(bond.a, bond.b, a.x, a.y, b.x, b.y)
         return (
-            self._line(
+            self._native_line(
                 (
                     a.x + (b.x - a.x) * t0,
                     a.y + (b.y - a.y) * t0,
                     a.x + (b.x - a.x) * t1,
                     a.y + (b.y - a.y) * t1,
-                )
+                ),
+                bond,
+                a,
+                b,
             ),
         )
 

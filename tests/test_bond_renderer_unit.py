@@ -49,6 +49,7 @@ from chemvas.ui.molecule.bond_geometry_plan_service import (
     BondLinePrimitive,
     BondPolygonPrimitive,
 )
+from chemvas.ui.molecule.bond_graphics_factory import BondStrokeItem
 from chemvas.ui.molecule.bond_renderer import BondRenderer
 
 
@@ -676,7 +677,7 @@ class BondRendererUnitTest(unittest.TestCase):
         )
         self.assertEqual(
             [(point.x(), point.y()) for point in polygon],
-            [(0.0, -0.5), (10.0, -0.5), (10.0, 2.5), (0.0, 2.5)],
+            [(0.0, -1.5), (10.0, -1.5), (10.0, 1.5), (0.0, 1.5)],
         )
 
     def test_helper_edge_guards_cover_invalid_ids_and_label_driven_paths(self) -> None:
@@ -689,11 +690,15 @@ class BondRendererUnitTest(unittest.TestCase):
         self.assertEqual(
             trim_segment((0.0, 0.0, 10.0, 0.0), 0.0), (0.0, 0.0, 10.0, 0.0)
         )
-        self.assertIsNone(self.renderer.line_geometry._double_neighbor_target(0, 1))
+        self.assertIsNone(
+            self.renderer.line_geometry._double_neighbor_target(0, 1, 0.0, 0.0)
+        )
 
         self.canvas.model.atoms[2] = Atom("C", 2.0, 6.0)
         self.canvas.graph_state.atom_bond_ids = {0: {0, 1}, 1: {0}}
-        self.assertIsNotNone(self.renderer.line_geometry._double_neighbor_target(0, 1))
+        self.assertIsNotNone(
+            self.renderer.line_geometry._double_neighbor_target(0, 1, 0.0, 0.0)
+        )
         self.assertEqual(
             self.renderer.line_geometry._plain_double_normal(0.0, 0.0, 10.0, 0.0, 0, 1),
             (0.0, 1.0),
@@ -710,10 +715,12 @@ class BondRendererUnitTest(unittest.TestCase):
             b_id=1,
         )
         self.assertEqual(outer, (0.0, 0.0, 10.0, 0.0))
-        self.assertAlmostEqual(inner[0], 0.8)
-        self.assertAlmostEqual(inner[2], 9.2)
+        self.assertAlmostEqual(inner[0], 0.0)
+        self.assertAlmostEqual(inner[2], 10.0)
 
-    def test_plain_double_segments_switch_which_side_is_shortened(self) -> None:
+    def test_isolated_double_segments_choose_side_without_arbitrary_shortening(
+        self,
+    ) -> None:
         outer_default, inner_default, normal = self.renderer.plain_double_segments(
             0.0,
             0.0,
@@ -744,11 +751,11 @@ class BondRendererUnitTest(unittest.TestCase):
 
         self.assertEqual(normal, (0.0, 1.0))
         self.assertEqual(outer_default, (0.0, 0.0, 10.0, 0.0))
-        self.assertEqual(inner_default, (1.2, 4.4, 8.8, 4.4))
+        self.assertEqual(inner_default, (0.0, 4.4, 10.0, 4.4))
         self.assertEqual(outer_center, (0.0, -2.2, 10.0, -2.2))
         self.assertEqual(inner_center, (0.0, 2.2, 10.0, 2.2))
         self.assertEqual(outer_outer, (0.0, 0.0, 10.0, 0.0))
-        self.assertEqual(inner_outer, (1.2, -4.4, 8.8, -4.4))
+        self.assertEqual(inner_outer, (0.0, -4.4, 10.0, -4.4))
 
     def test_ring_double_segments_prefers_3d_projection_when_available(self) -> None:
         self.canvas.atom_coords_3d = {
@@ -822,11 +829,11 @@ class BondRendererUnitTest(unittest.TestCase):
         )
 
         self.assertEqual(default_outer, (0.0, 0.0, 10.0, 0.0))
-        self.assertAlmostEqual(default_inner[0], 0.8)
+        self.assertAlmostEqual(default_inner[0], 0.0)
         self.assertAlmostEqual(center_outer[0], 0.0)
         self.assertAlmostEqual(center_inner[0], 0.0)
-        self.assertGreater(outer_outer[0], 0.0)
-        self.assertLess(outer_outer[2], 10.0)
+        self.assertEqual(outer_outer[0], 0.0)
+        self.assertEqual(outer_outer[2], 10.0)
         self.assertAlmostEqual(outer_inner[0], 0.0)
         self.assertAlmostEqual(outer_inner[2], 10.0)
 
@@ -898,8 +905,8 @@ class BondRendererUnitTest(unittest.TestCase):
         self.assertEqual(centered_normal, (0.0, -1.0))
         self.assertLess(centered_inner[1], 0.0)
         self.assertLess(outer_outer_2d[0], 1.0)
-        self.assertGreater(outer_outer_2d[0], 0.0)
-        self.assertLess(outer_inner_2d[1], 0.0)
+        self.assertEqual(outer_outer_2d[0], 0.0)
+        self.assertGreater(outer_inner_2d[1], 0.0)
         self.assertEqual(outer_normal_2d, (0.0, -1.0))
 
     def test_ring_double_segments_falls_back_to_2d_and_flips_toward_center(
@@ -934,8 +941,8 @@ class BondRendererUnitTest(unittest.TestCase):
 
         self.assertEqual(outer, (0.0, 0.0, 10.0, 0.0))
         self.assertEqual(normal, (0.0, 1.0))
-        self.assertAlmostEqual(inner[0], 0.8)
-        self.assertAlmostEqual(inner[2], 9.2)
+        self.assertAlmostEqual(inner[0], 0.0)
+        self.assertAlmostEqual(inner[2], 10.0)
 
     def test_draw_helpers_create_expected_graphics_items(self) -> None:
         line_item = self.renderer.one_sided_bond_strip(
@@ -1006,8 +1013,12 @@ class BondRendererUnitTest(unittest.TestCase):
     def test_double_neighbor_target_and_plain_double_normal_cover_invalid_and_offset_fallbacks(
         self,
     ) -> None:
-        self.assertIsNone(self.renderer.line_geometry._double_neighbor_target(None, 1))
-        self.assertIsNone(self.renderer.line_geometry._double_neighbor_target(0, None))
+        self.assertIsNone(
+            self.renderer.line_geometry._double_neighbor_target(None, 1, 0.0, 0.0)
+        )
+        self.assertIsNone(
+            self.renderer.line_geometry._double_neighbor_target(0, None, 0.0, 0.0)
+        )
 
         self.canvas.model.atoms[3] = Atom("C", 10.0, 10.0)
         self.canvas.graph_state.atom_bond_ids = {0: {0, 1, 2, 3}, 1: {0, 4}}
@@ -1018,8 +1029,11 @@ class BondRendererUnitTest(unittest.TestCase):
             Bond(3, 0, 1),
             Bond(1, 2, 1),
         ]
-        target = self.renderer.line_geometry._double_neighbor_target(0, 1)
+        target = self.renderer.line_geometry._double_neighbor_target(0, 1, 0.0, 0.0)
         self.assertEqual((target.x(), target.y()), (10.0 / 3.0, 10.0))
+        relative = self.renderer.line_geometry._double_neighbor_target(0, 1, 1.0, 2.0)
+        self.assertAlmostEqual(relative.x(), 7.0 / 3.0)
+        self.assertEqual(relative.y(), 8.0)
 
         self.canvas.graph_state.atom_bond_ids = {}
         self.canvas.model.atoms[1] = Atom("C", 8.0, -6.0)
@@ -1076,7 +1090,7 @@ class BondRendererUnitTest(unittest.TestCase):
         self.renderer.update_bond_geometry(0)
         self.assertFalse(dotted.path().isEmpty())
 
-        single = QGraphicsLineItem(0.0, 0.0, 1.0, 0.0)
+        single = BondStrokeItem(0.0, 0.0, 1.0, 0.0)
         single.setPos(2.0, 3.0)
         self._set_bond(Bond(0, 1, 1, style="single"))
         self.canvas._trim = (0.1, 0.9)
@@ -1250,7 +1264,7 @@ class BondRendererUnitTest(unittest.TestCase):
 
         self.assertEqual(len(items[0].polygon()), 4)
         self.assertAlmostEqual(items[1].line().y1(), 0.0)
-        self.assertGreater(
+        self.assertLess(
             sum(point.y() for point in items[0].polygon()) / len(items[0].polygon()),
             items[1].line().y1(),
         )

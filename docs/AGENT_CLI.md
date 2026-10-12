@@ -142,11 +142,13 @@ chemvas render-document scheme.chemvas --output journal.svg --width-mm 70 --max-
 chemvas render-document scheme.chemvas --output readable.svg --width-mm 174 --min-font-pt 6
 chemvas render-document scheme.chemvas --output scheme-transparent.png \
   --background transparent
+chemvas render-document scheme.chemvas --output scheme.cdxml --cdxml-label-bindings labels.json
 ```
 
 - `--width-mm`: Scales the figure to fit specific column widths (e.g., 84 mm for single column, 174 mm for double column).
 - `--min-font-pt`: Ensures rendered font sizes (including subscripts) remain readable.
 - `--max-height-mm`: Rejects figures exceeding vertical layout limits.
+- `--cdxml-label-bindings`: CDXML only. Reads a strict JSON sidecar, bound to the exact input bytes by SHA-256, that states the meaning of drawn `Ar` and `Hᵃ` labels; see [CDXML_EXPORT.md](CDXML_EXPORT.md). Any malformed, unbound or mismatched binding is refused before output.
 
 ## Graph Patch v1
 

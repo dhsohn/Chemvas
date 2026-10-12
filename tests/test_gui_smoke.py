@@ -1,13 +1,14 @@
 import math
 import os
 import unittest
+from itertools import product
 from unittest.mock import patch
 
 from chemvas.ui.annotations.state import arrow_state_dict_for
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from PyQt6.QtCore import QEvent, QEventLoop, QPoint, QPointF, QRectF, Qt
+from PyQt6.QtCore import QEvent, QEventLoop, QLineF, QPoint, QPointF, QRectF, Qt
 from PyQt6.QtTest import QTest
 from PyQt6.QtWidgets import (
     QApplication,
@@ -18,6 +19,7 @@ from PyQt6.QtWidgets import (
 
 from chemvas.bootstrap.main_window import build_main_window
 from chemvas.core.model_commands import MoveAtomsCommand
+from chemvas.features.selection import translate_projected_point_3d
 from chemvas.ui.annotations.state import scene_item_state_for
 from chemvas.ui.canvas.canvas_atom_graphics_state import visible_atom_item_for
 from chemvas.ui.canvas.canvas_mark_registry import mark_registry_for
@@ -207,15 +209,172 @@ class GuiShortcutSmokeTest(unittest.TestCase):
             inner = segments[1]
             outer_mid = ((outer[0] + outer[2]) * 0.5, (outer[1] + outer[3]) * 0.5)
             inner_mid = ((inner[0] + inner[2]) * 0.5, (inner[1] + inner[3]) * 0.5)
-            outer_dist = math.hypot(outer_mid[0] - center_x, outer_mid[1] - center_y)
-            inner_dist = math.hypot(inner_mid[0] - center_x, inner_mid[1] - center_y)
             outer_len = math.hypot(outer[2] - outer[0], outer[3] - outer[1])
             inner_len = math.hypot(inner[2] - inner[0], inner[3] - inner[1])
-            self.assertLess(inner_dist, outer_dist - 0.1)
-            self.assertLess(inner_len, outer_len - 0.1)
+            self.assertTrue(all(math.isfinite(value) for value in (*outer, *inner)))
+            self.assertGreater(outer_len, 0.0)
+            # Angular-bisector insets can shift the secondary midpoint along
+            # the edge. Its signed normal displacement determines its side.
+            nx, ny = (
+                -(outer[3] - outer[1]) / outer_len,
+                (outer[2] - outer[0]) / outer_len,
+            )
+            toward_center = (center_x - outer_mid[0]) * nx + (
+                center_y - outer_mid[1]
+            ) * ny
+            displacement = (inner_mid[0] - outer_mid[0]) * nx + (
+                inner_mid[1] - outer_mid[1]
+            ) * ny
+            self.assertGreater(displacement * toward_center, 0.0)
+            offset_bound = self._ring_double_offset_bound(bond, center_x, center_y)
+            # Perspective may make the inset slightly longer than the axis.
+            # A native offset at each end gives a finite triangle-inequality
+            # bound without assuming the inset is always shorter.
+            self.assertGreater(inner_len, 0.0)
+            self.assertLessEqual(
+                inner_len,
+                outer_len + 2.0 * offset_bound + 1e-6,
+                "secondary line exceeds bond length plus native offsets",
+            )
+            a = active_canvas_for_window(self.window).model.atoms[bond.a]
+            b = active_canvas_for_window(self.window).model.atoms[bond.b]
+            for actual, expected in zip(outer, (a.x, a.y, b.x, b.y), strict=True):
+                self.assertAlmostEqual(actual, expected, delta=1e-6)
+            for x, y in ((inner[0], inner[1]), (inner[2], inner[3])):
+                normal_distance = (x - a.x) * nx + (y - a.y) * ny
+                self.assertGreater(normal_distance * toward_center, 0.0)
+                self.assertLessEqual(
+                    abs(normal_distance),
+                    abs(toward_center) + 1e-6,
+                    "secondary endpoint crosses ring center",
+                )
+                self.assertLessEqual(
+                    abs(normal_distance),
+                    offset_bound + 1e-6,
+                    "secondary endpoint exceeds native offset",
+                )
+                along = (x - a.x) * ny - (y - a.y) * nx
+                self.assertGreaterEqual(
+                    along, -offset_bound - 1e-6, "secondary endpoint past bond ends"
+                )
+                self.assertLessEqual(
+                    along,
+                    outer_len + offset_bound + 1e-6,
+                    "secondary endpoint past bond ends",
+                )
             checked += 1
 
         self.assertGreaterEqual(checked, 3)
+
+    def _ring_double_offset_bound(self, bond, center_x, center_y) -> float:
+        canvas = active_canvas_for_window(self.window)
+        spacing = canvas.renderer.bond_spacing() * 1.1
+        rotation = canvas.runtime_state.rotation_state
+        camera = rotation.projection_center_3d
+        if camera is None:
+            return spacing
+        anchor = rotation.projection_anchor_2d or camera[:2]
+        bound = 0.0
+        for atom_id in (bond.a, bond.b):
+            point = canvas.render_context.geometry.current_atom_coords_3d(atom_id)
+            self.assertIsNotNone(point)
+            # Undo the screen translation before applying a physical offset,
+            # as required by this fixture's camera/translation contract.
+            point = translate_projected_point_3d(
+                point,
+                anchor[0] - center_x,
+                anchor[1] - center_y,
+                bond_length_px=canvas.renderer.style.bond_length_px,
+                center_3d=camera,
+            )
+            px, py = project_point_3d_for(canvas, point)
+            # A cube encloses every direction of the native spacing vector.
+            # Project its corners, not the renderer's returned inner segment,
+            # so corrupt paint geometry cannot increase its own allowance.
+            for delta in product((-spacing, spacing), repeat=3):
+                shifted = tuple(
+                    value + change for value, change in zip(point, delta, strict=True)
+                )
+                x, y = project_point_3d_for(canvas, shifted)
+                bound = max(bound, math.hypot(x - px, y - py))
+        self.assertTrue(math.isfinite(bound))
+        self.assertGreater(bound, 0.0)
+        return bound
+
+    def test_ring_double_geometry_guard_rejects_displaced_and_overlong_lines(
+        self,
+    ) -> None:
+        canvas = active_canvas_for_window(self.window)
+        canvas.services.structure_build_service.add_benzene_ring(QPointF(0.0, 0.0))
+        ring = canvas.runtime_state.ring_items()[0]
+        ring_atom_ids = ring.data(2)
+        for projected in (False, True):
+            if projected:
+                self._select_atom_ids(*ring_atom_ids)
+                rotation = canvas.services.selection_rotation_controller
+                self.assertTrue(
+                    rotation.begin_selection_3d_rotation(press_pos=QPointF(0.0, 20.0))
+                )
+                rotation.update_selection_3d_rotation(240.0, 120.0)
+                rotation.end_selection_3d_rotation()
+            self._assert_ring_double_bonds_face_inward(ring)
+            before = canvas.services.canvas_document_session_service.snapshot_state()
+            center = QPointF(
+                sum(canvas.model.atoms[i].x for i in ring_atom_ids)
+                / len(ring_atom_ids),
+                sum(canvas.model.atoms[i].y for i in ring_atom_ids)
+                / len(ring_atom_ids),
+            )
+            bond_id = next(
+                i
+                for i, bond in enumerate(canvas.model.bonds)
+                if bond is not None and bond.order == 2
+            )
+            items = canvas.runtime_state.bond_graphics_state.bond_items[bond_id]
+            outer, inner = items[:2]
+            original = inner.line()
+            axis = QLineF(
+                outer.mapToScene(outer.line().p1()),
+                outer.mapToScene(outer.line().p2()),
+            )
+            unit = (axis.p2() - axis.p1()) / axis.length()
+            normal = QPointF(-unit.y(), unit.x())
+            toward_center = QPointF.dotProduct(center - axis.center(), normal)
+            if toward_center < 0:
+                normal = -normal
+            start, end = (
+                inner.mapToScene(original.p1()),
+                inner.mapToScene(original.p2()),
+            )
+            displacement = QPointF.dotProduct(
+                (start + end) * 0.5 - axis.center(), normal
+            )
+            across_center = normal * (abs(toward_center) - displacement + 100.0)
+            mutations = {
+                "past_ring_center": (start + across_center, end + across_center),
+                "overlong": (start - unit * 100.0, end + unit * 100.0),
+                "past_bond_ends": (start + unit * 200.0, end + unit * 200.0),
+            }
+            for name, (p1, p2) in mutations.items():
+                with self.subTest(projected=projected, mutation=name):
+                    try:
+                        inner.setLine(
+                            QLineF(inner.mapFromScene(p1), inner.mapFromScene(p2))
+                        )
+                        message = {
+                            "past_ring_center": "ring center",
+                            "overlong": "bond length",
+                            "past_bond_ends": "bond ends",
+                        }[name]
+                        with self.assertRaisesRegex(AssertionError, message):
+                            self._assert_ring_double_bonds_face_inward(ring)
+                    finally:
+                        inner.setLine(original)
+                    self._assert_ring_double_bonds_face_inward(ring)
+                    self.assertEqual(
+                        canvas.services.canvas_document_session_service.snapshot_state(),
+                        before,
+                    )
 
     def test_generic_tool_shortcuts_switch_active_tool(self) -> None:
         self._press_key(Qt.Key.Key_X)
@@ -1488,11 +1647,9 @@ class GuiShortcutSmokeTest(unittest.TestCase):
                 f"after update, bold strip corner ({c0.x()}, {c0.y()}) has no mitre partner",
             )
 
-    def test_benzene_bold_ring_strips_thicken_inward_with_sharp_mitres(self) -> None:
-        # Ring bold doubles once thickened away from the inner double line
-        # (outward) while bold singles thickened inward, so at every benzene
-        # vertex the two strips met on a slanted shared edge that cut the
-        # corner off and left a white wedge where the sharp point belongs.
+    def test_benzene_bold_ring_strips_are_centered_with_sharp_mitres(self) -> None:
+        # ADR 0046 centers Bold on its axis. Adjacent strips must still share
+        # sharp bounded mitres, without a white gap at their common vertex.
         canvas = active_canvas_for_window(self.window)
         canvas.services.structure_build_service.add_benzene_ring(QPointF(0.0, 0.0))
         transform = canvas.services.scene_transform_controller
@@ -1512,12 +1669,11 @@ class GuiShortcutSmokeTest(unittest.TestCase):
         )
         center_x = sum(canvas.model.atoms[i].x for i in atom_ids) / len(atom_ids)
         center_y = sum(canvas.model.atoms[i].y for i in atom_ids) / len(atom_ids)
-        base_width = canvas.renderer.bond_line_width()
         bold_width = canvas.renderer.bold_bond_width()
         # Adjacent hexagon edges meet at 120 degrees, so each mitre corner sits
         # on the radial bisector at offset / sin(60 degrees) from the vertex.
-        outer_reach = (base_width / 2.0) / math.sin(math.pi / 3.0)
-        inner_reach = (bold_width - base_width / 2.0) / math.sin(math.pi / 3.0)
+        outer_reach = (bold_width / 2.0) / math.sin(math.pi / 3.0)
+        inner_reach = outer_reach
 
         vertex_bonds: dict[int, list[int]] = {}
         for bond_id in bond_ids:
@@ -1561,7 +1717,7 @@ class GuiShortcutSmokeTest(unittest.TestCase):
                 )
             # Both shared corners lie on the radial bisector: a sharp point
             # just outside the vertex and an inner point toward the ring
-            # centre, proving both strips thicken inward and mitre cleanly.
+            # centre, proving both strips remain centered and mitre cleanly.
             reaches = []
             for corner in corner_sets[0]:
                 along = (corner.x() - atom.x) * ux + (corner.y() - atom.y) * uy

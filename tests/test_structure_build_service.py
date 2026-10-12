@@ -125,7 +125,10 @@ class _FakeCanvas:
             side_effect=AssertionError("canvas facade should not be used")
         )
         self.hit_testing_find_atom_near = Mock(return_value=None)
-        self.bond_renderer = SimpleNamespace(add_bond_graphics=self._add_bond_graphics)
+        self.bond_renderer = SimpleNamespace(
+            add_bond_graphics=self._add_bond_graphics,
+            update_bond_geometry=lambda bond_id, **_kwargs: self.redraw_bond(bond_id),
+        )
         self.services = canvas_runtime_services(
             hit_testing_service=SimpleNamespace(
                 find_atom_near=self.hit_testing_find_atom_near
@@ -148,6 +151,7 @@ class _FakeCanvas:
             graph_service=SimpleNamespace(
                 bond_id_between=self.bond_id_between,
                 bond_exists=self.bond_exists,
+                rebuild_bond_adjacency=Mock(),
             ),
             move_controller=SimpleNamespace(
                 redraw_bond=self.redraw_bond,
@@ -691,6 +695,7 @@ class StructureBuildServiceTest(unittest.TestCase):
 
         service.render_model()
 
+        canvas.services.graph_service.rebuild_bond_adjacency.assert_called_once_with()
         self.assertEqual(canvas.added_graphics, [0, 2])
         self.assertEqual(canvas.carbon_dots, [0])
         self.assertEqual(labels.draw_atom.call_args_list, [mock.call(1), mock.call(2)])
@@ -724,6 +729,7 @@ class StructureBuildServiceTest(unittest.TestCase):
 
         service.render_model()
 
+        canvas.services.graph_service.rebuild_bond_adjacency.assert_called_once_with()
         self.assertEqual(canvas.carbon_dots, [0])
         labels.draw_atom.assert_called_once_with(1)
         self.assertEqual(canvas.wrapper_label_calls, [])

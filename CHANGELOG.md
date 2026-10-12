@@ -7,10 +7,101 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- Preserve live sibling paint order in reviewed CDXML snapshots after Undo, without relaxing overlap or fragment-interleaving checks.
+- Keep terminal double-bond labels and inset axes on the same side after fractional translation, save/reopen and Undo/Redo by sharing a translation-stable normal tie rule.
+- Reject out-of-range native CDXML RGB channels before eight-bit comparison, returning a clear CLI input error without creating or replacing files.
+
+- Export reviewed CDXML bindings from an immutable saved-document scene, keeping documentary contact IDs correct immediately after deleting bonds and saving. Preserve selection, visibility, group refusals and dirty/stale guards (ADR 0054).
+
+- Add explicit reviewed CDXML label bindings to desktop export, native bold annotations and positioned editable sub/superscript runs. Align vertical/multiple Ar and terminal double-bond labels through common Qt placement (ADR 0053).
+
+- Restore browser movement without Qt, apply the native atom baseline to browser label geometry, and preserve bond centerlines alongside painted outlines for browser selection. Refresh existing joins after ring insertion and through Undo/Redo; rebuild graph indexes before whole-model drawing.
+
+- Require exact measured native palette values during CDXML recovery; edit real XML color elements instead of comment decoys and verify the parsed output palette before writing (ADR 0052).
+
+- Add `review-cdxml` to report native font/style substitutions and palette stability, and create a new palette-restored copy of a known first ChemDraw 25.0.2.14 save without changing authored RGB. Full font and document fidelity remain unresolved (ADR 0051).
+
+- Share facing-glyph anchors for compact labels across screen and headless rendering, serialize explicit label alignment and nearest twentieth-point text sizes (ADR 0048).
+- Reject relative paint-order reversals between overlapping straight strokes and opaque filled rectangles while allowing native Z renumbering.
+
+- Preserve native per-line widths for plot lines, arrow segments and TS brackets by emitting unheaded arrows; validate effective arrow paint, endpoints and narrowly linked native fallback IDs (ADR 0047).
+- Reject changed inherited or local bond-spacing percentages and newly added spacing overrides in consumer references; native percentage truncation remains a refusal.
+
+- Refresh neighboring bond joins and double insets during partial movement, rotation and history replay; restore stored paint outlines even when rollback redraw fails.
+- Distinguish generic-ARY stereo acceptance from concrete-phenyl refusal with active query, endpoint, display and reversed-paint regression checks.
+
+- Apply one centered Bold and native-style double-bond rendering convention to both old and new documents without rewriting their coordinates or source files. Share preview/update/export outlines, retain native bond semantics, correct CDXML double side/spacing, and support single bold_out and double_outer export (ADR 0046).
+
+- Accept native-witnessed hydrogen-count omission forms and definition-fragment ID renumbering without changing source chemistry; retain atom/bond membership and ordered attachment checks (ADR 0045).
+- Restrict the seven exceptional TS hydrogen-count forms to their witnessed order-1 bond composition, display and definition context; reject unproven equal-valence alternatives.
+
+- Mark native-verified P/O/H and Me/tBu labels as chemically interpretable; preserve their existing graph and keep genuine native valence warnings visible (ADR 0044).
+
+- Preserve formal charge in native CDXML with explicit charged-atom fragment definitions while retaining visible labels and attached charge marks (ADR 0043).
+
+- Preserve explicitly bound generic aryl as a visible Ar nickname containing an
+  ARY query, retaining up to two existing outer connections. Require a typed
+  meaning for ambiguous Ar; explicit argon remains Element 18. No source-model
+  rewrite or inferred phenyl ring is performed.
+- Reject consumer references with changed inherited caption alignment, unproved
+  added/removed hydrogen counts, or changed graphic arrowheads.
+
+- Add experimental CDXML consumer-measured note placement with a v2 reference
+  binding source, uncorrected producer, label bindings, export options, frames,
+  expected fonts and declared consumer environment. Validate text paths and
+  molecular objects; retain 1 mm margins after all group moves or refuse.
+  Font substitution and native size quantization remain explicit limitations;
+  default caption placement is unchanged.
+- Preserve full CDXML color-channel precision, preventing native consumer
+  truncation of an 8-bit RGB channel when six significant digits were written.
+
+- Export native order-1 `bold_in` bonds as CDXML `Display="Bold"` with the
+  renderer’s scaled effective `BoldWidth`, retaining atom positions, connectivity
+  and colour. Consumer centring, caps, joins and label clearance can differ from
+  Qt’s one-sided strip; exact outline equivalence is not promised. Other bold
+  variants and non-integer/non-single orders remain refused.
+
+- Export existing native order-1 dotted chemical bonds as CDXML `Order="1"`
+  `Display="Dash"`, separately from dashed drawing lines and explicit documentary
+  graphics. Refuse bool/float and unsupported dotted orders; keep native v9,
+  clipboard and existing tool contracts. Generic Ar attachment limits remain.
+
+
 The experimental browser editor runs from a source checkout only (`chemvas --ui web`) and is omitted from release distribution packages.
+
+### Changed
+
+- CDXML `aryl_label` (typed API or v2 sidecar) now always emits exported `Ar`
+  as a page-level non-chemical caption (`<t InterpretChemically="no">`) with
+  author-note and caption metadata `objecttag`s, not as `<n>`, after ChemDraw
+  25.0.2.14 was observed to reopen both `NodeType="Unspecified"` and
+  `GenericNickname="Ar"` nodes as argon (`Element="18"`). Export refuses when
+  Ar still has any non-documentary bond in the document; v1 `generic_aryl`
+  paths are unchanged; see ADR 0038 (Proposed).
+- CDXML export accepts the unbound group label `Ph` on the wide end (`bond.b`)
+  of one order-1 wedge or hash bond whose narrow stereocentre (`bond.a`) is a
+  supported pure element, keeping native `B`/`E`, `WedgeBegin`/`WedgedHashBegin`,
+  and the existing drawn narrow-end check. Other group labels, `Ph` at the
+  narrow end, typed `Ar` bindings, and plain-single rules for `Me`/`tBu` are
+  unchanged; see ADR 0035 (Proposed).
 
 ### Added
 
+- CDXML label-binding sidecar version `2`: `aryl_label` on drawn `Ar` with an
+  explicit `author_note`, plus `documentary_contacts` that permit selected
+  native order-1 dotted bonds to export as non-chemical dashed line graphics
+  while the `Ar` label stays an unexpanded page caption (not argon, `Ph`, or
+  `4-F-Ph` graph). Unlisted order-1 dotted bonds keep chemical encoding; v1 sidecars unchanged.
+  Producer encoding only; see ADR 0038 (Proposed).
+- CDXML export accepts `CdxmlLabelBinding.aryl_fragment("4-F-Ph")` on a drawn
+  `Ar` label with one plain single attachment, emitting a fixed para-fluorophenyl
+  nickname graph (`C6H4F`) while keeping display text `Ar`. The identifier is
+  bound-only; legends and literal `4-F-Ph` labels are not inferred. Producer
+  encoding only; see ADR 0036 (Proposed).
+- CDXML export also accepts the same `4-F-Ph` binding on the wide end of one
+  order-1 wedge or hash bond when `bond.a` is an unbound supported element,
+  reusing the existing stereo `B`/`E`/`Display` encoding; see ADR 0037
+  (Proposed). Not verified in ChemDraw.
 - File > Export MOL in the browser downloads the selected structure as an MDL
   Molfile through the desktop's selected-only payload and the same V2000 writer
   and optional RDKit abbreviation fallback, without changing the document.

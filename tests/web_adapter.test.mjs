@@ -2398,6 +2398,17 @@ test('drawing snap rings use only the current gesture preview', async () => {
   }
 });
 
+test('native joined bond paint uses its polygon while retaining the edit centerline', async () => {
+  const {bondHoverMarkup} = await import('../app/chemvas/web/scene.mjs');
+  const primitive = {line: [0, 0, 20, 0], polygon: [[-1, -1], [21, -1], [20, 1], [0, 1]], outlined: false};
+  const before = JSON.stringify(primitive);
+  const svg = bondHoverMarkup({primitives: [primitive], width: 2, color: [0, 0, 0, 255], opacity: 1, z: 4.5, target: null});
+  assert.ok(svg.includes('<polygon points="-1.0000,-1.0000 21.0000,-1.0000 20.0000,1.0000 0.0000,1.0000"'));
+  assert.ok(svg.includes('stroke="none"'));
+  assert.ok(!svg.includes('<line'), 'the chemical centerline must not be painted as a second stroke');
+  assert.equal(JSON.stringify(primitive), before);
+});
+
 test('Bond hover draws planner primitives faintly, rings its target and is never picked', async () => {
   const {bondHoverMarkup} = await import('../app/chemvas/web/scene.mjs');
   assert.equal(typeof bondHoverMarkup, 'function', 'scene.mjs draws no Bond hover preview');

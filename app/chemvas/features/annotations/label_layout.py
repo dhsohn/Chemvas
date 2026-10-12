@@ -36,6 +36,15 @@ ATOM_LABEL_DOCUMENT_MARGIN = 4.0
 ATOM_LABEL_HIT_PADDING_RATIO = 0.12
 
 
+def atom_label_baseline_offset(em_size: float, descent: float) -> float:
+    """Center the em above its descender using the actual painted face metrics.
+
+    Native 96-case GDI/SaveAs measurements confirm this placement rule; no
+    platform, family, size or document-specific correction is applied.
+    """
+    return (em_size - descent) / 2.0
+
+
 def label_bounding_rect(
     base: tuple[float, float, float, float],
     hit_padding: float,
@@ -552,10 +561,18 @@ def _token_anchor_layout(
         # reverse the user's text or select one end as the bond anchor.
         return text, None, False, None
     open_x, open_y = _open_direction(vectors)
-    # Compact alkyl names have no explicit attachment-carbon glyph and
-    # cannot reverse as element groups. Keep their conventional spelling,
-    # but align the facing terminal glyph rather than the whole word.
-    if text in {"tBu", "t-Bu", "i-Pr"} and abs(open_x) >= 1e-6:
+    # Compact aliases and two-letter element labels keep their spelling.
+    # Align the facing terminal glyph rather than the whole word, using
+    # the same layout for the canvas and exported document scene.
+    compact = text in {"Me", "Ar", "tBu", "t-Bu", "i-Pr"} or (
+        len(text) == 2 and text[0].isupper() and text[1].islower()
+    )
+    # The native Ar label uses its leading glyph for vertical attachments and
+    # freezes that leading anchor when multiply attached. This is presentation
+    # only: Ar's chemical meaning still requires an explicit export binding.
+    if text == "Ar" and (len(vectors) > 1 or abs(open_x) < 1e-6):
+        return text, "A", False, None
+    if compact and abs(open_x) >= 1e-6:
         at_end = open_x < 0.0
         body_direction = -1.0 if at_end else 1.0
         if not any(dx * body_direction > 0.95 for dx, _ in vectors):
@@ -622,6 +639,7 @@ __all__ = [
     "LabelLayout",
     "LabelRun",
     "PlacedRun",
+    "atom_label_baseline_offset",
     "atom_label_presentation",
     "attachment_anchor_token",
     "attachment_group_at_end",

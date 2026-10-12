@@ -119,6 +119,7 @@ def test_root_help_inventory_matches_dispatched_headless_commands(
         | application.SCHEME_LAYOUT_COMMANDS
         | application.DOCUMENT_TEMPLATE_COMMANDS
         | application.DOCUMENT_RENDER_COMMANDS
+        | application.CDXML_REVIEW_COMMANDS
     )
 
 

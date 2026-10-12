@@ -31,7 +31,9 @@ def _require_graphics_value(
 
 
 def _expected_label_position(canvas, label: AtomLabelItem, atom) -> QPointF:
-    anchor_center = _optional_graphics_callable(label, "anchor_center")
+    anchor_center = _optional_graphics_callable(label, "label_position_center")
+    if anchor_center is None:
+        anchor_center = _optional_graphics_callable(label, "anchor_center")
     center = anchor_center() if anchor_center is not None else None
     if center is None:
         bounding_rect = _optional_graphics_callable(label, "boundingRect")
@@ -39,9 +41,12 @@ def _expected_label_position(canvas, label: AtomLabelItem, atom) -> QPointF:
             raise RuntimeError("atom label has no bounding-rect getter")
         center = bounding_rect().center()
     offset = canvas.renderer.style.atom_label_offset_px
+    dx, dy = canvas.render_context.bonds.line_geometry.terminal_label_offset(
+        label.data(1)
+    )
     return QPointF(
-        atom.x - center.x() + offset,
-        atom.y - center.y() - offset,
+        atom.x + dx - center.x() + offset,
+        atom.y + dy - center.y() - offset,
     )
 
 

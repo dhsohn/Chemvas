@@ -16,6 +16,7 @@ from PyQt6.QtGui import (
     QTextBlock,
     QTextCharFormat,
     QTextCursor,
+    QTextLayout,
     QTextListFormat,
     QTransform,
 )
@@ -34,6 +35,7 @@ from chemvas.features.annotations import (
     ATOM_LABEL_DOCUMENT_MARGIN,
     SUB_SCALE,
     LabelLayout,
+    atom_label_baseline_offset,
     label_bounding_rect,
     parse_atom_label,
     place_hydride_stack,
@@ -211,7 +213,7 @@ def _text_document_paint_path(item: QGraphicsTextItem) -> QPainterPath:
                     )
                     for run in runs:
                         font = run.rawFont()
-                        baseline_shift = _fragment_baseline_shift(
+                        baseline_shift = note_fragment_baseline_shift(
                             fragment.charFormat(), font
                         )
                         for glyph, position in zip(
@@ -227,7 +229,7 @@ def _text_document_paint_path(item: QGraphicsTextItem) -> QPainterPath:
     return path
 
 
-def _fragment_baseline_shift(format_: QTextCharFormat, font: QRawFont) -> float:
+def note_fragment_baseline_shift(format_: QTextCharFormat, font: QRawFont) -> float:
     if (
         format_.verticalAlignment()
         == QTextCharFormat.VerticalAlignment.AlignSuperScript
@@ -297,7 +299,7 @@ def _fragment_decoration_path(
                 offsets.append(-font.ascent())
             if run.strikeOut():
                 offsets.append(-font.ascent() / 3)
-            baseline = top + line.ascent() + _fragment_baseline_shift(format_, font)
+            baseline = top + line.ascent() + note_fragment_baseline_shift(format_, font)
             for offset in offsets:
                 path.addRect(
                     QRectF(
@@ -499,9 +501,10 @@ class AtomLabelItem(NoSelectTextItem):
     def set_anchor(self, element: str | None, *, at_end: bool = False) -> None:
         """Anchor the bond attachment on one element glyph inside the label.
 
-        When set, :meth:`anchor_center` / :meth:`anchor_scene_rect` report that
-        glyph so the atom sits on it (not the label's midpoint) and bonds trim to
-        it. ``at_end`` picks the last matching glyph, for reversed labels ("HN").
+        The anchor rectangle describes the painted glyph cell for bond trimming.
+        ``label_position_center`` supplies its horizontal center and the native
+        baseline reference for positioning; the cell's vertical box center is
+        not the atom position. ``at_end`` picks the trailing glyph ("HN").
         """
         self._anchor_element = element or None
         self._anchor_at_end = bool(at_end)
@@ -546,18 +549,75 @@ class AtomLabelItem(NoSelectTextItem):
             return None
         base = self._base_rect()
         margin = self._doc_margin()
-        fm = QFontMetricsF(self.font())
-        width = fm.horizontalAdvance(element)
+        text = self._raw_text
+        run_x = 0.0
         if self._typographic and self._layout is not None:
-            total = self._layout.width
-        else:
-            total = fm.horizontalAdvance(self._raw_text)
-        left = margin + (total - width) if self._anchor_at_end else margin
-        return QRectF(left, base.top(), width, base.height())
+            run = self._layout.runs[-1 if self._anchor_at_end else 0]
+            text, run_x = run.text, run.x
+        # Shape the complete painted run: kerning (Ta, Te, Tc, Ts) changes
+        # the facing character's advance cell relative to a standalone glyph.
+        layout = QTextLayout(text, self.font())
+        layout.beginLayout()
+        line = layout.createLine()
+        layout.endLayout()
+        count = len(text.encode("utf-16-le")) // 2
+        length = len(element.encode("utf-16-le")) // 2
+        start = count - length if self._anchor_at_end else 0
+        left = line.cursorToX(start)[0]
+        right = line.cursorToX(start + length)[0]
+        return QRectF(margin + run_x + left, base.top(), right - left, base.height())
+
+    @property
+    def anchor_at_end(self) -> bool:
+        """Whether the shared presentation anchors the trailing glyph."""
+        return self._anchor_at_end
+
+    def label_advance(self) -> float:
+        """Painted line advance in local coordinates, without document margins."""
+        if self._typographic and self._layout is not None:
+            return self._layout.width
+        return QFontMetricsF(self.font()).horizontalAdvance(self._raw_text)
 
     def anchor_center(self) -> QPointF | None:
         rect = self._anchor_local_rect()
         return rect.center() if rect is not None else None
+
+    def label_position_center(self) -> QPointF:
+        """Common atom placement using the actual face's em/descent metrics.
+
+        Native labels center the em above the descender: their baseline is
+        (em - descent) / 2 below the atom, not the QTextDocument box center.
+        Keep the painter's baseline intact and position the whole item.
+        """
+        anchor = self._anchor_local_rect()
+        center = (anchor if anchor is not None else self._base_rect()).center()
+        if self._stack_element_rect is not None:
+            baseline = (
+                self._stack_element_rect.top() + QFontMetricsF(self.font()).ascent()
+            )
+        elif self._typographic and self._layout is not None:
+            normal = next(
+                (run for run in self._layout.runs if run.role == "normal"), None
+            )
+            if normal is None:
+                return center
+            baseline = self._doc_margin() + normal.baseline
+        else:
+            document = self.document()
+            if document is None:
+                return center
+            block = document.begin()
+            layout = block.layout()
+            if layout is None or not layout.lineCount():
+                return center
+            line = layout.lineAt(0)
+            baseline = layout.position().y() + line.y() + line.ascent()
+        raw = QRawFont.fromFont(self.font())
+        if raw.isValid() and raw.pixelSize() > 0:
+            center.setY(
+                baseline - atom_label_baseline_offset(raw.pixelSize(), raw.descent())
+            )
+        return center
 
     def anchor_scene_rect(self) -> QRectF | None:
         rect = self._anchor_local_rect()

@@ -9,10 +9,12 @@ from PyQt6.QtWidgets import (
     QComboBox,
     QDialog,
     QDoubleSpinBox,
+    QFileDialog,
     QFormLayout,
     QFrame,
     QHBoxLayout,
     QLabel,
+    QLineEdit,
     QPushButton,
     QSpinBox,
     QVBoxLayout,
@@ -58,6 +60,7 @@ class FigureExportOptions:
     target_width_mm: float | None = None
     max_height_mm: float | None = None
     min_font_pt: float | None = None
+    cdxml_label_bindings_path: str | None = None
 
 
 @dataclass(frozen=True)
@@ -190,6 +193,34 @@ def prompt_export_options(window: MainWindowLike) -> FigureExportOptions | None:
     editable_svg_warning.setWordWrap(True)
     layout.addWidget(editable_svg_warning)
 
+    bindings_label = QLabel("Reviewed CDXML label meanings (optional):")
+    layout.addWidget(bindings_label)
+    bindings_row = QHBoxLayout()
+    bindings_path = QLineEdit()
+    bindings_path.setObjectName("exportCdxmlBindingsPath")
+    bindings_label.setBuddy(bindings_path)
+    bindings_path.setPlaceholderText("Select the binding JSON for this saved drawing")
+    bindings_browse = QPushButton("Browse…")
+    bindings_browse.setObjectName("exportCdxmlBindingsBrowse")
+    bindings_row.addWidget(bindings_path)
+    bindings_row.addWidget(bindings_browse)
+    layout.addLayout(bindings_row)
+    bindings_help = QLabel(
+        "Label meanings are never guessed. The selected file must match the "
+        "saved drawing exactly; save edits and review its bindings before export."
+    )
+    bindings_help.setWordWrap(True)
+    layout.addWidget(bindings_help)
+
+    def browse_bindings() -> None:
+        path, _ = QFileDialog.getOpenFileName(
+            dialog, "Choose reviewed CDXML label meanings", "", "JSON (*.json)"
+        )
+        if path:
+            bindings_path.setText(path)
+
+    bindings_browse.clicked.connect(browse_bindings)
+
     dpi_label = QLabel("Resolution (DPI):")
     layout.addWidget(dpi_label)
     dpi_combo = QComboBox()
@@ -221,6 +252,8 @@ def prompt_export_options(window: MainWindowLike) -> FigureExportOptions | None:
 
     def sync_format_controls() -> None:
         fmt = format_combo.currentData()
+        for control in (bindings_label, bindings_path, bindings_browse, bindings_help):
+            control.setVisible(fmt == "cdxml")
         dpi_enabled = is_dpi_relevant(fmt)
         dpi_label.setEnabled(dpi_enabled)
         dpi_combo.setEnabled(dpi_enabled)
@@ -272,6 +305,9 @@ def prompt_export_options(window: MainWindowLike) -> FigureExportOptions | None:
         if limits.height_check.isChecked()
         else None,
         min_font_pt=limits.font.value() if limits.font_check.isChecked() else None,
+        cdxml_label_bindings_path=(bindings_path.text().strip() or None)
+        if format_combo.currentData() == "cdxml"
+        else None,
     )
     window.runtime_state.last_export_options = options
     return options

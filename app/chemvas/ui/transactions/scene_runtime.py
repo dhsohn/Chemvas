@@ -243,6 +243,7 @@ _BOND_PRIMITIVE_GRAPHICS_PROPERTIES = (
 )
 
 _GRAPHICS_ITEM_DIRECT_ATTRIBUTES = (
+    "_stroke_polygon",
     "_hit_padding",
     "_hit_radius",
     "_raw_text",

@@ -32,6 +32,10 @@ class Renderer(RenderMetrics):
 
     def atom_font(self) -> QFont:
         font = QFont(self.style.font_family, self.atom_font_size_pt())
+        # Chemical labels use character advances, as the native CDXML label
+        # engine does. Keep this common to canvas, headless and vector output;
+        # caption typography retains its own font settings.
+        font.setKerning(False)
         return font
 
     def ring_fill_brush(self, color: str | None = None) -> QBrush:

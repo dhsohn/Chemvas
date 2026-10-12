@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from contextlib import contextmanager
 from typing import TYPE_CHECKING
 
 from PyQt6.QtCore import QPointF, Qt
@@ -18,11 +19,50 @@ from chemvas.ui.canvas.sheet_setup_logic import normalize_sheet_setup
 from chemvas.ui.scene.scene_selectability import make_item_selectable
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
+    from collections.abc import Callable, Iterator
 
     from PyQt6.QtWidgets import QGraphicsTextItem
 
     from chemvas.ui.scene.scene_render_context import SceneRenderContext
+
+
+@contextmanager
+def detached_document_scene(state: dict) -> Iterator[SceneRenderContext]:
+    """Build one saved-state scene in the caller's existing Qt application."""
+    from PyQt6.QtCore import QCoreApplication, QEvent
+    from PyQt6.QtWidgets import QGraphicsScene
+
+    from chemvas.adapters.qt.renderer import Renderer
+    from chemvas.domain.document import deserialize_model_state
+    from chemvas.features.graph import build_bond_adjacency_index
+    from chemvas.ui.canvas.sheet_setup_state import sheet_rects
+    from chemvas.ui.scene.scene_render_context import SceneRenderState
+    from chemvas.ui.scene.scene_rendering import build_scene_render_context
+
+    scene = QGraphicsScene()
+    try:
+        model = deserialize_model_state(state["model"])
+        drawing_state = SceneRenderState()
+        graph = drawing_state.graph_state
+        graph.atom_neighbors, graph.atom_bond_ids = build_bond_adjacency_index(
+            model.atoms, model.bonds
+        )
+        context = build_scene_render_context(
+            scene_provider=lambda: scene,
+            model_provider=lambda: model,
+            renderer=Renderer(),
+            state=drawing_state,
+        )
+        populate_document_scene(context, state)
+        sheet = drawing_state.sheet_setup_state
+        sheet.rect, scene_rect = sheet_rects(
+            sheet.size_name, sheet.orientation, sheet.custom_size_mm
+        )
+        scene.setSceneRect(scene_rect)
+        yield context
+    finally:
+        scene.deleteLater()
+        QCoreApplication.sendPostedEvents(scene, QEvent.Type.DeferredDelete)
 
 
 def populate_document_scene(

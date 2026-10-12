@@ -63,6 +63,9 @@ def selection_path_for_bond_item(
     default_width_for_pen: PenWidthGetter = _default_width_for_pen,
     line_stroke_path: LineStrokePathBuilder = selection_line_stroke_path,
 ) -> QPainterPath:
+    stroke_polygon = getattr(item, "stroke_polygon", None)
+    if callable(stroke_polygon) and stroke_polygon() is not None:
+        return item.mapToScene(item.shape())
     if isinstance(item, QGraphicsLineItem):
         line = item.line()
         start = item.mapToScene(QPointF(line.x1(), line.y1()))

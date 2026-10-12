@@ -95,6 +95,7 @@ if TYPE_CHECKING:
     )
     from chemvas.ui.canvas.canvas_hit_testing_service import CanvasHitTestingService
     from chemvas.ui.canvas.canvas_view import CanvasView
+    from chemvas.ui.export.reviewed_cdxml_snapshot import ReviewedCdxmlSnapshot
 
 _DOCUMENT_MUTATED_RUNTIME_FIELDS = (
     "sheet_setup_state",
@@ -614,7 +615,22 @@ class CanvasDocumentSessionService:
         editable_svg: bool = False,
         max_height_mm: float | None = None,
         min_font_pt: float | None = None,
+        reviewed_cdxml_snapshot: ReviewedCdxmlSnapshot | None = None,
     ) -> ExportPlan:
+        if reviewed_cdxml_snapshot is not None:
+            if fmt.lower() != "cdxml" or scope != reviewed_cdxml_snapshot.scope:
+                raise ValueError(
+                    "Reviewed CDXML snapshot does not match export options."
+                )
+            return reviewed_cdxml_snapshot.export(
+                path,
+                dpi=dpi,
+                background=background,
+                sizing=sizing,
+                target_width_mm=target_width_mm,
+                max_height_mm=max_height_mm,
+                min_font_pt=min_font_pt,
+            )
         if fmt.lower() == "svg" and editable_svg and scope != "selection":
             # The embedded whole-sheet document must not drop an existing plan.
             require_preserved_calculation_plan_for(self.canvas)

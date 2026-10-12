@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING, Any
 
 from chemvas.domain.document import VALID_ARROW_KINDS
 from chemvas.domain.document.shapes import moved_shape
+from chemvas.features.graph import geometry_bond_sets_for_atom_ids
 from chemvas.features.selection import translate_projected_point_3d
 from chemvas.ui.canvas.canvas_mark_registry import mark_registry_for
 from chemvas.ui.canvas.canvas_ring_fill_scene_service import rebuild_ring_fill_polygons
@@ -57,11 +58,7 @@ class CanvasMoveController:
             # multi-atom move_atoms path and fixes single-atom drags that
             # previously left marks behind and the spatial index stale.
             self.move_atom(atom_id, dx, dy)
-            for bond_id, bond in enumerate(self.canvas.model.bonds):
-                if bond is None:
-                    continue
-                if bond.a == atom_id or bond.b == atom_id:
-                    self.redraw_bond(bond_id)
+            self.redraw_bonds_for_atoms({atom_id})
         elif kind == "bond":
             bond_id = item.data(1)
             if not isinstance(bond_id, int):
@@ -71,8 +68,7 @@ class CanvasMoveController:
                 return
             self.move_atom(bond.a, dx, dy)
             self.move_atom(bond.b, dx, dy)
-            self.redraw_connected_bonds(bond.a)
-            self.redraw_connected_bonds(bond.b)
+            self.redraw_bonds_for_atoms({bond.a, bond.b})
         elif kind == "mark":
             item.moveBy(dx, dy)
             data = item.data(1) or {}
@@ -173,16 +169,19 @@ class CanvasMoveController:
             self.move_atom(atom_id, dx, dy)
         use_bond_sets = bond_ids is not None or redraw_bond_ids is not None
         if use_bond_sets:
-            if bond_ids:
-                for bond_id in bond_ids:
+            _, dependent_ids = self.geometry_bond_sets_for_atom_ids(atom_ids)
+            translated_ids = (bond_ids or set()) - dependent_ids
+            refreshed_ids = (redraw_bond_ids or set()) | dependent_ids
+            if translated_ids:
+                for bond_id in translated_ids:
                     for (
                         item
                     ) in self.canvas.runtime_state.bond_graphics_state.bond_items.get(
                         bond_id, []
                     ):
                         item.moveBy(dx, dy)
-            if redraw_bond_ids:
-                for bond_id in redraw_bond_ids:
+            if refreshed_ids:
+                for bond_id in refreshed_ids:
                     update_bond_geometry_for(
                         self.canvas,
                         bond_id,
@@ -203,7 +202,8 @@ class CanvasMoveController:
             self.canvas.services.selection.update_selection_outline()
 
     def redraw_bonds_for_atoms(self, atom_ids: set[int]) -> None:
-        for bond_id in self.bond_ids_for_atom_ids(atom_ids):
+        internal, dependent = self.geometry_bond_sets_for_atom_ids(atom_ids)
+        for bond_id in internal | dependent:
             self.redraw_bond(bond_id)
 
     def update_bond_geometries_for_atoms(
@@ -217,7 +217,8 @@ class CanvasMoveController:
         keeping the frozen mid-gesture count.
         """
 
-        for bond_id in self.bond_ids_for_atom_ids(atom_ids):
+        internal, dependent = self.geometry_bond_sets_for_atom_ids(atom_ids)
+        for bond_id in internal | dependent:
             update_bond_geometry_for(
                 self.canvas,
                 bond_id,
@@ -240,6 +241,23 @@ class CanvasMoveController:
         for atom_id in atom_ids:
             bond_ids.update(graph.atom_bond_ids.get(atom_id, ()))
         return bond_ids
+
+    def geometry_bond_sets_for_atom_ids(
+        self, atom_ids: set[int]
+    ) -> tuple[set[int], set[int]]:
+        """Separate rigid translation from angle-dependent geometry refresh.
+
+        A boundary edge changes direction relative to every edge at either end.
+        Those edges include stationary neighbours and selected internal edges;
+        neither may keep its previous outline or simply translate it. A whole
+        connected selection still retains the rigid item-translation fast path.
+        """
+        model = self.canvas.model
+        graph = self.canvas.runtime_state.graph_state
+
+        return geometry_bond_sets_for_atom_ids(
+            atom_ids, graph.atom_bond_ids, model.bonds, bond_for_id=model.bond_for_id
+        )
 
     def move_rings_for_atoms(
         self,

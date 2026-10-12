@@ -13,7 +13,7 @@ import pytest
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PyQt6.QtCore import QByteArray, QEvent, QPointF, Qt
-from PyQt6.QtGui import QFontMetricsF, QImage, QPainter, QPainterPath
+from PyQt6.QtGui import QFontMetricsF, QImage, QPainter, QPainterPath, QRawFont
 from PyQt6.QtSvg import QSvgRenderer
 from PyQt6.QtWidgets import QApplication
 
@@ -89,7 +89,12 @@ def _assert_oxygen_attachment(canvas, raw_label, angle):
     anchor = item.anchor_scene_rect()
     assert anchor is not None
     assert anchor.center().x() == pytest.approx(atom.x + offset, abs=1e-9)
-    assert anchor.center().y() == pytest.approx(atom.y - offset, abs=1e-9)
+    raw = QRawFont.fromFont(item.font())
+    glyph = raw.pathForGlyph(raw.glyphIndexesForString("O")[0]).boundingRect()
+    painted_baseline = oxygen.top() - glyph.top()
+    assert painted_baseline == pytest.approx(
+        atom.y - offset + (raw.pixelSize() - raw.descent()) / 2, abs=1e-9
+    )
     assert oxygen.intersects(anchor)
     assert canvas.model.atoms[1].element == raw_label
 

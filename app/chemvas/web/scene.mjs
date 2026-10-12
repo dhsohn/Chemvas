@@ -545,12 +545,14 @@ export function valenceWarningMarkup(document, ids, drawing, style, scale, viewp
 
 // One planner primitive inside a bond group that supplies stroke width and colour.
 function bondPrimitiveMarkup(primitive, color) {
+  // A native joined stroke retains its chemical centerline for selection and
+  // editing, while the planner's polygon owns the visible ink.
+  if (primitive.polygon) return `<polygon points="${primitive.polygon.map(p => p.map(number).join(',')).join(' ')}" fill="${color}" ${primitive.outlined ? '' : 'stroke="none"'}/>`;
   if (primitive.line) {
     const [x1, y1, x2, y2] = primitive.line;
     return x1 !== x2 || y1 !== y2 ? line(x1, y1, x2, y2) : '';
   }
   if (primitive.dots) return primitive.dots.map(([x, y]) => `<circle cx="${number(x)}" cy="${number(y)}" r="${number(primitive.radius)}" fill="${color}" stroke="none"/>`).join('');
-  if (primitive.polygon) return `<polygon points="${primitive.polygon.map(p => p.map(number).join(',')).join(' ')}" fill="${color}" ${primitive.outlined ? '' : 'stroke="none"'}/>`;
   return '';
 }
 

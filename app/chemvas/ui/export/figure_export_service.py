@@ -25,6 +25,8 @@ if TYPE_CHECKING:
     from PyQt6.QtWidgets import QGraphicsItem
 
     from chemvas.domain.document.groups import SceneGroup
+    from chemvas.features.export import CdxmlLabelBindings, CdxmlTextLayoutReference
+    from chemvas.ui.export.export_cdxml import LabelBindings
     from chemvas.ui.scene.scene_render_context import SceneRenderContext
 
 
@@ -95,6 +97,52 @@ class FigureExportService:
             target_width_pt=target_width_pt,
         )
 
+    def _typed_label_bindings(
+        self,
+        items: Sequence[QGraphicsItem],
+        label_bindings: CdxmlLabelBindings,
+    ) -> LabelBindings:
+        """Bind each sidecar entry to an exported atom and its exact label.
+
+        The atom must exist, be visible and lie inside the export scope (the
+        same closure and visibility rule ``preflight_cdxml`` uses), and its
+        label must equal ``expected_label`` code point for code point. Only
+        then is the stated meaning handed to the exporter, which still decides
+        whether that meaning fits the label.
+        """
+        from chemvas.ui.export.export_cdxml import CdxmlLabelBinding
+        from chemvas.ui.export.export_scope import export_item_closure
+
+        exported_atom_ids: set[int] = set()
+        for item in export_item_closure(list(items)):
+            if item.data(0) == "atom" and item.isVisible():
+                atom_id = item.data(1)
+                if isinstance(atom_id, int):
+                    exported_atom_ids.add(atom_id)
+        atoms = self.context.model.atoms
+        typed: dict[int, CdxmlLabelBinding] = {}
+        for entry in label_bindings.entries:
+            prefix = f"CDXML label binding for atom {entry.atom_id}"
+            atom = atoms.get(entry.atom_id)
+            if atom is None:
+                raise ValueError(f"{prefix}: the atom is not in the document")
+            if entry.atom_id not in exported_atom_ids:
+                raise ValueError(
+                    f"{prefix}: the atom is hidden or outside the export scope"
+                )
+            if atom.element != entry.expected_label:
+                raise ValueError(
+                    f"{prefix}: the document label {atom.element!r} is not the "
+                    f"expected label {entry.expected_label!r}"
+                )
+            typed[entry.atom_id] = CdxmlLabelBinding(
+                entry.meaning,
+                element=entry.element,
+                fragment=entry.fragment,
+                author_note=entry.author_note,
+            )
+        return typed
+
     def plan_figure_export(
         self,
         *,
@@ -124,7 +172,26 @@ class FigureExportService:
         max_height_mm: float | None = None,
         min_font_pt: float | None = None,
         after_render: Callable[[Path], None] | None = None,
+        label_bindings: CdxmlLabelBindings | None = None,
+        layout_reference: CdxmlTextLayoutReference | None = None,
     ) -> ExportPlan:
+        if label_bindings is not None and fmt.lower() != "cdxml":
+            raise ValueError(
+                "CDXML label bindings apply to CDXML export only. No file was written."
+            )
+        if layout_reference is not None and fmt.lower() != "cdxml":
+            raise ValueError("CDXML layout reference applies to CDXML export only")
+        if layout_reference is not None and layout_reference.export_options != {
+            "format": fmt.lower(),
+            "scope": scope,
+            "sizing": sizing,
+            "background": background,
+            "dpi": dpi,
+            "width_mm": target_width_mm,
+            "max_height_mm": max_height_mm,
+            "min_font_pt": min_font_pt,
+        }:
+            raise ValueError("CDXML layout reference does not match export options")
         items, plan = self._resolve_figure_export(
             scope=scope,
             selection=selection,
@@ -150,12 +217,19 @@ class FigureExportService:
                 dpi=dpi,
                 max_height_mm=max_height_mm,
             )
+            typed_bindings: LabelBindings | None = None
+            documentary_contacts = None
+            if label_bindings is not None:
+                typed_bindings = self._typed_label_bindings(items, label_bindings)
+                documentary_contacts = label_bindings.documentary_contacts or None
             preflight_cdxml(
                 self.context,
                 items,
                 plan,
                 background=background,
                 groups=self._groups,
+                label_bindings=typed_bindings,
+                documentary_contacts=documentary_contacts,
             )
             cdxml_bytes = serialize_cdxml(
                 self.context,
@@ -163,6 +237,9 @@ class FigureExportService:
                 plan,
                 background=background,
                 groups=self._groups,
+                label_bindings=typed_bindings,
+                documentary_contacts=documentary_contacts,
+                layout_reference=layout_reference,
             )
 
             def write_cdxml(tmp: Path) -> None:

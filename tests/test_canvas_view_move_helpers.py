@@ -157,7 +157,7 @@ class CanvasViewMoveHelpersTest(unittest.TestCase):
                 atoms={1: Atom("C", 10.0, 10.0)},
                 bonds=[Bond(1, 2, 1), None],
             ),
-            bond_renderer=SimpleNamespace(redraw_connected_bonds=mock.Mock()),
+            bond_renderer=SimpleNamespace(redraw_bond=mock.Mock()),
             services=canvas_runtime_services(
                 scene_decoration_build_service=SimpleNamespace(
                     mark_center=mock.Mock(return_value=QPointF(15.0, 18.0))
@@ -183,9 +183,7 @@ class CanvasViewMoveHelpersTest(unittest.TestCase):
         controller.move_atom.assert_has_calls(
             [mock.call(1, 4.0, -2.0), mock.call(2, 4.0, -2.0)]
         )
-        view.bond_renderer.redraw_connected_bonds.assert_has_calls(
-            [mock.call(1, skip_bond_id=None), mock.call(2, skip_bond_id=None)]
-        )
+        view.bond_renderer.redraw_bond.assert_called_once_with(0)
         self.assertEqual(mark_item.moves, [(1.0, 2.0)])
         self.assertEqual(mark_item.data(1)["dx"], 5.0)
         self.assertEqual(mark_item.data(1)["dy"], 8.0)
@@ -287,6 +285,7 @@ class CanvasViewMoveHelpersTest(unittest.TestCase):
     def test_move_atoms_uses_bond_sets_or_falls_back_to_redraw(self) -> None:
         bond_graphic = _FakeItem("bond")
         view = SimpleNamespace(
+            model=MoleculeModel(),
             bond_renderer=SimpleNamespace(update_bond_geometry=mock.Mock()),
             refresh_selection_outline=mock.Mock(),
             runtime_state=canvas_runtime_state(
