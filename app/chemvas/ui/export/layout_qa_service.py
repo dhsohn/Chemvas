@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 import math
-from typing import TYPE_CHECKING, Any, override
+from dataclasses import dataclass
+from typing import TYPE_CHECKING, Any, cast, override
 
 from PyQt6.QtCore import QRectF, Qt
 from PyQt6.QtGui import (
@@ -23,6 +24,15 @@ from PyQt6.QtWidgets import (
 from chemvas.ui.annotations.arrows import ARROW_LABEL_ROLE
 from chemvas.ui.canvas.graphics_items import note_paint_scene_path
 from chemvas.ui.export.export_scope import EXPORT_EXCLUDED_KINDS, item_export_bounds
+from chemvas.ui.export.layout_spatial import (
+    MAX_INTERSECTION_COMPLEXITY,
+    MAX_INTERSECTION_ELEMENTS,
+    MAX_LAYOUT_WORK_UNITS,
+    MAX_TOTAL_PATH_ELEMENTS,
+    layout_limit,
+    overlapping_bounds,
+    validate_path,
+)
 from chemvas.ui.scene.scene_item_access import item_is_unavailable_for_scene_operation
 
 if TYPE_CHECKING:
@@ -52,117 +62,163 @@ def check_scene_layout(
     warnings = _sheet_boundary_warnings(context)
     if sheet_only:
         return _layout_report(warnings, sheet_only=True)
-    notes = []
-    note_paths = []
+    entries = _collision_entries(context)
+    candidates = []
+    elements = 0
+    complexity = 0
+    for left, right in overlapping_bounds([entry.path for entry in entries]):
+        rule = _collision_rule(entries[left], entries[right])
+        if rule is None:
+            continue
+        candidates.append((left, right, rule))
+        if len(candidates) > MAX_LAYOUT_WORK_UNITS:
+            raise layout_limit(f"layout work limit of {MAX_LAYOUT_WORK_UNITS}")
+        elements += (
+            entries[left].path.elementCount() + entries[right].path.elementCount()
+        )
+        complexity += (
+            entries[left].path.elementCount() * entries[right].path.elementCount()
+        )
+    # Complete broad-phase validation before allocating intersections or warnings.
+    if elements > MAX_INTERSECTION_ELEMENTS:
+        raise layout_limit(
+            f"layout intersection limit of {MAX_INTERSECTION_ELEMENTS} path elements"
+        )
+    if complexity > MAX_INTERSECTION_COMPLEXITY:
+        raise layout_limit(
+            f"layout intersection-complexity limit of {MAX_INTERSECTION_COMPLEXITY}"
+        )
+    for left, right, (code, refs, message) in candidates:
+        overlap = entries[left].path.intersected(entries[right].path)
+        if _positive_path(overlap):
+            warnings.append(_warning(code, refs, overlap.boundingRect(), message))
+    return _layout_report(warnings, sheet_only=False)
+
+
+@dataclass
+class _CollisionEntry:
+    ref: dict[str, object]
+    path: QPainterPath
+
+
+def _collision_entries(context: SceneRenderContext) -> list[_CollisionEntry]:
+    entries: list[_CollisionEntry] = []
+    total_elements = 0
+
+    def add(ref: dict[str, object], path: QPainterPath) -> None:
+        nonlocal total_elements
+        validate_path(path)
+        total_elements += path.elementCount()
+        if total_elements > MAX_TOTAL_PATH_ELEMENTS:
+            raise layout_limit(
+                f"layout total-path limit of {MAX_TOTAL_PATH_ELEMENTS} elements"
+            )
+        if not path.isEmpty():
+            entries.append(_CollisionEntry(ref, path))
+
+    for atom_id, item in sorted(context.state.atom_graphics_state.atom_items.items()):
+        if item.isVisible() and item.effectiveOpacity() > 0.0:
+            add({"kind": "atom", "id": atom_id}, _atom_label_scene_path(item))
     for index, item in enumerate(context.state.scene_items("note_items")):
         if (
-            item_is_unavailable_for_scene_operation(item)
-            or not item.isVisible()
-            or item.effectiveOpacity() <= 0.0
+            not item_is_unavailable_for_scene_operation(item)
+            and item.isVisible()
+            and item.effectiveOpacity() > 0.0
         ):
-            continue
-        path = note_paint_scene_path(item)
-        if path.isEmpty():
-            continue
-        notes.append((index, item))
-        note_paths.append((index, path))
-    shapes = [
+            add({"kind": "note", "index": index}, note_paint_scene_path(item))
+    arrows = [
         (index, item)
-        for index, item in enumerate(context.state.scene_items("shape_items"))
+        for index, item in enumerate(context.state.scene_items("arrow_items"))
         if not item_is_unavailable_for_scene_operation(item)
-        and item.isVisible()
-        and _has_visible_shape_paint(item)
     ]
-    atom_paths = []
-    for atom_id, item in sorted(context.state.atom_graphics_state.atom_items.items()):
-        if not item.isVisible() or item.effectiveOpacity() <= 0.0:
+    for index, arrow in arrows:
+        for item in arrow.childItems():
+            if item.data(0) != ARROW_LABEL_ROLE or not isinstance(
+                item, QGraphicsTextItem
+            ):
+                continue
+            if not item.isVisible() or item.effectiveOpacity() <= 0.0:
+                continue
+            side = item.data(1)
+            if side not in {"above", "below"}:
+                raise ValueError("Arrow label has no valid above/below side metadata.")
+            add(
+                {"kind": "arrow-label", "index": index, "side": side},
+                note_paint_scene_path(item),
+            )
+    for atom_ids, path in _molecular_bond_paths(context):
+        add({"kind": "bond", "atom_ids": atom_ids}, path)
+    for index, item in enumerate(context.state.scene_items("mark_items")):
+        if item_is_unavailable_for_scene_operation(item):
             continue
-        path = _atom_label_scene_path(item)
-        if not path.isEmpty():
-            atom_paths.append((atom_id, path))
-    for left_position, (left_id, left_path) in enumerate(atom_paths):
-        for right_id, right_path in atom_paths[left_position + 1 :]:
-            overlap = left_path.intersected(right_path)
-            if _positive_path(overlap):
-                warnings.append(
-                    _warning(
-                        "text-text-overlap",
-                        [
-                            {"kind": "atom", "id": left_id},
-                            {"kind": "atom", "id": right_id},
-                        ],
-                        overlap.boundingRect(),
-                        "Atom labels overlap.",
-                    )
-                )
-
-    for atom_id, atom_path in atom_paths:
-        for note_index, note_path in note_paths:
-            overlap = atom_path.intersected(note_path)
-            if _positive_path(overlap):
-                warnings.append(
-                    _warning(
-                        "text-text-overlap",
-                        [
-                            {"kind": "atom", "id": atom_id},
-                            {"kind": "note", "index": note_index},
-                        ],
-                        overlap.boundingRect(),
-                        "Atom label and note overlap.",
-                    )
-                )
-
-    for left_position, (left_index, left_path) in enumerate(note_paths):
-        for right_index, right_path in note_paths[left_position + 1 :]:
-            overlap = left_path.intersected(right_path)
-            if not _positive_path(overlap):
-                continue
-            warnings.append(
-                _warning(
-                    "text-text-overlap",
-                    [
-                        {"kind": "note", "index": left_index},
-                        {"kind": "note", "index": right_index},
-                    ],
-                    overlap.boundingRect(),
-                    "Notes overlap.",
-                )
+        metadata = item.data(1)
+        if (
+            isinstance(item, QGraphicsTextItem)
+            and item.isVisible()
+            and item.effectiveOpacity() > 0.0
+            and isinstance(metadata, dict)
+            and metadata.get("kind") in {"plus", "minus"}
+            and type(metadata.get("atom_id")) is int
+        ):
+            add(
+                {"kind": "mark", "index": index, "atom_id": metadata["atom_id"]},
+                note_paint_scene_path(item),
             )
+    for index, arrow in arrows:
+        add({"kind": "arrow", "index": index}, _graphics_paint_scene_path(arrow))
+    for index, item in enumerate(context.state.scene_items("shape_items")):
+        if item_is_unavailable_for_scene_operation(item):
+            continue
+        border = _shape_border_scene_path(item)
+        if border is not None:
+            add({"kind": "shape", "index": index}, border)
+    return entries
 
-    for note_index, note_path in note_paths:
-        for shape_index, shape in shapes:
-            border = _shape_border_scene_path(shape)
-            if border is None:
-                continue
-            overlap = note_path.intersected(border)
-            if not _positive_path(overlap):
-                continue
-            warnings.append(
-                _warning(
-                    "text-shape-border-overlap",
-                    [
-                        {"kind": "note", "index": note_index},
-                        {"kind": "shape", "index": shape_index},
-                    ],
-                    overlap.boundingRect(),
-                    "Note text crosses a shape border.",
-                )
+
+def _collision_rule(
+    left: _CollisionEntry, right: _CollisionEntry
+) -> tuple[str, list[dict[str, object]], str] | None:
+    a, b = left.ref["kind"], right.ref["kind"]
+    refs = [left.ref, right.ref]
+    if a in {"atom", "note", "arrow-label"} and b in {"atom", "note", "arrow-label"}:
+        message = (
+            "Attached arrow label overlaps other text."
+            if b == "arrow-label"
+            else "Atom labels overlap."
+            if a == b == "atom"
+            else "Notes overlap."
+            if a == b == "note"
+            else "Atom label and note overlap."
+        )
+        return "text-text-overlap", refs, message
+    if a == "atom" and b == "bond":
+        if left.ref["id"] not in cast("list[int]", right.ref["atom_ids"]):
+            return (
+                "atom-bond-overlap",
+                refs,
+                "Atom label crosses a nonincident molecular bond.",
             )
-
-    bond_paths = (
-        _molecular_bond_paths(context)
-        if atom_paths
-        or context.state.scene_items("arrow_items")
-        or context.state.scene_items("mark_items")
-        else []
-    )
-    warnings.extend(_molecular_text_bond_warnings(context, atom_paths, bond_paths))
-    warnings.extend(_arrow_structure_warnings(context, atom_paths, bond_paths))
-
-    warnings.extend(
-        _arrow_label_warnings(context, atom_paths, note_paths, bond_paths, shapes)
-    )
-    return _layout_report(warnings, sheet_only=False)
+    if a == "bond" and b == "mark":
+        return (
+            "charge-bond-overlap",
+            refs[::-1],
+            "Attached charge glyph crosses a molecular bond.",
+        )
+    if a in {"atom", "bond"} and b == "arrow":
+        message = (
+            "Arrow crosses an atom label."
+            if a == "atom"
+            else "Arrow crosses a molecular bond."
+        )
+        return "arrow-structure-overlap", refs[::-1], message
+    if a == "arrow-label" and b in {"bond", "arrow", "shape"}:
+        code = "text-shape-border-overlap" if b == "shape" else f"text-{b}-overlap"
+        return code, refs, "Attached arrow label crosses painted geometry."
+    if a == "note" and b == "shape":
+        return "text-shape-border-overlap", refs, "Note text crosses a shape border."
+    if a == "note" and b == "arrow":
+        return "text-arrow-overlap", refs, "Note text crosses an arrow stroke."
+    return None
 
 
 def _layout_report(
@@ -189,13 +245,14 @@ def _layout_report(
                 "Visible atom, note and attached arrow-label ink pairs.",
                 "Atom labels against nonincident molecular bonds; attached charges against all molecular bonds.",
                 "Arrow strokes against atom labels and molecular bonds.",
+                "Standalone note ink against arrow and line strokes.",
                 "Attached arrow-label ink against molecular bonds and own or other arrow strokes.",
                 "Notes and attached arrow-label ink against shape borders.",
                 containment,
             ],
             "not_checked": [
                 *unchecked,
-                "Other collision pairs, including note-bond, note-arrow, bond-bond, arrow-arrow and charge-text pairs.",
+                "Other collision pairs, including note-bond, bond-bond, arrow-arrow and charge-text pairs.",
                 "Collisions involving images, TS brackets, orbitals, ring fills and other standalone marks.",
                 "Automatic list markers outside the collected text glyph runs in collision checks.",
             ],
@@ -325,81 +382,6 @@ def _has_visible_list_marker(item: QGraphicsTextItem) -> bool:
     return False
 
 
-def _arrow_label_warnings(
-    context: SceneRenderContext,
-    atom_paths: list[tuple[int, QPainterPath]],
-    note_paths: list[tuple[int, QPainterPath]],
-    bond_paths: list[tuple[list[int], QPainterPath]],
-    shapes: list[tuple[int, Any]],
-) -> list[dict[str, object]]:
-    warnings: list[dict[str, object]] = []
-    text_paths: list[tuple[dict[str, object], QPainterPath]] = [
-        ({"kind": "atom", "id": atom_id}, path) for atom_id, path in atom_paths
-    ] + [({"kind": "note", "index": index}, path) for index, path in note_paths]
-    targets: list[tuple[str, dict[str, object], QPainterPath]] = [
-        ("text-bond-overlap", {"kind": "bond", "atom_ids": ids}, path)
-        for ids, path in bond_paths
-    ]
-    targets.extend(
-        (
-            "text-arrow-overlap",
-            {"kind": "arrow", "index": index},
-            _graphics_paint_scene_path(arrow),
-        )
-        for index, arrow in enumerate(context.state.scene_items("arrow_items"))
-        if not item_is_unavailable_for_scene_operation(arrow)
-    )
-    targets.extend(
-        ("text-shape-border-overlap", {"kind": "shape", "index": index}, path)
-        for index, shape in shapes
-        if (path := _shape_border_scene_path(shape)) is not None
-    )
-    for index, arrow in enumerate(context.state.scene_items("arrow_items")):
-        if item_is_unavailable_for_scene_operation(arrow):
-            continue
-        for item in arrow.childItems():
-            if (
-                item.data(0) != ARROW_LABEL_ROLE
-                or not isinstance(item, QGraphicsTextItem)
-                or not item.isVisible()
-                or item.effectiveOpacity() <= 0.0
-            ):
-                continue
-            side = item.data(1)
-            if side not in {"above", "below"}:
-                raise ValueError("Arrow label has no valid above/below side metadata.")
-            label_path = note_paint_scene_path(item)
-            if label_path.isEmpty():
-                continue
-            ref = {"kind": "arrow-label", "index": index, "side": side}
-            # Previously visited labels join the text list, so every pair is
-            # checked once without comparing all scene items indiscriminately.
-            for other_ref, path in text_paths:
-                overlap = label_path.intersected(path)
-                if _positive_path(overlap):
-                    warnings.append(
-                        _warning(
-                            "text-text-overlap",
-                            [other_ref, ref],
-                            overlap.boundingRect(),
-                            "Attached arrow label overlaps other text.",
-                        )
-                    )
-            for code, other_ref, path in targets:
-                overlap = label_path.intersected(path)
-                if _positive_path(overlap):
-                    warnings.append(
-                        _warning(
-                            code,
-                            [ref, other_ref],
-                            overlap.boundingRect(),
-                            "Attached arrow label crosses painted geometry.",
-                        )
-                    )
-            text_paths.append((ref, label_path))
-    return warnings
-
-
 def _molecular_bond_paths(
     context: SceneRenderContext,
 ) -> list[tuple[list[int], QPainterPath]]:
@@ -414,106 +396,6 @@ def _molecular_bond_paths(
         if bond is not None and not path.isEmpty():
             bond_paths.append((sorted((bond.a, bond.b)), path))
     return bond_paths
-
-
-def _molecular_text_bond_warnings(
-    context: SceneRenderContext,
-    atom_paths: list[tuple[int, QPainterPath]],
-    bond_paths: list[tuple[list[int], QPainterPath]],
-) -> list[dict[str, object]]:
-    warnings: list[dict[str, object]] = []
-    for atom_id, atom_path in atom_paths:
-        for atom_ids, bond_path in bond_paths:
-            if atom_id in atom_ids:
-                continue
-            overlap = atom_path.intersected(bond_path)
-            if _positive_path(overlap):
-                warnings.append(
-                    _warning(
-                        "atom-bond-overlap",
-                        [
-                            {"kind": "atom", "id": atom_id},
-                            {"kind": "bond", "atom_ids": atom_ids},
-                        ],
-                        overlap.boundingRect(),
-                        "Atom label crosses a nonincident molecular bond.",
-                    )
-                )
-    for index, item in enumerate(context.state.scene_items("mark_items")):
-        if item_is_unavailable_for_scene_operation(item):
-            continue
-        metadata = item.data(1)
-        if (
-            not isinstance(item, QGraphicsTextItem)
-            or not isinstance(metadata, dict)
-            or metadata.get("kind") not in {"plus", "minus"}
-            or type(metadata.get("atom_id")) is not int
-            or not item.isVisible()
-            or item.effectiveOpacity() <= 0.0
-        ):
-            continue
-        charge_path = note_paint_scene_path(item)
-        for atom_ids, bond_path in bond_paths:
-            overlap = charge_path.intersected(bond_path)
-            if _positive_path(overlap):
-                warnings.append(
-                    _warning(
-                        "charge-bond-overlap",
-                        [
-                            {
-                                "kind": "mark",
-                                "index": index,
-                                "atom_id": metadata["atom_id"],
-                            },
-                            {"kind": "bond", "atom_ids": atom_ids},
-                        ],
-                        overlap.boundingRect(),
-                        "Attached charge glyph crosses a molecular bond.",
-                    )
-                )
-    return warnings
-
-
-def _arrow_structure_warnings(
-    context: SceneRenderContext,
-    atom_paths: list[tuple[int, QPainterPath]],
-    bond_paths: list[tuple[list[int], QPainterPath]],
-) -> list[dict[str, object]]:
-    warnings: list[dict[str, object]] = []
-    for arrow_index, arrow in enumerate(context.state.scene_items("arrow_items")):
-        if item_is_unavailable_for_scene_operation(arrow):
-            continue
-        arrow_path = _graphics_paint_scene_path(arrow)
-        for atom_id, atom_path in atom_paths:
-            overlap = arrow_path.intersected(atom_path)
-            if _positive_path(overlap):
-                warnings.append(
-                    _warning(
-                        "arrow-structure-overlap",
-                        [
-                            {"kind": "arrow", "index": arrow_index},
-                            {"kind": "atom", "id": atom_id},
-                        ],
-                        overlap.boundingRect(),
-                        "Arrow crosses an atom label.",
-                    )
-                )
-        for atom_ids, bond_path in bond_paths:
-            overlap = arrow_path.intersected(bond_path)
-            if _positive_path(overlap):
-                warnings.append(
-                    _warning(
-                        "arrow-structure-overlap",
-                        [
-                            {"kind": "arrow", "index": arrow_index},
-                            {"kind": "bond", "atom_ids": atom_ids},
-                        ],
-                        overlap.boundingRect(),
-                        "Arrow crosses a molecular bond.",
-                    )
-                )
-
-    return warnings
 
 
 class _AtomLabelPainter(QPainter):
@@ -554,16 +436,6 @@ def _atom_label_scene_path(item: QGraphicsTextItem) -> QPainterPath:
     return note_paint_scene_path(item)
 
 
-def _has_visible_shape_paint(item: Any) -> bool:
-    if item.opacity() <= 0.0:
-        return False
-    pen = item.pen()
-    if pen.style() != Qt.PenStyle.NoPen and pen.color().alpha() > 0:
-        return True
-    brush = item.brush()
-    return brush.style() != Qt.BrushStyle.NoBrush and brush.color().alpha() > 0
-
-
 def _graphics_paint_scene_path(item: Any) -> QPainterPath:
     if not item.isVisible() or item.effectiveOpacity() <= 0.0:
         return QPainterPath()
@@ -592,6 +464,8 @@ def _graphics_paint_scene_path(item: Any) -> QPainterPath:
 
 
 def _shape_border_scene_path(item: Any) -> QPainterPath | None:
+    if not item.isVisible() or item.effectiveOpacity() <= 0.0:
+        return None
     pen = item.pen()
     if pen.style() == Qt.PenStyle.NoPen or pen.color().alpha() == 0:
         return None
@@ -601,15 +475,24 @@ def _shape_border_scene_path(item: Any) -> QPainterPath | None:
 def _stroke_path(path: QPainterPath, pen: Any) -> QPainterPath:
     if pen.style() == Qt.PenStyle.NoPen or pen.color().alpha() == 0:
         return QPainterPath()
+    validate_path(path)
     stroker = QPainterPathStroker()
     stroker.setWidth(max(float(pen.widthF()), _GEOMETRY_EPSILON))
     stroker.setCapStyle(pen.capStyle())
     stroker.setJoinStyle(pen.joinStyle())
     dash_pattern = pen.dashPattern()
     if dash_pattern:
+        # Bound dash expansion before Qt allocates the painted stroke.
+        period = sum(dash_pattern) * max(float(pen.widthF()), _GEOMETRY_EPSILON)
+        if period <= 0 or path.length() / period * len(dash_pattern) > 100_000:
+            raise layout_limit(
+                "layout dashed-stroke limit of 100000 segments", containment_only=False
+            )
         stroker.setDashPattern(dash_pattern)
         stroker.setDashOffset(pen.dashOffset())
-    return stroker.createStroke(path)
+    painted = stroker.createStroke(path)
+    validate_path(painted)
+    return painted
 
 
 def _positive_path(path: QPainterPath) -> bool:

@@ -23,8 +23,8 @@ Chemvas is an open-source drawing tool for **reaction schemes that you can rebui
 
 **Agent editing you can check**
 
-- `inspect-document` lists every atom with a stable ID and every bond by its two atom IDs, plus the SHA-256 of the file.
-- `apply-patch` takes a JSON patch of graph operations. It refuses a patch written against different file bytes, can check a patch with `--dry-run` without writing anything, validates the whole document, and writes to a new file only. The input file is never modified.
+- `inspect-document` lists every atom with a stable ID and every bond by its two atom IDs, and saved notes by their snapshot index, plus the SHA-256 of the file.
+- `apply-patch` takes a JSON patch of graph operations and note creation, movement, or content/style replacement. It refuses a patch written against different file bytes, can check a patch with `--dry-run` without writing anything, validates the whole document, and writes to a new file only. The input file is never modified.
 - Patches are checked for document structure, not for chemistry: element symbols and valence are not validated. Review the rendered figure before you use it.
 
 **Drawing by hand**

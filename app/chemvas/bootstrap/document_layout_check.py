@@ -16,7 +16,7 @@ from chemvas.bootstrap.document_cli_shared import (
 )
 from chemvas.core.document_io import read_exact_document
 
-MAX_LAYOUT_WORK_UNITS = 10_000
+MAX_LAYOUT_TEXT_CHARACTERS = 100_000
 
 
 def run(argv: list[str]) -> int:
@@ -33,15 +33,7 @@ def run(argv: list[str]) -> int:
             raise ValueError(
                 f"input document exceeds the {MAX_GRAPHICS_RECORDS}-graphics-record layout limit"
             )
-        if not args.sheet_only:
-            layout_work_units = _layout_work_units(
-                cast("Mapping[str, object]", document.state)
-            )
-            if layout_work_units > MAX_LAYOUT_WORK_UNITS:
-                raise ValueError(
-                    f"input document exceeds the layout work limit of {MAX_LAYOUT_WORK_UNITS}; "
-                    "use --sheet-only for containment only (collisions remain unchecked)"
-                )
+        _validate_layout_text_budget(document.state)
         analysis = _check_offscreen(document.state, sheet_only=args.sheet_only)
         report = {
             "format": "chemvas-layout-check-report",
@@ -77,53 +69,25 @@ def _argument_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def _layout_work_units(state: Mapping[str, object]) -> int:
-    notes = state.get("notes", [])
-    shapes = state.get("shapes", [])
-    arrows = state.get("arrows", [])
-    marks = state.get("marks", [])
-    if not all(isinstance(records, list) for records in (notes, shapes, arrows, marks)):
-        raise ValueError("Invalid Chemvas file.")
-    model = state.get("model")
-    if not isinstance(model, Mapping) or not isinstance(model.get("atoms"), Mapping):
-        raise ValueError("Invalid Chemvas file.")
-    bonds = model.get("bonds")
-    if not isinstance(bonds, list):
-        raise ValueError("Invalid Chemvas file.")
-    # render_model creates no label for an implicit C. Count all other atoms,
-    # including explicit C, regardless of color, clipping or derived typography.
-    label_count = sum(
-        1
-        for atom in model["atoms"].values()
-        if atom["element"].upper() != "C" or bool(atom.get("explicit_label", False))
+def _validate_layout_text_budget(state: Mapping[str, object]) -> None:
+    # Bound shaping before opening Qt. Collision work is measured from actual
+    # painted bounds in the scene, rather than all possible document pairs.
+    def characters(value: object) -> int:
+        if isinstance(value, str):
+            return len(value)
+        if isinstance(value, Mapping):
+            return sum(characters(child) for child in value.values())
+        if isinstance(value, list):
+            return sum(characters(child) for child in value)
+        return 0
+
+    count = sum(
+        characters(state.get(key)) for key in ("model", "notes", "marks", "arrows")
     )
-    note_count = len(cast("list[object]", notes))
-    shape_count = len(cast("list[object]", shapes))
-    arrow_count = len(cast("list[object]", arrows))
-    arrow_label_count = sum(
-        bool(text)
-        for arrow in cast("list[Mapping[str, Any]]", arrows)
-        for text in arrow.get("labels", {}).values()
-    )
-    bond_count = len(bonds)
-    charge_count = sum(
-        mark.get("kind") in {"plus", "minus"} and type(mark.get("atom_id")) is int
-        for mark in cast("list[Mapping[str, object]]", marks)
-    )
-    text_count = note_count + label_count + arrow_label_count
-    return (
-        text_count * (text_count - 1) // 2
-        + (note_count + arrow_label_count) * shape_count
-        + arrow_count * (label_count + arrow_label_count + bond_count)
-        # Count incident and invisible pairs too: this pre-Qt bound must not
-        # depend on clipping, label placement or graphical visibility.
-        + (label_count + charge_count + arrow_label_count) * bond_count
-        + len(cast("list[object]", marks))
-        + text_count
-        + shape_count
-        + arrow_count
-        + bond_count
-    )
+    if count > MAX_LAYOUT_TEXT_CHARACTERS:
+        raise ValueError(
+            f"input document exceeds the layout text limit of {MAX_LAYOUT_TEXT_CHARACTERS} characters"
+        )
 
 
 def _check_offscreen(

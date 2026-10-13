@@ -450,3 +450,54 @@ def test_patch_rejects_oversized_candidate_before_reporting_or_writing(
     assert report["candidate_sha256"] == hashlib.sha256(expected).hexdigest()
     if not dry_run:
         assert output.read_bytes() == expected
+
+
+def test_note_patch_cli_dry_run_write_and_failed_batch_preserve_source(
+    tmp_path, capsys
+):
+    source, request, output = (
+        tmp_path / name for name in ("source.chemvas", "patch.json", "notes.chemvas")
+    )
+    source_bytes = _write_source(source)
+    patch = _patch(source_bytes)
+    patch["operations"] = [
+        {"op": "add_note", "note_index": 1, "note": {"text": "new", "x": 30, "y": 40}},
+        {"op": "move_note", "note_index": 0, "x": 10, "y": 20},
+        {
+            "op": "update_note",
+            "note_index": 0,
+            "content": {
+                "text": "styled",
+                "style": {"color": "#f00", "font_weight": 700},
+            },
+        },
+    ]
+    request.write_text(json.dumps(patch))
+    assert cli.run(["apply-patch", str(source), str(request), "--dry-run"]) == 0
+    preview = json.loads(capsys.readouterr().out)
+    assert not preview["written"] and preview["before"]["notes"] == 1
+    assert preview["after"]["notes"] == 2
+    assert not output.exists() and source.read_bytes() == source_bytes
+    assert (
+        cli.run(["apply-patch", str(source), str(request), "--output", str(output)])
+        == 0
+    )
+    report = json.loads(capsys.readouterr().out)
+    assert report["candidate_sha256"] == preview["candidate_sha256"]
+    assert report["candidate_sha256"] == hashlib.sha256(output.read_bytes()).hexdigest()
+    candidate = read_document(output)
+    assert candidate.state["notes"][0]["text"] == "styled"
+    assert candidate.state["notes"][1]["text"] == "new"
+    assert cli.run(["inspect-document", str(output)]) == 0
+    inventory = json.loads(capsys.readouterr().out)
+    assert inventory["next_note_index"] == 2
+    assert inventory["notes"][0]["html"] == candidate.state["notes"][0]["html"]
+    patch["operations"].append({"op": "move_note", "note_index": 9, "x": 0, "y": 0})
+    request.write_text(json.dumps(patch))
+    rejected = tmp_path / "rejected.chemvas"
+    with pytest.raises(SystemExit) as error:
+        cli.run(["apply-patch", str(source), str(request), "--output", str(rejected)])
+    assert error.value.code == 2
+    assert "note 9 does not exist" in capsys.readouterr().err
+    assert not rejected.exists()
+    assert source.read_bytes() == source_bytes

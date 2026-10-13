@@ -93,6 +93,9 @@ def test_inspection_is_sorted_and_exposes_agent_patch_contract() -> None:
         "add_bond",
         "update_bond",
         "remove_bond",
+        "add_note",
+        "move_note",
+        "update_note",
     ]
 
 
@@ -324,8 +327,8 @@ def test_patch_applies_ordered_graph_operations_without_mutating_source() -> Non
     )
 
     assert state == original
-    assert result.before == {"atoms": 1, "bonds": 0, "components": 1}
-    assert result.after == {"atoms": 2, "bonds": 1, "components": 1}
+    assert result.before == {"atoms": 1, "bonds": 0, "components": 1, "notes": 0}
+    assert result.after == {"atoms": 2, "bonds": 1, "components": 1, "notes": 0}
     assert result.payload["state"]["model"]["atoms"][0]["element"] == "N"
     assert result.payload["state"]["model"]["atoms"][1]["x"] == 20.0
     assert result.payload["state"]["model"]["bonds"][0] == {
@@ -531,7 +534,7 @@ def test_remove_bond_removes_a_bare_implicit_carbon_with_its_dependents() -> Non
     assert result.payload["state"]["groups"] == [
         {"atoms": [0], "items": [["notes", 0]]}
     ]
-    assert result.after == {"atoms": 2, "bonds": 1, "components": 1}
+    assert result.after == {"atoms": 2, "bonds": 1, "components": 1, "notes": 1}
 
 
 @pytest.mark.parametrize(

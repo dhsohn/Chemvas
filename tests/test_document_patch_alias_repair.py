@@ -169,6 +169,7 @@ def test_source_alias_error_can_be_repaired_but_inspection_stays_strict(alias, r
     assert result.before == {
         "atoms": len(state["model"]["atoms"]),
         "bonds": len(state["model"]["bonds"]),
+        "notes": len(state["notes"]),
         "components": 1,
     }
     # Removing the second bond leaves atom 2 a bare implicit carbon, which
@@ -176,6 +177,7 @@ def test_source_alias_error_can_be_repaired_but_inspection_stays_strict(alias, r
     assert result.after == {
         "atoms": inspection["atom_count"],
         "bonds": inspection["bond_count"],
+        "notes": inspection["note_count"],
         "components": 1,
     }
     if repair == "remove_bond":

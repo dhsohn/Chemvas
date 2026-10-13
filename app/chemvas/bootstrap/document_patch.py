@@ -49,12 +49,12 @@ def run(argv: list[str]) -> int:
 def _argument_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="chemvas",
-        description="Chemvas LLM-safe document inspection and graph patch tools.",
+        description="Chemvas LLM-safe document inspection and graph/note patch tools.",
     )
     subparsers = parser.add_subparsers(dest="command", required=True)
     inspect_parser = subparsers.add_parser(
         "inspect-document",
-        help="inspect the complete chemical graph as deterministic JSON",
+        help="inspect the complete chemical graph and notes as deterministic JSON",
     )
     inspect_parser.add_argument("document", help="input .chemvas document")
 

@@ -30,6 +30,7 @@ from chemvas.domain.document.inspection import (
     inspect_components,
 )
 from chemvas.domain.document.perspective import translate_projected_point_3d
+from chemvas.features.document_composition import compose_document_state
 
 DOCUMENT_PATCH_FORMAT = "chemvas-graph-patch"
 DOCUMENT_PATCH_VERSION = 1
@@ -47,6 +48,9 @@ _SUPPORTED_OPERATIONS = (
     "add_bond",
     "update_bond",
     "remove_bond",
+    "add_note",
+    "move_note",
+    "update_note",
 )
 
 
@@ -100,6 +104,12 @@ def inspect_document_graph(state: Mapping[str, object]) -> dict[str, object]:
             key=lambda item: (bond_pair_key(item.a, item.b), item.a, item.b),
         )
     ]
+    notes = [
+        {"note_index": index, **deepcopy(note)}
+        for index, note in enumerate(
+            cast("list[dict[str, object]]", state.get("notes", []))
+        )
+    ]
     return {
         "format": "chemvas-document-inspection",
         "version": 1,
@@ -108,6 +118,9 @@ def inspect_document_graph(state: Mapping[str, object]) -> dict[str, object]:
         "bond_count": len(bonds),
         "atoms": atoms,
         "bonds": bonds,
+        "notes": notes,
+        "note_count": len(notes),
+        "next_note_index": len(notes),
         "components": [
             {
                 "index": component.index,
@@ -130,6 +143,9 @@ def inspect_document_graph(state: Mapping[str, object]) -> dict[str, object]:
             "supported_operations": list(_SUPPORTED_OPERATIONS),
             "atom_ids_are_stable": True,
             "bond_locator": "unordered_atom_endpoint_pair",
+            "note_locator": "zero_based_document_note_index",
+            "note_indices_require_source_sha256": True,
+            "update_note_replaces_content_and_style": True,
             "remove_bond_removes_bare_atoms": True,
             "automatic_chemical_inference": False,
         },
@@ -149,7 +165,7 @@ def apply_document_patch(
     model = _document_model(candidate)
     # A structurally valid drawing may need this patch to repair an invalid
     # alias attachment. Count topology without interpreting source chemistry.
-    before = _counts(model)
+    before = _counts(model, candidate)
     evidence: list[dict[str, object]] = []
     for index, operation in enumerate(operations):
         try:
@@ -171,7 +187,7 @@ def apply_document_patch(
             "patched document would violate a document or Calculation Plan invariant: "
             f"{exc}"
         ) from exc
-    after = _counts(model)
+    after = _counts(model, candidate)
     return DocumentPatchResult(
         payload=payload,
         operations=tuple(evidence),
@@ -223,6 +239,8 @@ def _apply_operation(
     state: dict[str, Any], model: MoleculeModel, operation: Mapping[str, object]
 ) -> dict[str, object]:
     op = cast("str", operation["op"])
+    if op in {"add_note", "move_note", "update_note"}:
+        return _apply_note_operation(state, operation)
     if op == "add_atom":
         return _add_atom(model, operation)
     if op == "update_atom":
@@ -236,6 +254,68 @@ def _apply_operation(
     if op == "update_bond":
         return _update_bond(model, operation)
     return _remove_bond(state, model, operation)
+
+
+def _apply_note_operation(
+    state: dict[str, Any], operation: Mapping[str, object]
+) -> dict[str, object]:
+    op = cast("str", operation["op"])
+    fields = {
+        "add_note": {"op", "note_index", "note"},
+        "move_note": {"op", "note_index", "x", "y"},
+        "update_note": {"op", "note_index", "content"},
+    }
+    _require_exact_keys(operation, fields[op], op)
+    note_index = _atom_id(operation.get("note_index"), "note_index")
+    notes = cast("list[dict[str, object]]", state["notes"])
+    if op == "add_note":
+        if note_index != len(notes):
+            raise ValueError(f"note_index must equal next_note_index {len(notes)}")
+        notes.append(_compose_note(operation["note"]))
+        return {"op": op, "note_index": note_index}
+    if note_index >= len(notes):
+        raise ValueError(f"note {note_index} does not exist")
+    note = notes[note_index]
+    if op == "move_note":
+        x, y = _number(operation["x"], "x"), _number(operation["y"], "y")
+        if (x, y) == (note["x"], note["y"]):
+            raise ValueError("move_note must change the note position")
+        # Keep the original serialized text/HTML, rotation, order and group
+        # references. A move never needs to interpret rich text.
+        note.update(x=x, y=y)
+        return {"op": op, "note_index": note_index, "x": x, "y": y}
+    content = _changes(
+        operation["content"],
+        frozenset(("text", "runs", "style")),
+        "update_note content",
+    )
+    replacement = _compose_note(
+        {
+            **content,
+            "x": note["x"],
+            "y": note["y"],
+            **({"rotation": note["rotation"]} if "rotation" in note else {}),
+        }
+    )
+    if replacement == note:
+        raise ValueError("update_note must change note content or style")
+    notes[note_index] = replacement
+    return {"op": op, "note_index": note_index}
+
+
+def _compose_note(value: object) -> dict[str, object]:
+    # The composition owner validates text/runs/style and produces sanitized
+    # note HTML. Do not introduce a second rich-text serializer for patches.
+    composed = compose_document_state(
+        {
+            "format": "chemvas-document-composition",
+            "version": 2,
+            "atoms": [],
+            "bonds": [],
+            "notes": [value],
+        }
+    )
+    return cast("dict[str, object]", composed["notes"][0])
 
 
 def _add_atom(
@@ -581,8 +661,9 @@ def _document_model(state: Mapping[str, object]) -> MoleculeModel:
     return deserialize_model_state(cast("Mapping[str, object]", model_state))
 
 
-def _counts(model: MoleculeModel) -> dict[str, int]:
+def _counts(model: MoleculeModel, state: Mapping[str, object]) -> dict[str, int]:
     return {
+        "notes": len(cast("list[object]", state.get("notes", []))),
         "atoms": len(model.atoms),
         "bonds": sum(item is not None for item in model.bonds),
         "components": len(

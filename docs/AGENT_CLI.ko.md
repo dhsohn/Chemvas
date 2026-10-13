@@ -90,7 +90,7 @@ chemvas check-layout scheme.chemvas > layout-report.json
 
 주요 진단 경고 코드:
 - `text-text-overlap`: 텍스트 노트, 원자 라벨, 화살표 라벨 간의 겹침.
-- `text-arrow-overlap`: 텍스트와 반응 화살표 선의 충돌.
+- `text-arrow-overlap`: 텍스트와 화살표 선의 충돌. 독립 노트가 일반선·굵은선·점선과 교차하는 경우도 포함합니다.
 - `text-bond-overlap` / `atom-bond-overlap`: 텍스트나 원자 라벨이 분자 결합선과 겹침.
 - `charge-bond-overlap`: 형식 전하 표시가 인접 결합선과 교차함.
 - `outside-sheet`: 요소가 설정된 캔버스 용지 영역을 벗어남.
@@ -102,6 +102,16 @@ chemvas check-layout scheme.chemvas --sheet-only > sheet-report.json
 ```
 
 종료 코드: `0` (정상 통과), `1` (경고 발견), `2` (입력 오류 또는 비정상 실패).
+
+충돌 검사는 그려진 영역의 경계 상자를 공간 인덱스로 좁힌 뒤 실제 경로의
+교차를 검사합니다. 배치가 성긴 큰 그림도 모든 객체 쌍의 비용을 미리 부과하지
+않고 문서 전체를 검사합니다. 글자 내부의 빈 공간이나 점선의 간격은 충돌로
+세지 않으며, 분자에서 서로 연결된 요소를 제외하는 기존 규칙은 유지됩니다.
+
+파일 크기, 객체 수, 텍스트 조판, 공간 탐색, 충돌 후보 쌍과 경로 복잡도에는
+계속 제한이 적용됩니다. 한도를 넘으면 종료 코드 `2`와 stderr 오류를 반환하고
+불완전한 JSON 보고서를 출력하지 않습니다. `--sheet-only`는 충돌 검사를 생략하지만
+도형 생성에 필요한 한도까지 우회하지는 않습니다.
 
 ## 고리 템플릿 삽입
 
@@ -182,7 +192,52 @@ chemvas apply-patch ring-added.chemvas patch.json --output revised.chemvas
 
 ![패치 적용 후: 벤젠 고리에 C=O 추가](images/cli-apply-patch-after.png)
 
-지원 연산: `add_atom`, `update_atom`, `move_atom`, `set_terminal_angle`, `add_bond`, `update_bond`, `remove_bond`.
+지원 연산: `add_atom`, `update_atom`, `move_atom`, `set_terminal_angle`, `add_bond`, `update_bond`, `remove_bond`, `add_note`, `move_note`, `update_note`.
+
+### 노트 생성과 편집
+
+`inspect-document`는 저장된 텍스트·HTML·좌표·회전을 담은 `notes`,
+`note_count`, `next_note_index`를 반환합니다. `note_index`는 정확히 그 저장
+스냅샷에서 0부터 세는 순서이며 영구 ID가 아닙니다. 검사 결과의 `source_sha256`을
+복사하고 문서를 수정해 저장한 뒤에는 다시 검사하세요. 이 조건은
+`patch_contract`에도 표시됩니다.
+
+기존 노트가 하나인 문서에서는 `next_note_index`인 `1`을 사용합니다:
+
+```json
+{
+  "format": "chemvas-graph-patch",
+  "version": 1,
+  "source_sha256": "<64 lowercase hexadecimal characters>",
+  "operations": [
+    {"op": "add_note", "note_index": 1,
+     "note": {"x": 64, "y": 140, "text": "Condition",
+              "style": {"font_size": 12, "color": "#245caa"}}},
+    {"op": "move_note", "note_index": 0, "x": 80, "y": 108},
+    {"op": "update_note", "note_index": 1,
+     "content": {"style": {"font_size": 12}, "runs": [
+       {"text": "TS", "style": {"font_weight": 700}},
+       {"text": "2", "style": {"vertical_align": "sub"}}
+     ]}}
+  ]
+}
+```
+
+- `add_note`는 현재 다음 인덱스에 추가합니다. 같은 패치에서 앞서 추가한 노트도
+  계산합니다. `note`는 구성 명령과 같은 `x`, `y`, `text` 또는 `runs`, 선택적
+  `style`과 `rotation`을 받습니다.
+- `move_note`는 `x`, `y`만 바꿉니다. 저장된 텍스트·HTML, 회전, 노트 순서와
+  그룹 참조를 그대로 보존합니다.
+- `update_note`는 `text` 또는 `runs`와 선택적 기본 `style`로 내용과 서식 전체를
+  교체합니다. 생략한 서식은 구성 명령의 기본값을 사용하며 이전 서식을 상속하지
+  않습니다. 색이나 글꼴만 바꾸더라도 원하는 전체 내용을 전달하세요. 좌표·회전·그룹
+  참조는 유지됩니다.
+
+구성 명령과 같은 검증기와 서식 직렬화기를 사용하며, 원시 HTML 패치나 암묵적
+서식 병합은 받지 않습니다. 검사 및 패치 보고에는 노트 개수도 포함됩니다.
+그래프 연산과 마찬가지로 dry run은 후보 문서 전체를 검증하고 실제 출력은 새
+파일로 만듭니다. 데스크톱에서 열면 일반 노트처럼 편집하고 이후 편집의 Undo/Redo와
+저장·재열기를 사용할 수 있습니다. CLI가 이미 열린 창의 이력에 작업을 넣지는 않습니다.
 
 ### 패치 작성을 위한 원자 ID 조회
 

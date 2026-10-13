@@ -791,3 +791,213 @@ def test_fully_transparent_shape_outside_sheet_is_ignored() -> None:
     assert report["counts"]["outside-sheet"] == 0
     assert report["warning_count"] == 0
     assert report["ok"] is True
+
+
+def _note_line_state(kind="line"):
+    from chemvas.features.document_composition import compose_document_state
+
+    return compose_document_state(
+        {
+            "format": "chemvas-document-composition",
+            "version": 1,
+            "atoms": [],
+            "bonds": [],
+            "notes": [{"text": "H", "x": 0.0, "y": 0.0}],
+            "arrows": [{"kind": kind, "start": [-40.0, 0.0], "end": [40.0, 0.0]}],
+        }
+    )
+
+
+def _center_note_ink(note, point):
+    from chemvas.ui.canvas.graphics_items import note_paint_scene_path
+
+    center = note_paint_scene_path(note).boundingRect().center()
+    note.moveBy(point.x() - center.x(), point.y() - center.y())
+
+
+@pytest.mark.parametrize("kind", ["line", "line_dashed", "line_bold", "arrow"])
+def test_standalone_note_crossing_native_line_ink_is_reported(kind):
+    from chemvas.bootstrap.document_cli_shared import offscreen_canvas
+
+    state = _note_line_state(kind)
+    original = copy.deepcopy(state)
+    with offscreen_canvas(state, command="test-note-line") as (canvas, service):
+        before = service.snapshot_state()
+        note = canvas.runtime_state.note_items()[0]
+        _center_note_ink(note, QPointF(0, 0))
+        report = check_canvas_layout(canvas)
+        matches = [w for w in report["warnings"] if w["code"] == "text-arrow-overlap"]
+        assert len(matches) == 1
+        assert matches[0]["items"] == [
+            {"kind": "note", "index": 0},
+            {"kind": "arrow", "index": 0},
+        ]
+        assert state == original
+        # Inspection itself does not modify persisted geometry.
+        after_move = service.snapshot_state()
+        assert check_canvas_layout(canvas) == report
+        assert service.snapshot_state() == after_move
+        assert before["arrows"] == after_move["arrows"]
+        note.moveBy(0, 25)
+        assert check_canvas_layout(canvas)["counts"]["text-arrow-overlap"] == 0
+
+
+@pytest.mark.parametrize("target", ["note", "arrow"])
+@pytest.mark.parametrize("hidden_by", ["visibility", "opacity", "color"])
+def test_note_arrow_collision_ignores_hidden_paint(target, hidden_by):
+    from chemvas.bootstrap.document_cli_shared import offscreen_canvas
+
+    with offscreen_canvas(_note_line_state(), command="test-note-hidden") as (
+        canvas,
+        _,
+    ):
+        note = canvas.runtime_state.note_items()[0]
+        arrow = canvas.runtime_state.arrow_items()[0]
+        _center_note_ink(note, QPointF(0, 0))
+        assert check_canvas_layout(canvas)["counts"]["text-arrow-overlap"] == 1
+        item = note if target == "note" else arrow
+        if hidden_by == "visibility":
+            item.setVisible(False)
+        elif hidden_by == "opacity":
+            item.setOpacity(0)
+        elif target == "note":
+            item.setDefaultTextColor(Qt.GlobalColor.transparent)
+        else:
+            pen = item.pen()
+            pen.setColor(Qt.GlobalColor.transparent)
+            item.setPen(pen)
+        assert check_canvas_layout(canvas)["counts"]["text-arrow-overlap"] == 0
+
+
+def test_note_in_actual_arrow_dash_gap_is_clear():
+    from chemvas.bootstrap.document_cli_shared import offscreen_canvas
+
+    with offscreen_canvas(_note_line_state(), command="test-note-dash-gap") as (
+        canvas,
+        _,
+    ):
+        note = canvas.runtime_state.note_items()[0]
+        note.setScale(0.03)
+        _center_note_ink(note, QPointF(7, 0))
+        arrow = canvas.runtime_state.arrow_items()[0]
+        path = QPainterPath(QPointF(0, 0))
+        path.lineTo(80, 0)
+        arrow.setPath(path)
+        pen = QPen(Qt.GlobalColor.black)
+        pen.setWidthF(1)
+        pen.setCapStyle(Qt.PenCapStyle.FlatCap)
+        pen.setDashPattern([2, 10])
+        arrow.setPen(pen)
+        assert arrow.shape().contains(QPointF(7, 0))
+        assert check_canvas_layout(canvas)["counts"]["text-arrow-overlap"] == 0
+        pen.setStyle(Qt.PenStyle.SolidLine)
+        arrow.setPen(pen)
+        assert check_canvas_layout(canvas)["counts"]["text-arrow-overlap"] == 1
+
+
+def test_arrow_in_glyph_hole_and_adjacent_leader_are_clear():
+    from chemvas.bootstrap.document_cli_shared import offscreen_canvas
+    from chemvas.ui.canvas.graphics_items import note_paint_scene_path
+
+    with offscreen_canvas(_note_line_state(), command="test-glyph-hole") as (canvas, _):
+        note = canvas.runtime_state.note_items()[0]
+        note.setPlainText("O")
+        note.setFont(QFont("Arial", 40))
+        _center_note_ink(note, QPointF(0, 0))
+        ink = note_paint_scene_path(note)
+        assert not ink.contains(QPointF(0, 0))
+        arrow = canvas.runtime_state.arrow_items()[0]
+        path = QPainterPath(QPointF(-1, 0))
+        path.lineTo(1, 0)
+        arrow.setPath(path)
+        assert check_canvas_layout(canvas)["counts"]["text-arrow-overlap"] == 0
+        # A leader terminates before the ink; its own label padding is immaterial.
+        edge = ink.boundingRect().right()
+        path = QPainterPath(QPointF(edge + 3, 0))
+        path.lineTo(edge + 30, 0)
+        arrow.setPath(path)
+        assert check_canvas_layout(canvas)["counts"]["text-arrow-overlap"] == 0
+        arrow.moveBy(-5, 0)
+        assert check_canvas_layout(canvas)["counts"]["text-arrow-overlap"] == 1
+
+
+def test_note_built_in_underline_is_not_a_separate_arrow():
+    note = QGraphicsTextItem()
+    note.setHtml('<span style="text-decoration:underline">number 12</span>')
+    scene = QGraphicsScene()
+    scene.addItem(note)
+    canvas = _canvas(notes=[note], shapes=[], sheet=QRectF(-100, -100, 500, 500))
+    assert check_canvas_layout(canvas)["ok"] is True
+
+
+@pytest.mark.parametrize(
+    "budget",
+    [
+        "MAX_INTERSECTION_ELEMENTS",
+        "MAX_INTERSECTION_COMPLEXITY",
+        "MAX_TOTAL_PATH_ELEMENTS",
+    ],
+)
+def test_collision_path_complexity_rejects_before_reporting_warnings(
+    monkeypatch, budget
+):
+    from chemvas.ui.export import layout_qa_service
+
+    scene = QGraphicsScene()
+    notes = [QGraphicsTextItem("same ink"), QGraphicsTextItem("same ink")]
+    for note in notes:
+        scene.addItem(note)
+    canvas = _canvas(notes=notes, shapes=[], sheet=QRectF(-100, -100, 500, 500))
+    assert check_canvas_layout(canvas)["counts"]["text-text-overlap"] == 1
+    monkeypatch.setattr(layout_qa_service, budget, 1)
+    with pytest.raises(ValueError, match="layout .*limit"):
+        check_canvas_layout(canvas)
+    assert check_canvas_layout(canvas, sheet_only=True)["ok"] is True
+
+
+def test_extreme_dash_expansion_is_refused_before_native_stroking(monkeypatch):
+    from chemvas.ui.export import layout_qa_service
+
+    path = QPainterPath(QPointF(0, 0))
+    path.lineTo(1_000_000, 0)
+    pen = QPen(Qt.GlobalColor.black)
+    pen.setWidthF(1)
+    pen.setDashPattern([1, 1])
+
+    class NoExpansion:
+        def setWidth(self, value):
+            pass
+
+        def setCapStyle(self, value):
+            pass
+
+        def setJoinStyle(self, value):
+            pass
+
+        def createStroke(self, path):
+            raise AssertionError("native allocation occurred before budget validation")
+
+    monkeypatch.setattr(layout_qa_service, "QPainterPathStroker", NoExpansion)
+    with pytest.raises(ValueError, match="layout dashed-stroke limit"):
+        layout_qa_service._stroke_path(path, pen)
+
+
+def test_standalone_note_does_not_become_a_molecular_bond_label():
+    from chemvas.bootstrap.document_cli_shared import offscreen_canvas
+    from chemvas.features.document_composition import compose_document_state
+
+    state = compose_document_state(
+        {
+            "format": "chemvas-document-composition",
+            "version": 1,
+            "atoms": [
+                {"id": 0, "element": "C", "x": -40.0, "y": 0.0},
+                {"id": 1, "element": "C", "x": 40.0, "y": 0.0},
+            ],
+            "bonds": [{"a": 0, "b": 1, "order": 1}],
+            "notes": [{"text": "H", "x": 0.0, "y": 0.0}],
+        }
+    )
+    with offscreen_canvas(state, command="test-note-bond-category") as (canvas, _):
+        _center_note_ink(canvas.runtime_state.note_items()[0], QPointF(0, 0))
+        assert check_canvas_layout(canvas)["ok"] is True

@@ -409,38 +409,85 @@ def test_check_layout_refuses_a_document_whose_number_cannot_be_parsed(
 
 
 @pytest.mark.parametrize("charged", [False, True])
-def test_molecular_pair_budget_rejects_before_opening_qt(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys, charged: bool
-) -> None:
-    count = 111 if charged else 100
-    atoms = [
-        {
-            "id": index,
-            "element": "C" if charged else "N",
-            "x": float(index * 30),
-            "y": 0.0,
-            **({"formal_charge": 1} if charged else {}),
-        }
-        for index in range(count)
-    ]
+def test_sparse_molecular_drawing_is_checked_without_mutating_source(tmp_path, charged):
+    count = 160
     source = _compose(
         tmp_path,
         notes=[],
-        atoms=atoms,
-        bonds=[{"a": index, "b": index + 1, "order": 1} for index in range(count - 1)],
+        atoms=[
+            {
+                "id": i,
+                "element": "C" if charged else "N",
+                "x": float(i * 30),
+                "y": 0.0,
+                **({"formal_charge": 1} if charged else {}),
+            }
+            for i in range(count)
+        ],
+        bonds=[{"a": i, "b": i + 1, "order": 1} for i in range(count - 1)],
     )
     before = source.read_bytes()
+    result = _run("check-layout", str(source))
+    assert result.returncode == 1, result.stderr  # Whole-sheet checks remain active.
+    assert result.stderr == ""
+    assert json.loads(result.stdout)["counts"]["outside-sheet"] > 0
+    assert source.read_bytes() == before
 
-    def forbidden(_state):
-        raise AssertionError("Resource rejection must precede Qt")
+
+@pytest.mark.parametrize("sheet_only", [False, True])
+def test_text_complexity_is_rejected_before_qt(
+    tmp_path, monkeypatch, capsys, sheet_only
+):
+    source = _compose(tmp_path, notes=[{"text": "bounded", "x": 0.0, "y": 0.0}])
+    monkeypatch.setattr(document_layout_check, "MAX_LAYOUT_TEXT_CHARACTERS", 1)
+
+    def forbidden(*args, **kwargs):
+        raise AssertionError("Qt started for refused input")
 
     monkeypatch.setattr(document_layout_check, "_check_offscreen", forbidden)
+    with pytest.raises(SystemExit) as error:
+        document_layout_check.run(
+            ["check-layout", str(source), *(["--sheet-only"] if sheet_only else [])]
+        )
+    assert error.value.code == 2
+    output = capsys.readouterr()
+    assert output.out == ""
+    assert "layout text limit" in output.err
+
+
+def test_spatial_budget_failure_does_not_emit_partial_report(
+    tmp_path, monkeypatch, capsys
+):
+    from chemvas.ui.export import layout_spatial
+
+    source = _compose(tmp_path, notes=[{"text": "outside", "x": 1000.0, "y": 0.0}])
+    monkeypatch.setattr(layout_spatial, "MAX_SPATIAL_PROBES", 0)
     with pytest.raises(SystemExit) as error:
         document_layout_check.run(["check-layout", str(source)])
     assert error.value.code == 2
     output = capsys.readouterr()
     assert output.out == ""
-    assert "layout work limit of 10000" in output.err
+    assert "layout spatial-search limit" in output.err
+
+
+def test_sparse_note_grid_checks_all_content_and_is_deterministic(tmp_path):
+    source = _compose(
+        tmp_path,
+        notes=[
+            {
+                "text": str(i),
+                "x": float(i % 25 * 30 - 375),
+                "y": float(i // 25 * 30 - 300),
+            }
+            for i in range(500)
+        ],
+    )
+    before = source.read_bytes()
+    first = _run("check-layout", str(source))
+    second = _run("check-layout", str(source))
+    assert first.returncode == second.returncode == 0, first.stderr
+    assert first.stdout == second.stdout
+    assert json.loads(first.stdout)["warning_count"] == 0
     assert source.read_bytes() == before
 
 

@@ -1,6 +1,6 @@
 # ADR 0010: Document-owned notes and marks
 
-- Status: Accepted
+- Status: Extended by ADR 0056
 - Date: 2026-09-24
 - Extends: [ADR 0009](0009-document-owned-ring-fills.md)
 
