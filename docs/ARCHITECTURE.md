@@ -284,6 +284,14 @@ flowchart LR
 ### Headless Document Flow
 Headless CLI commands (`inspect-document`, `apply-patch`, `render-document`) validate source inputs deterministically and execute without launching desktop windows or session recovery.
 
+Note patches use saved snapshot indices protected by the exact source SHA-256.
+The patch feature reuses composition validation and rich-text serialization for
+explicit content/style replacement; movement preserves existing saved HTML
+([ADR 0056](adr/0056-snapshot-bound-note-patches.md)). Shared layout diagnostics
+use bounded spatial candidates followed by exact painted-path intersections,
+including standalone notes against arrow and line strokes
+([ADR 0057](adr/0057-bounded-spatial-layout-checks.md)).
+
 ### Legacy calculation plans
 A plan already stored in a document is kept when it still matches the drawing. Save refuses a write that would drop it. Chemvas does not map reactions or write `machine.json` ([ADR 0055](adr/0055-retire-rdkit-chemistry-provider.md)).
 
@@ -382,3 +390,6 @@ process locking and envelope storage ([ADR 0032](adr/0032-browser-clipboard-and-
 
 - [ADR 0054: Bind CDXML meanings to a saved drawing snapshot](adr/0054-saved-cdxml-export-snapshot.md): immutable saved IDs across GUI binding validation and serialization.
 - [ADR 0055: Retire the RDKit chemistry provider](adr/0055-retire-rdkit-chemistry-provider.md)
+
+- [ADR 0056: Snapshot-bound note patches](adr/0056-snapshot-bound-note-patches.md)
+- [ADR 0057: Bounded spatial layout checks](adr/0057-bounded-spatial-layout-checks.md)

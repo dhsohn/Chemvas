@@ -90,7 +90,7 @@ chemvas check-layout scheme.chemvas > layout-report.json
 
 Common diagnostic codes reported:
 - `text-text-overlap`: Overlapping text notes, atom labels, or arrow labels.
-- `text-arrow-overlap`: Text colliding with reaction arrow strokes.
+- `text-arrow-overlap`: Text colliding with arrow strokes, including standalone notes crossing plain, bold or dashed lines.
 - `text-bond-overlap` / `atom-bond-overlap`: Text or atom labels colliding with molecular bonds.
 - `charge-bond-overlap`: Formal charge marks intersecting adjacent bonds.
 - `outside-sheet`: Canvas elements extending beyond page boundaries.
@@ -102,6 +102,16 @@ chemvas check-layout scheme.chemvas --sheet-only > sheet-report.json
 ```
 
 Exit codes: `0` (clean), `1` (warnings detected), `2` (invalid document or error).
+
+Collision checks use a spatial index of painted bounds, then intersect the actual
+painted paths. Sparse figures are checked as a whole without charging for every
+possible object pair. Glyph holes and dash gaps do not count as painted overlap.
+Existing molecular adjacency exclusions remain in effect.
+
+Resource limits still apply to file size, object count, text shaping, spatial
+search, candidate pairs and path complexity. A budget failure returns exit `2`
+with an explanation on stderr and no partial JSON report. `--sheet-only` omits
+collision checks; it cannot bypass limits needed to construct the geometry.
 
 ## Native ring templates
 
@@ -182,7 +192,53 @@ Example patch reducing a double bond and adding a carbonyl group:
 
 ![After the patch: the ring carries a C=O](images/cli-apply-patch-after.png)
 
-Supported operations: `add_atom`, `update_atom`, `move_atom`, `set_terminal_angle`, `add_bond`, `update_bond`, `remove_bond`.
+Supported operations: `add_atom`, `update_atom`, `move_atom`, `set_terminal_angle`, `add_bond`, `update_bond`, `remove_bond`, `add_note`, `move_note`, `update_note`.
+
+### Creating and editing notes
+
+`inspect-document` returns `notes` (saved text, HTML, position and rotation),
+`note_count` and `next_note_index`. Each `note_index` is the zero-based position
+in that exact saved snapshot, not a persistent identity. Copy `source_sha256`
+from inspection and inspect again after saving a changed document. The
+`patch_contract` describes this requirement.
+
+For a source with one existing note, use its `next_note_index` of `1`:
+
+```json
+{
+  "format": "chemvas-graph-patch",
+  "version": 1,
+  "source_sha256": "<64 lowercase hexadecimal characters>",
+  "operations": [
+    {"op": "add_note", "note_index": 1,
+     "note": {"x": 64, "y": 140, "text": "Condition",
+              "style": {"font_size": 12, "color": "#245caa"}}},
+    {"op": "move_note", "note_index": 0, "x": 80, "y": 108},
+    {"op": "update_note", "note_index": 1,
+     "content": {"style": {"font_size": 12}, "runs": [
+       {"text": "TS", "style": {"font_weight": 700}},
+       {"text": "2", "style": {"vertical_align": "sub"}}
+     ]}}
+  ]
+}
+```
+
+- `add_note` appends at the current next index, including earlier additions in
+  the same patch. Its `note` accepts the composition contract: `x`, `y`, either
+  `text` or rich `runs`, optional `style`, and optional `rotation`.
+- `move_note` changes only `x` and `y`; it preserves the exact saved text/HTML,
+  rotation, note order and group references.
+- `update_note` replaces the entire content and style with either `text` or
+  `runs` and an optional base `style`. Omitted styles use composition defaults;
+  they do not inherit the old formatting. Supply the full desired content when
+  changing only a color or font. Position, rotation and group references remain.
+
+Notes use the same validation and rich-text serializer as composition. No raw
+HTML patch or implicit formatting merge is accepted. Inspect and patch reports
+include note counts. As with graph operations, dry runs validate the complete
+candidate and writes create a new file. Opening that file in the desktop uses
+normal editable notes, Undo/Redo for subsequent edits, and native save/reopen;
+the CLI does not insert an action into an already open window's history.
 
 ### Inspecting IDs for Patching
 

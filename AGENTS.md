@@ -32,7 +32,7 @@ Ruff·format·mypy를 돌린 뒤 **테스트를 `test_*.py` 파일마다 별도 
 실행한다. 모든 OS의 공통 검사는 offscreen으로 여러 파일을 동시에 돌린다.
 `scripts/run_test_files.sh`가 각 `test_*.py`를 자기 pytest 프로세스에서 돌린다. 호스트의
 네이티브 백엔드가 필요한 파일만 `scripts/check.sh`의 목록대로 직렬 실행한다: macOS의
-메뉴·포커스·문서 편집·복구 workflow 네 파일은 Cocoa로, Windows에서 그린 글리프를 재는 파일은
+메뉴·포커스·문서 편집·복구 workflow 다섯 파일은 Cocoa로, Windows에서 그린 글리프를 재는 파일은
 제품과 같은 글꼴 엔진을 쓰는 Windows Qt 백엔드로 돌린다. Mac 테스트는 수집 전에
 프로세스 내부의 휘발성 설정으로 AppKit 창 복원을 끄므로 Python의 이전 충돌 복원 창이
 검사를 막지 않는다. 사용자 환경설정이나 저장된 복구 파일은 변경하지 않는다. Windows offscreen에서

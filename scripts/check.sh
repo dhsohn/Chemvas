@@ -235,6 +235,7 @@ case "$platform" in
       test_note_appearance_workflows.py
       test_note_formatting_workflows.py
       test_native_document_editability.py
+      test_document_patch_note_workflow.py
       test_session_recovery_integration.py
     )
     ;;
@@ -255,6 +256,7 @@ case "$platform" in
       test_journal_layout_checks.py
       test_layout_qa_service.py
       test_native_document_editability.py
+      test_document_patch_note_workflow.py
       test_session_recovery_integration.py
       test_note_export_typography.py
       test_scaled_bond_label_clearance.py

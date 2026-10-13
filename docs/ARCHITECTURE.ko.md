@@ -265,6 +265,13 @@ flowchart LR
 ### 헤드리스 문서 작업 흐름
 헤드리스 CLI 명령(`inspect-document`, `apply-patch`, `render-document`)은 GUI 창이나 세션 복구 없이 독립적으로 소스를 검증하고 실행합니다.
 
+노트 패치는 정확한 원본 SHA-256으로 보호되는 저장 스냅샷의 인덱스를 사용합니다.
+내용·서식 교체에는 구성 기능의 검증과 서식 직렬화를 재사용하고, 이동은 기존 HTML을
+보존합니다([ADR 0056](adr/0056-snapshot-bound-note-patches.md)). 공용 레이아웃
+진단은 한도가 있는 공간 후보 탐색 뒤 실제 그려진 경로의 교차를 검사하며,
+독립 노트와 화살표·일반선의 충돌도 포함합니다
+([ADR 0057](adr/0057-bounded-spatial-layout-checks.md)).
+
 ### 기존 계산 계획
 문서에 이미 저장된 계획은 현재 그림과 맞을 때 유지됩니다. 그 계획이 빠지는 저장은 거부됩니다. Chemvas는 반응을 대응시키거나 `machine.json`을 쓰지 않습니다 ([ADR 0055](adr/0055-retire-rdkit-chemistry-provider.md)).
 
@@ -362,3 +369,6 @@ ADR을 언제 쓰는지, 작성 규칙과 템플릿은 [ADR 안내](adr/README.m
 
 - [ADR 0054: Bind CDXML meanings to a saved drawing snapshot](adr/0054-saved-cdxml-export-snapshot.md): immutable saved IDs across GUI binding validation and serialization.
 - [ADR 0055: RDKit 화학 provider 제거](adr/0055-retire-rdkit-chemistry-provider.md)
+
+- [ADR 0056: Snapshot-bound note patches](adr/0056-snapshot-bound-note-patches.md)
+- [ADR 0057: Bounded spatial layout checks](adr/0057-bounded-spatial-layout-checks.md)

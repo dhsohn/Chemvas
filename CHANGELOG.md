@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Inspect saved note indices and create, move, or replace note content and style
+  through hash-bound Graph Patch v1 operations. Rich runs share composition
+  validation, and moved notes retain their saved formatting and group references.
+
+### Fixed
+
+- Check large sparse figures with bounded spatial collision candidates instead
+  of rejecting them from the number of all possible object pairs. Dense or
+  overly complex geometry still fails without returning a partial report.
+- Detect standalone notes crossing arrow strokes, including plain, bold and
+  dashed lines, while excluding unpainted glyph holes and dash gaps.
+
 ## [0.25.0] - 2026-10-12
 
 ### Fixed

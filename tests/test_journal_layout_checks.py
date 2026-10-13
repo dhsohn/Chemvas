@@ -163,23 +163,16 @@ def test_overlapping_atom_labels_have_stable_sorted_ids() -> None:
         assert check_canvas_layout(canvas)["ok"] is True
 
 
-def test_atom_pair_work_limit_rejects_before_qt(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+def test_sparse_atom_pairs_are_checked_with_whole_sheet_containment(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     source = tmp_path / "many-labels.chemvas"
     state = _state({index: Atom("N", index * 25.0, 0.0) for index in range(142)})
     write_document(source, state, CANVAS_FILE_VERSION)
-
-    def reject_qt(_state):
-        pytest.fail("work limit must run before Qt scene construction")
-
-    monkeypatch.setattr(document_layout_check, "_check_offscreen", reject_qt)
-    with pytest.raises(SystemExit) as error:
-        document_layout_check.run(["check-layout", str(source)])
-    assert error.value.code == 2
+    assert document_layout_check.run(["check-layout", str(source)]) == 1
     result = capsys.readouterr()
-    assert result.out == ""
-    assert "layout work limit of 10000" in result.err
+    assert result.err == ""
+    assert '"outside-sheet"' in result.out
 
 
 def test_arrow_crossing_bond_reports_endpoints_not_runtime_bond_id() -> None:
@@ -362,31 +355,6 @@ def test_highlight_panel_is_not_a_molecular_collision_target() -> None:
         assert check_canvas_layout(canvas)["ok"] is True
 
 
-def test_work_bound_excludes_only_implicit_carbons_and_includes_arrows() -> None:
-    # Public synthetic counts, not a copy of any research drawing.
-    state = _state(
-        {
-            index: Atom("C" if index < 42 else "N", index * 25.0, 0.0)
-            for index in range(102)
-        },
-        bonds=[Bond(index, index + 1) for index in range(98)],
-        notes=[{"text": "note", "x": 0.0, "y": 0.0} for _ in range(30)],
-        arrows=[
-            {"kind": "arrow", "start": [0.0, -30.0], "end": [0.0, 30.0]}
-            for _ in range(20)
-        ],
-    )
-    state["shapes"] = [
-        {"shape_kind": "rect", "rect": [0.0, 0.0, 10.0, 10.0]} for _ in range(37)
-    ]
-    # The original 8520 units plus 60 visible labels × 98 candidate bonds.
-    assert document_layout_check._layout_work_units(state) == 8520 + 60 * 98
-    assert document_layout_check.MAX_LAYOUT_WORK_UNITS == 10000
-    # Explicit C is visible; do not discard it with implicit skeletal vertices.
-    state["model"]["atoms"][0]["explicit_label"] = True
-    assert document_layout_check._layout_work_units(state) == 8631 + 61 * 98
-
-
 def _attached_label(canvas, arrow_index=0, side="above"):
     return next(
         child
@@ -529,28 +497,21 @@ def test_attached_label_outside_sheet_ignores_invisible_ink(hidden_by) -> None:
         assert check_canvas_layout(canvas)["ok"] is True
 
 
-@pytest.mark.parametrize("arrow_count", [49, 50])
-def test_attached_label_work_limit_rejects_before_qt(
-    tmp_path, monkeypatch, capsys, arrow_count
-) -> None:
+@pytest.mark.parametrize("arrow_count", [50, 150])
+def test_attached_label_budget_counts_spatial_candidates(tmp_path, capsys, arrow_count):
     source = tmp_path / "many-arrow-labels.chemvas"
     state = _state({}, arrows=[_labelled_arrow() for _ in range(arrow_count)])
     write_document(source, state, CANVAS_FILE_VERSION)
-
-    def reject_qt(_state, *, sheet_only):
-        assert sheet_only is False
-        assert arrow_count == 49, "attached label work limit must run before Qt"
-        return {"ok": True}
-
-    monkeypatch.setattr(document_layout_check, "_check_offscreen", reject_qt)
-    if arrow_count == 49:
-        assert document_layout_check.run(["check-layout", str(source)]) == 0
+    if arrow_count == 50:
+        assert document_layout_check.run(["check-layout", str(source)]) == 1
         assert capsys.readouterr().err == ""
     else:
         with pytest.raises(SystemExit) as error:
             document_layout_check.run(["check-layout", str(source)])
         assert error.value.code == 2
-        assert "layout work limit" in capsys.readouterr().err
+        result = capsys.readouterr()
+        assert result.out == ""
+        assert "layout work limit" in result.err
 
 
 @pytest.mark.parametrize("target_kind", ["bond", "arrow"])
@@ -625,17 +586,3 @@ def test_attached_label_shape_border_and_glyph_gap() -> None:
         path.lineTo(point + QPointF(1, 0))
         shape.setPath(path)
         assert check_canvas_layout(canvas)["counts"]["text-shape-border-overlap"] == 1
-
-
-def test_arrow_label_work_bound_counts_only_the_added_comparisons() -> None:
-    state = _state(
-        {7: Atom("N", 0, 0), 42: Atom("C", 40, 0)},
-        bonds=[Bond(7, 42)],
-        notes=[{"text": "note", "x": 0, "y": 60}],
-        arrows=[_labelled_arrow(labels={"above": "", "below": ""})],
-    )
-    state["shapes"] = [{"shape_kind": "rect", "rect": [0, 0, 10, 10]}]
-    before = document_layout_check._layout_work_units(state)
-    state["arrows"][0]["labels"] = {"above": "k_1", "below": "k_-1"}
-    # 5 new text pairs, 2 borders, 2 arrow strokes, 2 bonds and 2 labels.
-    assert document_layout_check._layout_work_units(state) == before + 13
