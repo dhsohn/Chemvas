@@ -6,11 +6,16 @@ from decimal import Decimal
 
 import pytest
 
-from chemvas.core.document_io import read_document, write_document
 from chemvas.domain.document import CANVAS_FILE_VERSION, CHEMVAS_FILE_TYPE
 from chemvas.features.session import DocDescriptor
 from chemvas.ui.session import session_snapshot_store
 from chemvas.ui.session.session_snapshot_store import SessionSnapshotStore
+from tests.document_file_helpers import (
+    read_document,
+    read_payload,
+    write_document,
+    write_payload_text,
+)
 from tests.test_core_document_io import _canvas_state
 
 
@@ -43,7 +48,7 @@ def test_control_value_write_read_preserves_whole_drawing(tmp_path, field, value
     state = _drawing()
     state["settings"][field] = value
     before = deepcopy(state)
-    path = tmp_path / "settings.chemvas"
+    path = tmp_path / "settings.cdxml"
 
     written = write_document(path, state, CANVAS_FILE_VERSION)
     source_bytes = path.read_bytes()
@@ -63,7 +68,7 @@ def _crashed_store(tmp_path, monkeypatch, state):
     )
     store.begin()
     store.save_documents([DocDescriptor(state, None, "Unsaved drawing", True)])
-    manifest = json.loads((store.session_dir / "session.json").read_text())
+    manifest = read_payload((store.session_dir / "session.json").read_text())
     assert manifest["clean_exit"] is False
     snapshot = store.session_dir / manifest["docs"][0]["snapshot"]
     monkeypatch.setattr(session_snapshot_store, "_pid_alive", lambda _pid: False)
@@ -129,8 +134,8 @@ def test_exact_decimal_file_boundary_is_checked_before_normalization(
     assert json.loads(raw, parse_float=Decimal)["state"]["settings"][field] == Decimal(
         token
     )
-    path = tmp_path / "decimal.chemvas"
-    path.write_text(raw, encoding="utf-8")
+    path = tmp_path / "decimal.cdxml"
+    write_payload_text(path, raw, encoding="utf-8")
     before = path.read_bytes()
 
     if accepted:
@@ -149,7 +154,7 @@ def test_exact_decimal_file_boundary_is_checked_before_normalization(
 def test_invalid_live_setting_cannot_overwrite_a_saved_document(
     tmp_path, field, invalid
 ):
-    path = tmp_path / "kept.chemvas"
+    path = tmp_path / "kept.cdxml"
     valid = _drawing()
     write_document(path, valid, CANVAS_FILE_VERSION)
     source_bytes = path.read_bytes()
@@ -175,7 +180,7 @@ def test_invalid_snapshot_is_reported_and_retained_not_normalized(
 ):
     state = _drawing()
     _store, reader, snapshot = _crashed_store(tmp_path, monkeypatch, state)
-    payload = json.loads(snapshot.read_text())
+    payload = read_payload(snapshot.read_text())
     payload["state"]["settings"][field] = "numeric-token"
     raw = json.dumps(payload).replace('"numeric-token"', token)
     snapshot.write_text(raw, encoding="utf-8")

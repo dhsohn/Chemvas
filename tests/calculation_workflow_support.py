@@ -7,7 +7,7 @@ LEGACY_REVIEWED_PRECOMPLEX_FIXTURE = (
     Path(__file__).parent
     / "fixtures"
     / "document-v7"
-    / "legacy-reviewed-precomplex.chemvas"
+    / "legacy-reviewed-precomplex.json"
 )
 
 

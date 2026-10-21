@@ -10,7 +10,6 @@ import pytest
 from PyQt6.QtCore import QPointF
 from PyQt6.QtWidgets import QApplication
 
-from chemvas.core.document_io import read_document
 from chemvas.ui.annotations.state import scene_item_state_for
 from chemvas.ui.molecule.atom_coords_access import (
     current_atom_coords_3d_for,
@@ -20,6 +19,7 @@ from chemvas.ui.molecule.atom_coords_access import (
 from chemvas.ui.molecule.bond_graphics_access import project_point_3d_for
 from chemvas.ui.molecule.structure_mutation_access import add_bond_for
 from tests.canvas_factory import build_canvas_view
+from tests.document_file_helpers import read_document
 
 
 @pytest.fixture(scope="module")
@@ -151,7 +151,7 @@ def test_other_component_depth_survives_preview_save_reopen_and_exact_history(
     assert canvas.runtime_state.atom_coords_3d_state.atom_coords_3d == after_cache
     assert scene_item_state_for(canvas, mark) == mark_before
 
-    output = tmp_path / "two-molecules.chemvas"
+    output = tmp_path / "two-molecules.cdxml"
     documents.save_to_file(str(output))
     documents.apply_state(read_document(output).state)
     assert documents.snapshot_state() == after

@@ -15,7 +15,6 @@ from PyQt6.QtGui import QCursor, QMouseEvent
 from PyQt6.QtTest import QTest
 from PyQt6.QtWidgets import QApplication, QToolButton
 
-from chemvas.core.document_io import read_document, write_document
 from chemvas.domain.document import (
     CANVAS_FILE_VERSION,
     Atom,
@@ -30,6 +29,7 @@ from chemvas.ui.window.main_window_ports import (
     active_canvas_for_window,
     set_zoom_percent_for_window,
 )
+from tests.document_file_helpers import read_document, write_document
 
 # Nitromethane drawn as charge-separated N+ / O- annotations with no marks.
 POSITIONS = {10: (-40.0, 0.0), 11: (0.0, 0.0), 12: (20.0, -34.64), 13: (20.0, 34.64)}
@@ -79,7 +79,7 @@ def _write_nitromethane(path):
 def loaded(app, tmp_path):
     from chemvas.bootstrap.main_window import build_main_window
 
-    path = tmp_path / "nitromethane.chemvas"
+    path = tmp_path / "nitromethane.cdxml"
     original = _write_nitromethane(path)
     window = build_main_window()
     window.resize(1150, 780)
@@ -223,11 +223,11 @@ def test_one_charge_shortcut_undoes_to_the_loaded_annotations(
         assert history.state.history[0] is command
 
     history.undo()
-    saved = _assert_saved(window, tmp_path / "undone.chemvas", before, original)
+    saved = _assert_saved(window, tmp_path / "undone.cdxml", before, original)
     assert saved["marks"] == []
     assert saved["model"]["atom_annotations"] == original["model"]["atom_annotations"]
     history.redo()
-    _assert_saved(window, tmp_path / "redone.chemvas", after, original)
+    _assert_saved(window, tmp_path / "redone.cdxml", after, original)
 
 
 def test_charge_then_cancel_undoes_each_step_exactly(loaded, tmp_path):
@@ -257,7 +257,7 @@ def test_charge_then_cancel_undoes_each_step_exactly(loaded, tmp_path):
 
     history.undo()
     history.undo()
-    saved = _assert_saved(window, tmp_path / "undone.chemvas", before, original)
+    saved = _assert_saved(window, tmp_path / "undone.cdxml", before, original)
     assert saved["model"]["atom_annotations"] == original["model"]["atom_annotations"]
 
 
@@ -304,11 +304,11 @@ def test_one_mark_tool_click_undoes_to_the_loaded_annotations(
         assert history.state.history[0] is command
 
     history.undo()
-    saved = _assert_saved(window, tmp_path / "undone.chemvas", before, original)
+    saved = _assert_saved(window, tmp_path / "undone.cdxml", before, original)
     assert saved["marks"] == []
     assert saved["model"]["atom_annotations"] == original["model"]["atom_annotations"]
     history.redo()
-    _assert_saved(window, tmp_path / "redone.chemvas", after, original)
+    _assert_saved(window, tmp_path / "redone.cdxml", after, original)
 
 
 def test_refused_mark_edit_keeps_the_loaded_annotations(loaded):

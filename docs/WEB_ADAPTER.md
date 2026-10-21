@@ -187,7 +187,7 @@ while Cancel leaves the document and history unchanged.
 A selects the Atom tool. Enter a symbol in the context bar and click to apply it;
 an empty context field opens the existing-symbol prompt. Cancel leaves the document unchanged.
 
-File → Open reads `.chemvas`; Save downloads a copy that Qt can open. Document
+File → Open reads `.cdxml`; Save downloads a copy that Qt can open. Document
 versions 7–9 retain their version and data. Download initiation cannot prove a
 completed disk save, so the dirty marker and close warning remain visible, and
 downloading Save never clears the dirty marker or removes a recovery draft.
@@ -198,7 +198,7 @@ folder at a time; a second server started concurrently runs with recovery
 disabled and notifies the user. Each unsaved document receives one stable random
 draft identifier. After each accepted change, the server atomically writes the
 complete drawing in a draft envelope storing the document name, save timestamp,
-and `.chemvas` payload, without storing launch tokens, origins, or session
+and `.cdxml` payload, without storing launch tokens, origins, or session
 credentials. Files are stored unencrypted in local per-user application storage
 (`~/Library/Application Support/Chemvas/browser-drafts` on macOS;
 `%LOCALAPPDATA%/Chemvas/browser-drafts` or `~/AppData/Local/Chemvas/browser-drafts`
@@ -266,7 +266,7 @@ structures or V2000 limits. A drawn abbreviation is not expanded. Export
 leaves the document and its history unchanged.
 
 File > Export Figure downloads the whole sheet as a plain SVG file named after
-the document, with a trailing `.chemvas` replaced by `.svg`. The browser does not draw this figure. For each export the server
+the document, with a trailing `.cdxml` replaced by `.svg`. The browser does not draw this figure. For each export the server
 starts a separate Python process that opens a private copy of the current
 document in the desktop's offscreen canvas and runs the desktop's existing SVG
 figure export; that process uses Qt, writes only inside a private temporary

@@ -1,5 +1,5 @@
 # PyInstaller spec for Chemvas — a one-folder GUI bundle with the app icon and,
-# on macOS, a .app that claims the .chemvas document type.
+# on macOS, a .app that claims the .cdxml document type.
 #
 #   python -m pip install pyinstaller
 #   pyinstaller packaging/chemvas.spec
@@ -129,10 +129,10 @@ app = BUNDLE(
         "NSHighResolutionCapable": True,
         "CFBundleDocumentTypes": [
             {
-                "CFBundleTypeName": "Chemvas Drawing",
-                "CFBundleTypeExtensions": ["chemvas"],
+                "CFBundleTypeName": "ChemDraw XML",
+                "CFBundleTypeExtensions": ["cdxml"],
                 "CFBundleTypeRole": "Editor",
-                "LSHandlerRank": "Owner",
+                "LSHandlerRank": "Alternate",
                 "CFBundleTypeIconFile": "chemvas.icns",
             }
         ],

@@ -9,7 +9,6 @@ import pytest
 from PyQt6.QtWidgets import QMessageBox
 
 from chemvas.bootstrap.window_registry import open_new_window
-from chemvas.core.document_io import write_document
 from chemvas.domain.document import CANVAS_FILE_VERSION
 from chemvas.features.session import DocDescriptor, RestoredDoc, WithheldDoc
 from chemvas.shell.window_registry import forget_window, open_windows
@@ -23,6 +22,7 @@ from chemvas.ui.window.main_window_canvas_document_service import (
     MainWindowCanvasDocumentService,
 )
 from chemvas.ui.window.main_window_ports import active_canvas_for_window
+from tests.document_file_helpers import read_payload, write_document, write_payload_text
 from tests.test_session_recovery_service import _FakeStore, _FakeWindow, _service
 from tests.test_session_snapshot_store import _valid_state
 
@@ -88,12 +88,12 @@ def test_clean_exit_removes_discarded_payload_after_manifest_commit(
         with pytest.raises(OSError):
             store.mark_clean_exit()
     assert snapshot.exists()
-    assert not json.loads((store.session_dir / "session.json").read_bytes())[
+    assert not read_payload((store.session_dir / "session.json").read_bytes())[
         "clean_exit"
     ]
     store.mark_clean_exit()
     assert not snapshot.exists()
-    assert json.loads((store.session_dir / "session.json").read_bytes())["docs"] == []
+    assert read_payload((store.session_dir / "session.json").read_bytes())["docs"] == []
 
 
 def test_cleanup_failure_retries_without_reopening_copies():
@@ -146,7 +146,7 @@ def test_cleanup_failure_is_painted_ahead_of_recovery_warnings():
 
 @pytest.mark.parametrize("kind", ["relative", "absolute", "symlink"])
 def test_recovery_keeps_unsafe_snapshot_references(tmp_path, monkeypatch, kind):
-    outside = tmp_path / "outside.chemvas"
+    outside = tmp_path / "outside.cdxml"
     write_document(outside, _valid_state("Outside"), CANVAS_FILE_VERSION)
     outside_bytes = outside.read_bytes()
     root = tmp_path / "sessions"
@@ -154,7 +154,7 @@ def test_recovery_keeps_unsafe_snapshot_references(tmp_path, monkeypatch, kind):
     previous.begin()
     previous.save_documents([DocDescriptor(_valid_state(), None, "Draft", True)])
     manifest_path = previous.session_dir / "session.json"
-    manifest = json.loads(manifest_path.read_bytes())
+    manifest = read_payload(manifest_path.read_bytes())
     if kind == "symlink":
         snapshot = previous.session_dir / manifest["docs"][0]["snapshot"]
         snapshot.unlink()
@@ -164,9 +164,9 @@ def test_recovery_keeps_unsafe_snapshot_references(tmp_path, monkeypatch, kind):
             pytest.skip("This host cannot create symbolic links")
     else:
         manifest["docs"][0]["snapshot"] = (
-            "../../outside.chemvas" if kind == "relative" else str(outside)
+            "../../outside.cdxml" if kind == "relative" else str(outside)
         )
-        manifest_path.write_text(json.dumps(manifest))
+        write_payload_text(manifest_path, json.dumps(manifest))
     monkeypatch.setattr(store_module, "_pid_alive", lambda pid: False)
     current = SessionSnapshotStore(root, session_id="current", pid=4243)
     with mock.patch.object(current, "_read_state") as reader:
@@ -186,11 +186,7 @@ def test_file_menu_recovers_copy_and_retries_failed_handoff(
     previous = SessionSnapshotStore(tmp_path, session_id="crashed", pid=4242)
     previous.begin()
     previous.save_documents(
-        [
-            DocDescriptor(
-                _valid_state("Recovered"), "/original.chemvas", "Original", True
-            )
-        ]
+        [DocDescriptor(_valid_state("Recovered"), "/original.cdxml", "Original", True)]
     )
     previous_stores = [previous]
     recovery_stores = ()
@@ -199,11 +195,7 @@ def test_file_menu_recovers_copy_and_retries_failed_handoff(
         other = SessionSnapshotStore(root, session_id="crashed", pid=4242)
         other.begin()
         other.save_documents(
-            [
-                DocDescriptor(
-                    _valid_state("Other"), "/original.chemvas", "Original", True
-                )
-            ]
+            [DocDescriptor(_valid_state("Other"), "/original.cdxml", "Original", True)]
         )
         previous_stores.append(other)
         recovery_stores = (SessionSnapshotStore(root, session_id="reader", pid=4243),)
@@ -274,7 +266,7 @@ def test_file_menu_recovers_copy_and_retries_failed_handoff(
             assert recovery.snapshot_now()
         assert len(open_windows()) == count
         assert all(not store.session_dir.exists() for store in previous_stores)
-        manifest = json.loads((current.session_dir / "session.json").read_bytes())
+        manifest = read_payload((current.session_dir / "session.json").read_bytes())
         assert len(manifest["docs"]) == len(previous_stores)
         assert all(
             (current.session_dir / entry["snapshot"]).is_file()
@@ -465,7 +457,7 @@ def test_recovered_copy_is_not_offered_again_beside_an_unreadable_one(
     tmp_path, monkeypatch
 ):
     previous = _crashed_session(tmp_path, "Good", "Bad")
-    manifest = json.loads((previous.session_dir / "session.json").read_bytes())
+    manifest = read_payload((previous.session_dir / "session.json").read_bytes())
     unreadable = previous.session_dir / manifest["docs"][1]["snapshot"]
     unreadable.write_text("{corrupt")
     monkeypatch.setattr(store_module, "_pid_alive", lambda pid: False)

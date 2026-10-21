@@ -93,17 +93,17 @@ def test_registry_targets_exact_owned_keys_and_values() -> None:
     assert all(entry["Root"] == "HKCU" for entry in entries)
     assert all(entry["ValueType"] == "string" for entry in entries)
     expected = {
-        (r"Software\Classes\.chemvas\OpenWithProgids", "Chemvas.Document"),
+        (r"Software\Classes\.cdxml\OpenWithProgids", "Chemvas.Document"),
         (r"Software\Classes\Chemvas.Document", ""),
         (r"Software\Classes\Chemvas.Document\DefaultIcon", ""),
         (r"Software\Classes\Chemvas.Document\shell\open\command", ""),
         (r"Software\Classes\Applications\chemvas.exe", "FriendlyAppName"),
-        (r"Software\Classes\Applications\chemvas.exe\SupportedTypes", ".chemvas"),
+        (r"Software\Classes\Applications\chemvas.exe\SupportedTypes", ".cdxml"),
         (r"Software\Classes\Applications\chemvas.exe\shell\open\command", ""),
         (r"Software\Chemvas\Capabilities", "ApplicationName"),
         (r"Software\Chemvas\Capabilities", "ApplicationDescription"),
         (r"Software\Chemvas\Capabilities", "ApplicationIcon"),
-        (r"Software\Chemvas\Capabilities\FileAssociations", ".chemvas"),
+        (r"Software\Chemvas\Capabilities\FileAssociations", ".cdxml"),
         (r"Software\RegisteredApplications", "Chemvas"),
     }
     assert len(entries) == len(expected)
@@ -150,8 +150,8 @@ def test_uninstall_code_requires_exact_current_installation_ownership() -> None:
           begin
             RegDeleteKeyIncludingSubkeys(HKCU, 'Software\Classes\Chemvas.Document');
             if RegistryStringMatches(
-              'Software\Classes\.chemvas\OpenWithProgids', 'Chemvas.Document', '') then
-              RegDeleteValue(HKCU, 'Software\Classes\.chemvas\OpenWithProgids', 'Chemvas.Document');
+              'Software\Classes\.cdxml\OpenWithProgids', 'Chemvas.Document', '') then
+              RegDeleteValue(HKCU, 'Software\Classes\.cdxml\OpenWithProgids', 'Chemvas.Document');
           end;
           if RegistryStringMatches(
             'Software\Classes\Applications\chemvas.exe\shell\open\command', '', OwnCommand) then
@@ -180,7 +180,7 @@ def test_capabilities_match_the_owned_progid() -> None:
     assert values[(r"Software\RegisteredApplications", "Chemvas")] == (
         r"Software\Chemvas\Capabilities"
     )
-    assert values[(r"Software\Chemvas\Capabilities\FileAssociations", ".chemvas")] == (
+    assert values[(r"Software\Chemvas\Capabilities\FileAssociations", ".cdxml")] == (
         "Chemvas.Document"
     )
 

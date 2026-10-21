@@ -11,7 +11,7 @@ from tests.runtime_state import canvas_runtime_state
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from PyQt6.QtCore import QPointF, QRect, QRectF, Qt
+from PyQt6.QtCore import QPointF, QRectF, Qt
 from PyQt6.QtGui import QColor, QFont
 from PyQt6.QtWidgets import (
     QApplication,
@@ -127,7 +127,7 @@ class UIServiceTailCoverageTest(unittest.TestCase):
         item.setData.assert_not_called()
         canvas._update_selection_outline.assert_not_called()
 
-    def test_arrow_button_paints_up_triangle_when_rect_is_large_enough(self) -> None:
+    def test_arrow_button_renders_up_chevron(self) -> None:
         owner = QMainWindow()
         self.addCleanup(owner.close)
         button = ArrowButton("up", owner)
@@ -139,15 +139,11 @@ class UIServiceTailCoverageTest(unittest.TestCase):
 
         self.assertFalse(pixmap.isNull())
 
-    def test_arrow_button_paint_returns_when_adjusted_rect_is_empty(self) -> None:
-        class _TinyRectArrowButton(ArrowButton):
-            def rect(self):
-                return QRect(0, 0, 1, 1)
-
+    def test_arrow_button_renders_in_small_control(self) -> None:
         owner = QMainWindow()
         self.addCleanup(owner.close)
-        button = _TinyRectArrowButton("up", owner)
-        button.resize(24, 24)
+        button = ArrowButton("up", owner)
+        button.resize(8, 6)
         button.show()
 
         self.app.processEvents()

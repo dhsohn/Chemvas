@@ -40,7 +40,7 @@ from chemvas.ui.session import app_data_paths
 app_data_paths._candidate_dirs = lambda: [root / "app-data"]
 from chemvas.bootstrap.main_window import build_main_window
 from chemvas.bootstrap import document_render
-from chemvas.core.document_io import read_exact_document, write_document
+from tests.document_file_helpers import read_exact_document, write_document
 from chemvas.domain.document import CANVAS_FILE_VERSION
 from chemvas.ui.window.main_window_ports import active_canvas_for_window
 from tests.calculation_plan_support import _document_state, _plan
@@ -51,15 +51,15 @@ services = canvas.services
 session = services.canvas_document_session_service
 state = _document_state()
 state["calculation_plan"] = _plan(complete_mapping=False)
-write_document(root / "input.chemvas", state, CANVAS_FILE_VERSION)
-opened = read_exact_document(root / "input.chemvas").document
+write_document(root / "input.cdxml", state, CANVAS_FILE_VERSION)
+opened = read_exact_document(root / "input.cdxml").document
 session.apply_state(opened.state)
 services.move_controller.move_atoms({0, 1}, 20, 10)
 snapshot = session.snapshot_state()
 assert snapshot["calculation_plan"] == state["calculation_plan"]
 assert canvas.model.atoms[0].x == 20
-write_document(root / "output.chemvas", snapshot, CANVAS_FILE_VERSION)
-reopened = read_exact_document(root / "output.chemvas").document
+write_document(root / "output.cdxml", snapshot, CANVAS_FILE_VERSION)
+reopened = read_exact_document(root / "output.cdxml").document
 assert reopened.state["calculation_plan"] == state["calculation_plan"]
 result = document_render._render_offscreen(
     reopened.state, output_format="png", background="white", dpi=150,
@@ -68,7 +68,7 @@ result = document_render._render_offscreen(
 assert result.content.startswith(b"\x89PNG")
 assert not attempts
 print(json.dumps({
-    "document": hashlib.sha256((root / "output.chemvas").read_bytes()).hexdigest(),
+    "document": hashlib.sha256((root / "output.cdxml").read_bytes()).hexdigest(),
     "png": hashlib.sha256(result.content).hexdigest(),
 }))
 window.deleteLater()

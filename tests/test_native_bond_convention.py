@@ -10,13 +10,13 @@ from PyQt6.QtCore import QPointF
 from PyQt6.QtWidgets import QGraphicsLineItem, QGraphicsPolygonItem
 
 from chemvas.bootstrap.document_cli_shared import offscreen_document_scene
-from chemvas.core.document_io import read_document, write_document
 from chemvas.domain.document import Atom, Bond
 from chemvas.features.rendering import style_for_existing_bond_overlay
 from chemvas.ui.molecule.bond_preview_renderer import (
     build_bond_preview_items,
     update_bond_preview_items,
 )
+from tests.document_file_helpers import read_document, write_document
 from tests.test_cdxml_export import _export_cdxml, _simple_state
 
 
@@ -198,7 +198,7 @@ def test_supported_old_files_receive_same_rule_without_rewriting(
     state = _ring(style)
     if style.startswith("bold"):
         state["model"]["bonds"][0]["order"] = 1
-    path = tmp_path / f"v{version}.chemvas"
+    path = tmp_path / f"v{version}.cdxml"
     write_document(path, state, version)
     original = path.read_bytes()
     loaded = read_document(path)

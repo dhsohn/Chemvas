@@ -4,6 +4,8 @@ import unittest
 from types import SimpleNamespace
 from unittest import mock
 
+from tests.document_file_helpers import read_payload
+
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PyQt6.QtCore import QPointF
@@ -12,7 +14,6 @@ from PyQt6.QtTest import QTest
 from PyQt6.QtWidgets import QApplication, QMessageBox
 
 from chemvas.bootstrap.window_registry import open_new_window
-from chemvas.core.document_io import read_document
 from chemvas.shell.window_registry import forget_window, open_windows
 from chemvas.ui.molecule.structure_mutation_access import add_bond_between_points_for
 from chemvas.ui.session import session_snapshot_store as session_store_module
@@ -23,6 +24,7 @@ from chemvas.ui.session.session_recovery_service import (
 )
 from chemvas.ui.session.session_snapshot_store import SessionSnapshotStore
 from chemvas.ui.window.main_window_ports import active_canvas_for_window
+from tests.document_file_helpers import read_document
 
 
 class SessionRecoveryIntegrationTest(unittest.TestCase):
@@ -74,7 +76,7 @@ class SessionRecoveryIntegrationTest(unittest.TestCase):
         add_bond_between_points_for(canvas, QPointF(-20.0, 0.0), QPointF(20.0, 0.0))
         self.assertTrue(self._document_service(prev_window).is_dirty(canvas))
 
-        source = sessions_dir().parent / "source.chemvas"
+        source = sessions_dir().parent / "source.cdxml"
         original_bytes = None
         if saved_source:
             self.assertTrue(
@@ -217,12 +219,12 @@ class SessionRecoveryIntegrationTest(unittest.TestCase):
             )
             # The copy is snapshotted into this session before its original
             # session is released.
-            manifest = json.loads(
+            manifest = read_payload(
                 (sessions_dir() / "cur-session" / "session.json").read_bytes()
             )
             self.assertEqual([entry["dirty"] for entry in manifest["docs"]], [True])
             self.assertFalse((sessions_dir() / "prev-session").exists())
-            recovered_path = source.with_name("recovered.chemvas")
+            recovered_path = source.with_name("recovered.cdxml")
             self.assertTrue(
                 new_window.services.document_action_service.save_canvas_to_path(
                     new_window, str(recovered_path), canvas=restored_canvas

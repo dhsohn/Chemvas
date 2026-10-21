@@ -11,7 +11,6 @@ import pytest
 from PyQt6.QtCore import QPointF, Qt
 from PyQt6.QtWidgets import QApplication
 
-from chemvas.core.document_io import read_document, write_document
 from chemvas.domain.document import CANVAS_FILE_VERSION
 from chemvas.domain.document.perspective import unproject_point_3d
 from chemvas.ui.molecule.atom_coords_access import (
@@ -21,6 +20,7 @@ from chemvas.ui.molecule.atom_coords_access import (
 from chemvas.ui.molecule.bond_graphics_access import project_point_3d_for
 from chemvas.ui.molecule.structure_mutation_access import add_bond_for
 from tests.canvas_factory import build_canvas_view
+from tests.document_file_helpers import read_document, write_document
 
 
 @pytest.fixture(scope="module")
@@ -177,7 +177,7 @@ def test_moving_perspective_benzene_preserves_every_bond_segment(
     for bond_id, points in _bond_segments(canvas).items():
         for actual, expected in zip(points, after[bond_id], strict=True):
             assert actual == pytest.approx(expected, abs=1e-8)
-    path = tmp_path / "moved-perspective.chemvas"
+    path = tmp_path / "moved-perspective.cdxml"
     session = canvas.services.canvas_document_session_service
     write_document(path, session.snapshot_state(), CANVAS_FILE_VERSION)
     session.apply_state(read_document(path).state)
@@ -412,7 +412,7 @@ def test_pasted_perspective_ring_keeps_segments_through_move_and_history(
     delta = (pasted.x - original.x, pasted.y - original.y)
     assert_copy()
 
-    path = tmp_path / "pasted-perspective.chemvas"
+    path = tmp_path / "pasted-perspective.cdxml"
     session = canvas.services.canvas_document_session_service
     write_document(path, session.snapshot_state(), CANVAS_FILE_VERSION)
     session.apply_state(read_document(path).state)

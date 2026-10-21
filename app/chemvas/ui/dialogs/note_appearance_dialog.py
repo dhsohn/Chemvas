@@ -28,6 +28,7 @@ class NoteAppearanceDialog(QDialog):
         self.numbers: dict[str, QDoubleSpinBox] = {}
         self.colors: dict[str, QPushButton] = {}
         layout = QFormLayout(self)
+        layout.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.AllNonFixedFieldsGrow)
         notice = QLabel(
             "Applies to every note in this document, including new notes.\n"
             "Character formatting is unchanged.",

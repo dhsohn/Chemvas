@@ -55,12 +55,22 @@ def _validate_document_state(state: Mapping[str, object], version: int) -> None:
     state_kind = _state_kind(state)
     if state_kind != "canvas":
         raise ValueError("Invalid Chemvas file.")
+    if version < 10 and "cdxml_source" in state:
+        raise ValueError("Native CDXML source requires document v10.")
     _validate_canvas_state(state)
     settings = cast("Mapping[str, object]", state["settings"])
     if version < 9 and (
         settings["sheet_size"] != "A4" or "sheet_custom_size_mm" in settings
     ):
         raise ValueError("Non-A4 and custom sheet sizes require Chemvas document v9.")
+    if version < 10 and any(
+        bond.get("style") in {"wavy", "hash_plain"}
+        for bond in cast(
+            "list[Mapping[str, object]]",
+            cast("Mapping[str, object]", state["model"])["bonds"],
+        )
+    ):
+        raise ValueError("Native wavy and plain hash bonds require document v10.")
     if version == 7:
         for collection, field in (
             ("notes", "rotation"),
@@ -95,6 +105,10 @@ def _validate_canvas_state(state: Mapping[str, object]) -> None:
         raise ValueError(
             f"Invalid Chemvas file. state fields: missing={missing}, unknown={unknown}."
         )
+    if "cdxml_source" in state:
+        from .cdxml_source import validate_cdxml_source
+
+        validate_cdxml_source(state["cdxml_source"], state)
     model_state = state.get("model")
     if not isinstance(model_state, Mapping):
         raise ValueError("Invalid Chemvas file.")

@@ -13,6 +13,7 @@ from types import SimpleNamespace
 import pytest
 
 from chemvas.bootstrap import document_composition, document_layout_check
+from tests.document_file_helpers import read_payload, write_payload_text
 
 # The in-process commands must share one application: creating and
 # destroying a QApplication per call crashes Qt on Linux.
@@ -54,7 +55,8 @@ def _compose(
     arrows: list[dict[str, object]] | None = None,
 ) -> Path:
     request = tmp_path / "layout.json"
-    request.write_text(
+    write_payload_text(
+        request,
         json.dumps(
             {
                 "format": "chemvas-document-composition",
@@ -68,7 +70,7 @@ def _compose(
         ),
         encoding="utf-8",
     )
-    output = tmp_path / "layout.chemvas"
+    output = tmp_path / "layout.cdxml"
     argv = ["compose-document", str(request), "--output", str(output)]
     with redirect_stdout(io.StringIO()):
         assert document_composition.run(argv) == 0
@@ -96,7 +98,7 @@ def test_check_layout_reports_overlapping_notes_without_mutating_source(
     assert report["format"] == "chemvas-layout-check-report"
     assert report["version"] == 1
     assert report["source_sha256"] == hashlib.sha256(before).hexdigest()
-    assert report["chemvas_document_version"] == json.loads(before)["version"]
+    assert report["chemvas_document_version"] == read_payload(before)["version"]
     assert report["ok"] is False
     assert report["warning_count"] == 1
     assert report["counts"] == {
@@ -135,7 +137,7 @@ def test_check_layout_enforces_size_limit_during_the_read(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
-    source = tmp_path / "growing.chemvas"
+    source = tmp_path / "growing.cdxml"
     source.write_bytes(b"0" * (document_layout_check.MAX_DOCUMENT_BYTES + 1))
     real_stat = Path.stat
 
@@ -395,17 +397,17 @@ def test_check_layout_refuses_a_document_whose_number_cannot_be_parsed(
     tmp_path: Path,
 ) -> None:
     source = _compose(tmp_path, notes=[])
-    poisoned = source.read_text(encoding="utf-8").replace(
+    poisoned = json.dumps(read_payload(source.read_bytes())).replace(
         "{", '{"scale": 1e99999999999999999999,', 1
     )
-    source.write_text(poisoned, encoding="utf-8")
+    write_payload_text(source, poisoned, encoding="utf-8")
 
     result = _run("check-layout", str(source))
 
     assert result.returncode == 2
     assert result.stdout == ""
     assert "Traceback" not in result.stderr
-    assert "Invalid Chemvas file." in result.stderr
+    assert "out of range" in result.stderr or "Invalid Chemvas file." in result.stderr
 
 
 @pytest.mark.parametrize("charged", [False, True])
@@ -523,7 +525,7 @@ def test_check_layout_reports_atom_bond_ids_and_preserves_source(
 def test_check_layout_reports_attached_charge_index_without_mutation(
     tmp_path: Path,
 ) -> None:
-    from chemvas.core.document_io import read_exact_document, write_document
+    from tests.document_file_helpers import read_exact_document, write_document
 
     composed = _compose(
         tmp_path,
@@ -537,7 +539,7 @@ def test_check_layout_reports_attached_charge_index_without_mutation(
     )
     document = read_exact_document(composed, max_bytes=1024 * 1024).document
     document.state["marks"][0].update(x=0.0, y=0.0, dx=0.0, dy=-80.0)
-    source = tmp_path / "charged.chemvas"
+    source = tmp_path / "charged.cdxml"
     write_document(source, document.state, document.payload["version"])
     before = source.read_bytes()
 

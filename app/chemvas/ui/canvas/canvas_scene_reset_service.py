@@ -117,6 +117,12 @@ class CanvasSceneResetService:
             clear_hover,
             lambda: setattr(canvas, "model", empty_model),
             lambda: set_calculation_plan_for(canvas, None),
+            lambda: setattr(
+                canvas.runtime_state.document_metadata_state, "cdxml_source", None
+            ),
+            lambda: (
+                canvas.runtime_state.document_metadata_state.cdxml_item_bindings.clear()
+            ),
             self.hit_testing_service.mark_spatial_index_dirty,
             lambda: clear_atom_coords_3d_for(canvas),
             self.rotation.reset_all,

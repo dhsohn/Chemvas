@@ -70,7 +70,7 @@ def document_command(
 
 def compose(directory: Path, name: str, payload: dict) -> Path:
     request = directory / f"{name}.composition.json"
-    output = directory / f"{name}.chemvas"
+    output = directory / f"{name}.cdxml"
     write_json(
         request, {"format": "chemvas-document-composition", "version": 1, **payload}
     )
@@ -101,7 +101,7 @@ def template_fragment(directory: Path) -> tuple[list, list, list]:
             "anchor": {"kind": "free"},
         },
     )
-    ring = directory / "benzene.chemvas"
+    ring = directory / "benzene.cdxml"
     command("insert-template", seed, "--request", request, "--output", ring)
     graph = command("inspect-document", ring)
     atoms = graph["atoms"]
@@ -153,13 +153,15 @@ def template_fragment(directory: Path) -> tuple[list, list, list]:
             "operations": operations,
         },
     )
-    fragment = directory / "methoxy.chemvas"
+    fragment = directory / "methoxy.cdxml"
     command("apply-patch", ring, patch, "--output", fragment)
     graph = command("inspect-document", fragment)
     # This seed is created above and contains only this graph and ring metadata.
     # inspect-document is a graph inventory, not a lossless document serializer.
     # Preserve native ring membership: bonds alone omit inner-double-bond context.
-    native = json.loads(fragment.read_text(encoding="utf-8"))
+    from chemvas.features.document_files import read_document
+
+    native = read_document(fragment).payload
     fills = [
         {key: fill[key] for key in ("atom_ids", "color", "alpha")}
         for fill in native["state"]["ring_fills"]
@@ -242,7 +244,7 @@ def figure(directory: Path, name: str, fragment: tuple, multipart: bool) -> dict
             },
         },
     )
-    arranged = directory / f"{name}-arranged.chemvas"
+    arranged = directory / f"{name}-arranged.cdxml"
     request = directory / f"{name}-arrange.json"
     write_json(
         request,
@@ -269,7 +271,7 @@ def figure(directory: Path, name: str, fragment: tuple, multipart: bool) -> dict
             "rows": [{"blocks": blocks, "reference_blocks": [0]}],
         },
     )
-    final = directory / f"{name}.chemvas"
+    final = directory / f"{name}.cdxml"
     alignment = command(
         "layout-document", arranged, "--layout", request, "--output", final
     )

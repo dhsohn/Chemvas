@@ -18,11 +18,11 @@ from PyQt6.QtSvg import QSvgRenderer
 from PyQt6.QtWidgets import QApplication
 
 from chemvas.adapters.qt.renderer import Renderer
-from chemvas.core.document_io import read_exact_document, write_document
 from chemvas.domain.document import Atom, Bond, MoleculeModel
 from chemvas.ui.canvas.canvas_format_access import file_format_version_for
 from chemvas.ui.canvas.canvas_view import CanvasView
 from chemvas.ui.export.export_render_service import export_scene
+from tests.document_file_helpers import read_exact_document, write_document
 
 # One angle for each group of directions that runs the same drawing code,
 # with both sides of the vertical, where the abbreviation flips, and two
@@ -164,7 +164,7 @@ def test_movement_rotation_and_native_reopen_refresh_attachment_only(canvas, tmp
         mover.move_atoms({0}, target_x - neighbor.x, target_y - neighbor.y)
         _assert_oxygen_attachment(canvas, "OMe", angle)
         state = deepcopy(session.snapshot_state())
-        path = tmp_path / f"rotated-{angle}.chemvas"
+        path = tmp_path / f"rotated-{angle}.cdxml"
         write_document(path, state, file_format_version_for(canvas))
         read = read_exact_document(path)
         assert read.source_bytes == path.read_bytes()

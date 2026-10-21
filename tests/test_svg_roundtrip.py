@@ -777,8 +777,12 @@ class SvgRoundtripTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             path = self._svg_path(tmp)
 
-            with self.assertRaisesRegex(ValueError, "No editable Chemvas metadata"):
+            with self.assertRaisesRegex(
+                ValueError, "No editable Chemvas metadata"
+            ) as error:
                 extract_chemvas_document_from_svg(path)
+            self.assertIn("original .cdxml file", str(error.exception))
+            self.assertIn("Editable Chemvas SVG checked", str(error.exception))
 
             path.write_text(
                 '<svg xmlns="http://www.w3.org/2000/svg" '

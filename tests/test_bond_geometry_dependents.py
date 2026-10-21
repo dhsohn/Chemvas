@@ -9,7 +9,6 @@ from PyQt6.QtCore import QPointF
 from PyQt6.QtWidgets import QGraphicsLineItem, QGraphicsPolygonItem
 
 from chemvas.bootstrap.document_cli_shared import offscreen_document_scene
-from chemvas.core.document_io import read_document, write_document
 from chemvas.domain.document import CANVAS_FILE_VERSION, Atom, Bond
 from chemvas.features.export import ExportPlan
 from chemvas.ui.export.export_render_service import (
@@ -17,6 +16,7 @@ from chemvas.ui.export.export_render_service import (
     resolve_export_plan,
 )
 from tests.canvas_factory import build_canvas_view
+from tests.document_file_helpers import read_document, write_document
 from tests.test_cdxml_export import _simple_state
 from tests.test_perspective_move import _event_at, _select_atoms, _start_drag
 
@@ -82,7 +82,7 @@ def _same(a, b):
 def _verify_reopen_export(canvas, tmp_path):
     docs = canvas.services.canvas_document_session_service
     state = docs.snapshot_state()
-    path = tmp_path / "saved.chemvas"
+    path = tmp_path / "saved.cdxml"
     write_document(path, state, CANVAS_FILE_VERSION)
     loaded = read_document(path)
     assert json.loads(json.dumps(loaded.state["model"])) == json.loads(

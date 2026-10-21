@@ -13,7 +13,6 @@ from copy import deepcopy
 import pytest
 
 from chemvas.bootstrap import document_render as cli
-from chemvas.core.document_io import write_document
 from chemvas.domain.document import (
     CANVAS_FILE_VERSION,
     Atom,
@@ -23,6 +22,7 @@ from chemvas.domain.document import (
     serialize_settings,
 )
 from chemvas.features.export.cdxml_consumer_validation import validate_consumer_objects
+from tests.document_file_helpers import write_document, write_payload_text
 
 pytestmark = pytest.mark.usefixtures("qt_application")
 
@@ -46,7 +46,7 @@ def _render(source, output, sidecar=None, *, width=170):
 
 
 def _fixture(tmp_path, capsys, *, rotated=False):
-    source = tmp_path / "source.chemvas"
+    source = tmp_path / "source.cdxml"
     notes = [
         {"text": "A_A\n-1.0", "x": 20, "y": 20},
         {"text": "A_B\n-2.0", "x": 65, "y": 20},
@@ -136,7 +136,7 @@ def _fixture(tmp_path, capsys, *, rotated=False):
         notes=[0] if rotated else [0, 1],
     )
     sidecar = tmp_path / "layout.json"
-    sidecar.write_text(json.dumps(payload))
+    write_payload_text(sidecar, json.dumps(payload))
     return source, producer, consumer, sidecar, payload
 
 
@@ -335,7 +335,7 @@ def test_invalid_measurement_refuses_without_writing(tmp_path, capsys, change, m
     payload["consumer_sha256"] = _hash(consumer.read_bytes())
     if change == "consumer_hash":
         payload["consumer_sha256"] = "0" * 64
-    sidecar.write_text(json.dumps(payload))
+    write_payload_text(sidecar, json.dumps(payload))
     output = tmp_path / "after.cdxml"
     source_bytes = source.read_bytes()
     with pytest.raises(SystemExit) as error:
@@ -381,7 +381,7 @@ def test_post_collision_margin_refuses_even_when_box_is_inside_page(tmp_path, ca
     texts[0].set("BoundingBox", " ".join(map(str, first_box)))
     consumer.write_bytes(ET.tostring(root))
     payload["consumer_sha256"] = _hash(consumer.read_bytes())
-    sidecar.write_text(json.dumps(payload))
+    write_payload_text(sidecar, json.dumps(payload))
     capsys.readouterr()
     output = tmp_path / "too-tight.cdxml"
     with pytest.raises(SystemExit):
@@ -401,7 +401,7 @@ def test_explicit_substitution_is_reported_and_never_claimed_as_font_identity(
         payload["font_mapping"][old] = "Declared substitute"
     consumer.write_bytes(ET.tostring(root))
     payload["consumer_sha256"] = _hash(consumer.read_bytes())
-    sidecar.write_text(json.dumps(payload))
+    write_payload_text(sidecar, json.dumps(payload))
     assert _render(source, tmp_path / "after.cdxml", sidecar) == 0
     report = json.loads(capsys.readouterr().out)["cdxml_layout_reference"]
     assert report["experimental"] is True
@@ -431,13 +431,13 @@ def test_native_dropped_atom_label_ids_preserve_each_label(tmp_path, capsys):
         label.attrib.pop("id")
     consumer.write_bytes(ET.tostring(root))
     payload["consumer_sha256"] = _hash(consumer.read_bytes())
-    sidecar.write_text(json.dumps(payload))
+    write_payload_text(sidecar, json.dumps(payload))
     assert _render(source, tmp_path / "accepted.cdxml", sidecar) == 0
     capsys.readouterr()
     labels[0].find("s").text = "N"
     consumer.write_bytes(ET.tostring(root))
     payload["consumer_sha256"] = _hash(consumer.read_bytes())
-    sidecar.write_text(json.dumps(payload))
+    write_payload_text(sidecar, json.dumps(payload))
     output = tmp_path / "rejected.cdxml"
     with pytest.raises(SystemExit) as error:
         _render(source, output, sidecar)

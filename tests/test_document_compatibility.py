@@ -15,14 +15,16 @@ import pytest
 from chemvas.bootstrap import document_patch as patch_cli
 from chemvas.core.document_io import (
     parse_document,
-    read_exact_document,
-    write_document,
+    read_exact_snapshot,
+    write_snapshot,
 )
 from chemvas.core.svg_roundtrip import (
     extract_chemvas_document_from_svg,
     extract_chemvas_svg_payload,
 )
 from chemvas.domain.document import CANVAS_FILE_VERSION
+from chemvas.features.document_files import read_exact_document as read_cdxml_exact
+from tests.document_file_helpers import encode_payload
 
 FIXTURE_ROOT = Path(__file__).parent / "fixtures" / "document-v7"
 
@@ -88,7 +90,7 @@ def _stored_precomplex(state: dict) -> list[dict]:
 
 
 def _frozen_document(name: str) -> tuple[bytes, dict]:
-    raw = (FIXTURE_ROOT / f"{name}.chemvas").read_bytes()
+    raw = (FIXTURE_ROOT / f"{name}.json").read_bytes()
     assert hashlib.sha256(raw).hexdigest() == FROZEN_SHA256[name]
     payload = json.loads(raw)
     assert payload["version"] == 7
@@ -119,9 +121,9 @@ def _svg_bytes(document: dict, scope: str = "sheet") -> bytes:
 @pytest.mark.parametrize("name", FROZEN_SHA256)
 def test_frozen_v7_native_read_write_preserves_complete_state(name, tmp_path):
     original_bytes, original = _frozen_document(name)
-    path = FIXTURE_ROOT / f"{name}.chemvas"
+    path = FIXTURE_ROOT / f"{name}.json"
 
-    read = read_exact_document(path)
+    read = read_exact_snapshot(path)
     document = read.document
 
     assert read.source_bytes == original_bytes
@@ -130,8 +132,8 @@ def test_frozen_v7_native_read_write_preserves_complete_state(name, tmp_path):
     assert document.state == original["state"]
     before = deepcopy(document.state)
     output = tmp_path / "resaved.chemvas"
-    written = write_document(output, document.state, CANVAS_FILE_VERSION)
-    saved = read_exact_document(output)
+    written = write_snapshot(output, document.state, CANVAS_FILE_VERSION)
+    saved = read_exact_snapshot(output)
     reopened = saved.document
     assert written.payload["version"] == CANVAS_FILE_VERSION
     assert reopened.state == {**original["state"], "last_smiles_input": None}
@@ -160,7 +162,7 @@ def test_literal_v7_editable_svg_readers_preserve_complete_state(name, scope, tm
         "document": original,
     }
     assert path.read_bytes() == svg_bytes
-    assert (FIXTURE_ROOT / f"{name}.chemvas").read_bytes() == original_bytes
+    assert (FIXTURE_ROOT / f"{name}.json").read_bytes() == original_bytes
 
 
 @pytest.mark.parametrize("name", FROZEN_SHA256)
@@ -168,14 +170,15 @@ def test_frozen_v7_inspect_dry_run_and_patch_preserve_other_state(
     name, tmp_path, capsys
 ):
     original_bytes, original = _frozen_document(name)
-    source = tmp_path / "source.chemvas"
+    original_bytes = encode_payload(original)
+    source = tmp_path / "source.cdxml"
     source.write_bytes(original_bytes)
     source_sha256 = hashlib.sha256(original_bytes).hexdigest()
 
     assert patch_cli.run(["inspect-document", str(source)]) == 0
     inspection = json.loads(capsys.readouterr().out)
     assert inspection["source_sha256"] == source_sha256
-    assert inspection["chemvas_document_version"] == 7
+    assert inspection["chemvas_document_version"] == CANVAS_FILE_VERSION
     assert inspection["atom_count"] == len(original["state"]["model"]["atoms"])
     request = {
         "format": "chemvas-graph-patch",
@@ -194,10 +197,10 @@ def test_frozen_v7_inspect_dry_run_and_patch_preserve_other_state(
     dry_run = json.loads(capsys.readouterr().out)
     assert not dry_run["written"]
     assert set(tmp_path.iterdir()) == {source, request_path}
-    output = tmp_path / "patched.chemvas"
+    output = tmp_path / "patched.cdxml"
     assert patch_cli.run([*argv, "--output", str(output)]) == 0
     applied = json.loads(capsys.readouterr().out)
-    candidate = read_exact_document(output)
+    candidate = read_cdxml_exact(output)
     expected = deepcopy(original["state"])
     expected["last_smiles_input"] = None
     expected["model"]["atoms"]["0"]["color"] = "#ff0000"
@@ -219,22 +222,22 @@ def test_legacy_reviewed_precomplex_objects_survive_native_read_and_resave(tmp_p
     assert [item["kind"] for item in stored] == ["candidate_ensemble"] * 2
     assert all("selection" in item and item["candidates"] for item in stored)
 
-    document = read_exact_document(
-        FIXTURE_ROOT / "legacy-reviewed-precomplex.chemvas"
+    document = read_exact_snapshot(
+        FIXTURE_ROOT / "legacy-reviewed-precomplex.json"
     ).document
     assert _stored_precomplex(document.state) == stored
     output = tmp_path / "resaved.chemvas"
-    write_document(output, document.state, CANVAS_FILE_VERSION)
-    saved = read_exact_document(output)
+    write_snapshot(output, document.state, CANVAS_FILE_VERSION)
+    saved = read_exact_snapshot(output)
     reopened = saved.document
 
     # The re-saved file spells the same objects, not merely an equal state.
     assert _stored_precomplex(json.loads(saved.source_bytes)["state"]) == stored
     assert _stored_precomplex(reopened.state) == stored
     second = tmp_path / "resaved-again.chemvas"
-    write_document(second, reopened.state, CANVAS_FILE_VERSION)
+    write_snapshot(second, reopened.state, CANVAS_FILE_VERSION)
     assert second.read_bytes() == saved.source_bytes
-    assert (FIXTURE_ROOT / "legacy-reviewed-precomplex.chemvas").read_bytes() == (
+    assert (FIXTURE_ROOT / "legacy-reviewed-precomplex.json").read_bytes() == (
         original_bytes
     )
 
@@ -254,12 +257,13 @@ def test_archive_number_beyond_float_range_is_rejected_on_open(token, tmp_path):
     )
 
     with pytest.raises(ValueError, match="out of range"):
-        read_exact_document(path)
+        read_exact_snapshot(path)
 
 
 def test_graph_patch_moving_an_atom_keeps_legacy_reviewed_precomplex(tmp_path, capsys):
     original_bytes, original = _frozen_document("legacy-reviewed-precomplex")
-    source = tmp_path / "source.chemvas"
+    original_bytes = encode_payload(original)
+    source = tmp_path / "source.cdxml"
     source.write_bytes(original_bytes)
     request_path = tmp_path / "patch.json"
     request_path.write_text(
@@ -273,7 +277,7 @@ def test_graph_patch_moving_an_atom_keeps_legacy_reviewed_precomplex(tmp_path, c
         ),
         encoding="utf-8",
     )
-    output = tmp_path / "patched.chemvas"
+    output = tmp_path / "patched.cdxml"
 
     assert (
         patch_cli.run(
@@ -283,7 +287,11 @@ def test_graph_patch_moving_an_atom_keeps_legacy_reviewed_precomplex(tmp_path, c
     )
 
     assert json.loads(capsys.readouterr().out)["written"]
-    patched = read_exact_document(output).document
+    patched = (
+        read_cdxml_exact(output)
+        if output.suffix == ".cdxml"
+        else read_exact_snapshot(output)
+    ).document
     assert patched.state["model"]["atoms"]["0"]["x"] == -3.0
     assert patched.state["calculation_plan"] == original["state"]["calculation_plan"]
     assert source.read_bytes() == original_bytes

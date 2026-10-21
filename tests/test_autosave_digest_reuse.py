@@ -13,6 +13,7 @@ from chemvas.ui.canvas import canvas_document_metadata_state as metadata
 from chemvas.ui.session import session_recovery_service as recovery
 from chemvas.ui.session import session_snapshot_store as snapshots
 from tests.canvas_factory import build_canvas_view
+from tests.document_file_helpers import read_payload
 
 
 @pytest.fixture(scope="module")
@@ -29,7 +30,7 @@ def drawing(app, monkeypatch, tmp_path):
         tab_references=SimpleNamespace(all_canvases=lambda: [canvas])
     )
     monkeypatch.setattr(recovery, "default_open_windows", lambda: [window])
-    metadata.set_document_file_path_for(canvas, str(tmp_path / "source.chemvas"))
+    metadata.set_document_file_path_for(canvas, str(tmp_path / "source.cdxml"))
     metadata.mark_document_clean_for(
         canvas, canvas.services.canvas_document_session_service.snapshot_state()
     )
@@ -58,8 +59,8 @@ def _files(store):
 
 
 def _persisted_state(store):
-    manifest = json.loads((store.session_dir / "session.json").read_bytes())
-    return json.loads(
+    manifest = read_payload((store.session_dir / "session.json").read_bytes())
+    return read_payload(
         (store.session_dir / manifest["docs"][0]["snapshot"]).read_bytes()
     )["state"]
 
@@ -224,7 +225,7 @@ def test_uninitialized_blank_document_still_never_hashes(drawing, monkeypatch):
     store.save_documents(docs)
     digest.assert_not_called()
     assert not docs[0].dirty
-    assert json.loads((store.session_dir / "session.json").read_bytes())["docs"] == []
+    assert read_payload((store.session_dir / "session.json").read_bytes())["docs"] == []
 
 
 def test_reused_digest_does_not_bypass_strict_snapshot_write(drawing, monkeypatch):

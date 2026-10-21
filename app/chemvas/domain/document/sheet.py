@@ -6,7 +6,7 @@ from decimal import Decimal
 
 POINTS_PER_MM = 72.0 / 25.4
 MIN_SHEET_MM = 10.0
-MAX_SHEET_MM = 2000.0
+MAX_SHEET_MM = 3000.0
 SHEET_SIZES_MM: dict[str, tuple[float, float]] = {
     "A0": (841.0, 1189.0),
     "A1": (594.0, 841.0),

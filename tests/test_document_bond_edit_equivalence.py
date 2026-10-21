@@ -18,11 +18,11 @@ from PyQt6.QtWidgets import (
     QStyleOptionGraphicsItem,
 )
 
-from chemvas.core.document_io import read_document, write_document
 from chemvas.domain.document import CANVAS_FILE_VERSION
 from chemvas.domain.document.perspective import unproject_point_3d
 from chemvas.features.document_composition import compose_document_state
 from chemvas.ui.selection.selection_queries import selected_ids_for
+from tests.document_file_helpers import read_document, write_document
 from tests.document_patch_workflow_support import run_patch
 from tests.gui_workflow_support import app as app
 from tests.gui_workflow_support import drawing as drawing
@@ -273,7 +273,7 @@ def test_bond_shortcut_matches_cli_literal_edit_and_reopening(
     sentinels = _sentinels(canvas)
     groups = dict(canvas.runtime_state.group_state.groups)
     before_glyph = _glyph(canvas, initial_style, initial_order, reverse)
-    source = tmp_path / "source.chemvas"
+    source = tmp_path / "source.cdxml"
     write_document(source, before, CANVAS_FILE_VERSION)
     original = source.read_bytes()
     QTest.keyClick(canvas, key)
@@ -334,7 +334,7 @@ def test_bond_shortcut_matches_cli_literal_edit_and_reopening(
                 canvas.runtime_state.group_state.groups[key] is group
                 for key, group in groups.items()
             )
-    saved = tmp_path / "gui-saved.chemvas"
+    saved = tmp_path / "gui-saved.cdxml"
     assert documents.save_to_file(str(saved)) == []
     for path in (output, saved):
         stored = read_document(path).state
@@ -370,7 +370,7 @@ def test_gui_bond_guards_and_explicit_cli_policy_remain_distinct(
     stacks = history.capture_stack_snapshot()
     sentinels = _sentinels(canvas)
     glyph = _glyph(canvas, style, 2)
-    source = tmp_path / "source.chemvas"
+    source = tmp_path / "source.cdxml"
     write_document(source, before, CANVAS_FILE_VERSION)
     key = Qt.Key.Key_2 if policy == "no-op" else Qt.Key.Key_C
     QTest.keyClick(canvas, key)

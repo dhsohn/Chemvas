@@ -11,6 +11,7 @@ import pytest
 
 from chemvas.domain.document import build_document_payload, extract_document_state
 from chemvas.features.document_composition import compose_document_state
+from tests.document_file_helpers import write_payload_text
 
 
 def _state():
@@ -136,8 +137,8 @@ def test_image_source_errors_identify_image_index(source):
 def test_cli_rejects_null_annotations_without_traceback_or_mutation(tmp_path, command):
     payload = build_document_payload(_state(), 7)
     payload["state"]["model"]["atom_annotations"] = {"0": None}
-    source = tmp_path / "invalid.chemvas"
-    source.write_text(json.dumps(payload), encoding="utf-8")
+    source = tmp_path / "invalid.cdxml"
+    write_payload_text(source, json.dumps(payload), encoding="utf-8")
     before = source.read_bytes()
     env = dict(
         os.environ,
@@ -225,18 +226,19 @@ def test_all_cli_readers_reject_string_references_without_output(
 ):
     payload = build_document_payload(_referenced_state(), 7)
     _set_reference(payload["state"], section, "3" if section == "marks" else "0")
-    source = tmp_path / "invalid.chemvas"
-    source.write_text(json.dumps(payload), encoding="utf-8")
+    source = tmp_path / "invalid.cdxml"
+    write_payload_text(source, json.dumps(payload), encoding="utf-8")
     before = source.read_bytes()
     output = tmp_path / (
-        "output.png" if command == "render-document" else "output.chemvas"
+        "output.png" if command == "render-document" else "output.cdxml"
     )
     args = [command, str(source)]
     if command == "render-document":
         args += ["--output", str(output)]
     elif command == "apply-patch":
         patch = tmp_path / "patch.json"
-        patch.write_text(
+        write_payload_text(
+            patch,
             json.dumps(
                 {
                     "format": "chemvas-graph-patch",
@@ -303,8 +305,8 @@ def test_desktop_rejects_string_references_before_replacing_document(tmp_path, s
         stacks = history.capture_stack_snapshot()
         payload = build_document_payload(_referenced_state(), 7)
         _set_reference(payload["state"], section, "3" if section == "marks" else "0")
-        source = tmp_path / "invalid.chemvas"
-        source.write_text(json.dumps(payload), encoding="utf-8")
+        source = tmp_path / "invalid.cdxml"
+        write_payload_text(source, json.dumps(payload), encoding="utf-8")
         source_bytes = source.read_bytes()
         message_box = mock.Mock()
         target_provider = mock.Mock()

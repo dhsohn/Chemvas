@@ -25,4 +25,4 @@ py -3.13 -m venv .venv-windows
 
 ## 설치 및 파일 연결
 
-설치 프로그램은 관리자 권한 없이 `%LOCALAPPDATA%\Programs\Chemvas`에 설치되며, `.chemvas` 확장자에 대한 애플리케이션 연결을 등록합니다.
+설치 프로그램은 관리자 권한 없이 `%LOCALAPPDATA%\Programs\Chemvas`에 설치되며, `.cdxml` 확장자에 대한 애플리케이션 연결을 등록합니다.

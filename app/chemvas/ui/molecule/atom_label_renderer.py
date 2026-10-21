@@ -12,6 +12,7 @@ from chemvas.features.annotations import (
 )
 from chemvas.ui.canvas.graphics_items import AtomDotItem, AtomLabelItem
 from chemvas.ui.canvas.pick_radius_access import atom_pick_radius
+from chemvas.ui.molecule.native_atom_labels import NativeAtomLabelItem
 from chemvas.ui.scene.scene_graphics_operations import detach_graphics_item
 from chemvas.ui.scene.scene_selectability import make_item_selectable
 
@@ -60,12 +61,18 @@ class AtomLabelRenderer:
             if uses_compact_label_hit_shape(atom.element)
             else None
         )
-        if existing_item is not None and not isinstance(existing_item, AtomLabelItem):
+        native = self.context.state.atom_graphics_state.native_labels.get(atom_id)
+        item_type = (
+            NativeAtomLabelItem
+            if native is not None and native.text == atom.element
+            else AtomLabelItem
+        )
+        if existing_item is not None and type(existing_item) is not item_type:
             detach_graphics_item(self.context.scene, existing_item)
             existing_item = None
             items.pop(atom_id, None)
         if existing_item is None:
-            text_item = AtomLabelItem(
+            text_item = item_type(
                 hit_padding=label_hit_padding, hit_radius=label_hit_radius
             )
             self.context.scene.addItem(text_item)
@@ -75,7 +82,8 @@ class AtomLabelRenderer:
             text_item.set_hit_padding(label_hit_padding)
             text_item.set_hit_radius(label_hit_radius)
 
-        text_item.setFont(self.context.renderer.atom_font())
+        if not isinstance(text_item, NativeAtomLabelItem):
+            text_item.setFont(self.context.renderer.atom_font())
         text_item.setDefaultTextColor(QColor(atom.color))
         text_item.setData(0, "atom")
         text_item.setData(1, atom_id)
@@ -123,6 +131,10 @@ class AtomLabelRenderer:
             detach_graphics_item(self.context.scene, dot)
 
     def position_label(self, item, x: float, y: float) -> None:
+        native = self.context.state.atom_graphics_state.native_labels.get(item.data(1))
+        if isinstance(item, NativeAtomLabelItem) and native is not None:
+            item.position_native(native, x, y)
+            return
         offset = self.context.renderer.style.atom_label_offset_px
         atom_id = item.data(1)
         dx, dy = (
@@ -178,7 +190,21 @@ class AtomLabelRenderer:
         item = self.context.state.atom_graphics_state.atom_items.get(atom_id)
         if atom is None or not isinstance(item, AtomLabelItem):
             return False
+        native = self.context.state.atom_graphics_state.native_labels.get(atom_id)
+        needs_native = native is not None and native.text == atom.element
+        if isinstance(item, NativeAtomLabelItem) != needs_native:
+            self.draw_atom(atom_id)
+            return True
         before = self._label_presentation_signature(item)
+        native = self.context.state.atom_graphics_state.native_labels.get(atom_id)
+        if (
+            isinstance(item, NativeAtomLabelItem)
+            and native is not None
+            and native.text == atom.element
+        ):
+            item.apply_native(native, atom.color)
+            item.position_native(native, atom.x, atom.y)
+            return self._label_presentation_signature(item) != before
         display_text, anchor_element, anchor_at_end, hydrogens_below = (
             atom_label_presentation(self.context.model, atom_id, atom.element)
         )

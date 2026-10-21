@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 import re
 from dataclasses import FrozenInstanceError, replace
 from decimal import Decimal
@@ -17,6 +16,7 @@ from chemvas.domain.document import (
     shape_from_state,
     shape_to_state,
 )
+from tests.document_file_helpers import read_payload
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
@@ -75,10 +75,10 @@ def test_reordering_and_clearing_change_the_document_without_any_graphics() -> N
 def _document_shape_states() -> list[dict]:
     states: list[dict] = []
     for path in [
-        *sorted((REPO_ROOT / "tests" / "fixtures").rglob("*.chemvas")),
-        *sorted((REPO_ROOT / "examples").rglob("*.chemvas")),
+        *sorted((REPO_ROOT / "tests" / "fixtures").rglob("*.cdxml")),
+        *sorted((REPO_ROOT / "examples").rglob("*.cdxml")),
     ]:
-        document = json.loads(path.read_text(encoding="utf-8"))
+        document = read_payload(path.read_text(encoding="utf-8"))
         state = document.get("state", document)
         states.extend(state.get("shapes", []))
     return states

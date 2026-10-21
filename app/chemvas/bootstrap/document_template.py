@@ -18,7 +18,7 @@ from chemvas.bootstrap.document_cli_shared import (
     offscreen_canvas,
     read_json_request,
 )
-from chemvas.core.document_io import atomic_create_bytes, read_exact_document
+from chemvas.core.document_io import atomic_create_bytes
 from chemvas.domain.document import (
     Atom,
     Bond,
@@ -29,6 +29,7 @@ from chemvas.domain.document import (
     serialize_model_state,
 )
 from chemvas.domain.document.inspection import inspect_components
+from chemvas.features.document_files import read_exact_document
 from chemvas.features.insertion import (
     TemplateInsertPlan,
     TemplateInsertRequest,
@@ -111,7 +112,7 @@ def _argument_parser() -> argparse.ArgumentParser:
         "insert-template",
         help="insert a native ring template without overwriting the source",
     )
-    command.add_argument("document", help="input .chemvas document")
+    command.add_argument("document", help="input .cdxml document")
     command.add_argument(
         "--request", required=True, help="source-pinned template insertion v1 JSON"
     )
@@ -121,19 +122,19 @@ def _argument_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="fully validate the native candidate without writing",
     )
-    destination.add_argument("--output", help="new non-overwriting .chemvas path")
+    destination.add_argument("--output", help="new non-overwriting .cdxml path")
     return parser
 
 
 def _validate_paths(source: Path, request: Path, output: Path | None) -> None:
-    if source.suffix.lower() != ".chemvas" or not source.is_file():
-        raise ValueError("input must be an existing .chemvas document")
+    if source.suffix.lower() != ".cdxml" or not source.is_file():
+        raise ValueError("input must be an existing .cdxml document")
     if request.suffix.lower() != ".json" or not request.is_file():
         raise ValueError("request must be an existing .json file")
     if output is None:
         return
-    if output.suffix.lower() != ".chemvas":
-        raise ValueError("output must use the .chemvas filename extension")
+    if output.suffix.lower() != ".cdxml":
+        raise ValueError("output must use the .cdxml filename extension")
     if output.exists() or output.is_symlink():
         raise ValueError(f"output path already exists: {output}")
     if not output.parent.is_dir():

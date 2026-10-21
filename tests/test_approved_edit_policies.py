@@ -1,20 +1,19 @@
 """Approved editing policies preserve chemistry and retire input-only metadata."""
 
-import json
-
 import pytest
 from PyQt6 import sip
 from PyQt6.QtCore import QPointF, Qt
 from PyQt6.QtTest import QTest
 from PyQt6.QtWidgets import QApplication
 
-from chemvas.core.document_io import create_document, read_document
+from chemvas.core.document_io import create_document
 from chemvas.domain.document import build_document_payload
 from chemvas.ui.canvas.canvas_document_metadata_state import (
     document_is_dirty_for,
     mark_document_clean_for,
 )
 from tests.canvas_factory import build_canvas_view
+from tests.document_file_helpers import encode_payload, read_document
 
 
 @pytest.fixture
@@ -39,8 +38,8 @@ def test_legacy_smiles_input_does_not_create_dirty_state_or_noop_history(
     session = canvas.services.canvas_document_session_service
     state = session.snapshot_state()
     state["last_smiles_input"] = "obsolete input"
-    path = tmp_path / "legacy.chemvas"
-    raw = json.dumps(build_document_payload(state, version)).encode()
+    path = tmp_path / "legacy.cdxml"
+    raw = encode_payload(build_document_payload(state, version))
     path.write_bytes(raw)
     document = read_document(path)
     assert document.state["last_smiles_input"] == "obsolete input"

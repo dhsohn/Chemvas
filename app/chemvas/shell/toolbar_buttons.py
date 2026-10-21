@@ -1,12 +1,11 @@
 from __future__ import annotations
 
+from pathlib import Path
 from typing import TYPE_CHECKING, override
 
-from PyQt6.QtCore import QPointF, Qt
-from PyQt6.QtGui import QColor, QPainter, QPolygonF
+from PyQt6.QtCore import QRect, QSize, Qt
+from PyQt6.QtGui import QIcon, QPainter
 from PyQt6.QtWidgets import QToolButton
-
-from chemvas.shell.palette import PALETTE
 
 if TYPE_CHECKING:
     from PyQt6.QtCore import QPoint
@@ -14,60 +13,40 @@ if TYPE_CHECKING:
     from PyQt6.QtWidgets import QWidget
 
 
+def _chevron_icon(direction: str) -> QIcon:
+    icons = Path(__file__).resolve().parents[1] / "assets" / "icon"
+    icon = QIcon(str(icons / f"chevron-{direction}.svg"))
+    icon.addFile(
+        str(icons / f"chevron-{direction}-disabled.svg"), QSize(), QIcon.Mode.Disabled
+    )
+    return icon
+
+
 class ArrowButton(QToolButton):
     def __init__(self, direction: str, parent: QWidget | None = None) -> None:
         super().__init__(parent)
-        self._direction = direction
         self.setAutoRaise(True)
         self.setFocusPolicy(Qt.FocusPolicy.NoFocus)
-
-    @override
-    def paintEvent(self, event: QPaintEvent | None) -> None:
-        super().paintEvent(event)
-        painter = QPainter(self)
-        painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
-        painter.setPen(Qt.PenStyle.NoPen)
-        painter.setBrush(QColor(PALETTE["text_muted"]))
-        rect = self.rect().adjusted(6, 4, -6, -4)
-        if rect.width() <= 0 or rect.height() <= 0:
-            return
-        if self._direction == "up":
-            points = [
-                QPointF(rect.center().x(), rect.top()),
-                QPointF(rect.right(), rect.bottom()),
-                QPointF(rect.left(), rect.bottom()),
-            ]
-        else:
-            points = [
-                QPointF(rect.left(), rect.top()),
-                QPointF(rect.right(), rect.top()),
-                QPointF(rect.center().x(), rect.bottom()),
-            ]
-        painter.drawPolygon(QPolygonF(points))
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.setIcon(_chevron_icon(direction))
+        self.setIconSize(QSize(12, 12))
 
 
 class CornerMenuButton(QToolButton):
+    def __init__(self, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self._menu_chevron = _chevron_icon("down")
+
     @override
     def paintEvent(self, event: QPaintEvent | None) -> None:
         super().paintEvent(event)
         painter = QPainter(self)
-        painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
-        painter.setPen(Qt.PenStyle.NoPen)
-        painter.setBrush(
-            QColor(PALETTE["checked_text" if self.isChecked() else "text_muted"])
+        self._menu_chevron.paint(
+            painter,
+            QRect(self.width() - 11, self.height() - 10, 10, 10),
+            Qt.AlignmentFlag.AlignCenter,
+            QIcon.Mode.Normal if self.isEnabled() else QIcon.Mode.Disabled,
         )
-        rect = self.rect()
-        size = 3
-        right = rect.right() - 3
-        bottom = rect.bottom() - 3
-        left = right - size
-        top = bottom - size
-        points = [
-            QPointF(right, bottom),
-            QPointF(left, bottom),
-            QPointF(right, top),
-        ]
-        painter.drawPolygon(QPolygonF(points))
 
 
 class CornerMenuToolButton(CornerMenuButton):

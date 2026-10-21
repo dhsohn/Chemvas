@@ -1,13 +1,13 @@
 """The common placement rule matches independent native/GDI observations."""
 
-import json
 from pathlib import Path
 
 import pytest
 
 from chemvas.features.annotations import atom_label_baseline_offset
+from tests.document_file_helpers import read_payload
 
-ORACLE = json.loads(
+ORACLE = read_payload(
     (Path(__file__).parent / "fixtures/native_label_baselines.json").read_text()
 )
 

@@ -443,7 +443,7 @@ def test_selected_group_survives_actual_svg_export_and_gui_reopen(window, tmp_pa
     assert canvas.services.canvas_document_session_service.snapshot_state() == reopened
     QTest.keySequence(canvas, QKeySequence(QKeySequence.StandardKey.Redo))
     assert canvas.services.canvas_document_session_service.snapshot_state() == moved
-    saved = tmp_path / "edited.chemvas"
+    saved = tmp_path / "edited.cdxml"
     actions = window.services.document_action_service
     assert actions.save_canvas_to_path(window, str(saved), message_box=message_box)
     assert actions.load_canvas_from_path(window, str(saved), message_box=message_box)
@@ -474,6 +474,10 @@ def test_editable_selection_notice_explains_subset_before_export(window):
         assert "whole drawing" in notice.text()
         assert "not the Calculation Plan" not in notice.text()
         editable.setChecked(False)
+        assert not notice.isHidden()
+        assert "cannot be reopened" in notice.text()
+        assert ".cdxml" in notice.text()
+        fmt.setCurrentIndex(fmt.findData("png"))
         assert notice.isHidden()
         return QDialog.DialogCode.Rejected
 

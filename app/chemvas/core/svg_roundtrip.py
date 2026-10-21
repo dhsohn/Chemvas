@@ -104,7 +104,12 @@ def _read_editable_svg(path: PathType) -> tuple[dict[str, Any], ChemvasDocument]
         if child.tag == _SOURCE_TAG
     ]
     if not sources:
-        raise ValueError("No editable Chemvas metadata found in SVG.")
+        raise ValueError(
+            "No editable Chemvas metadata found in SVG. "
+            "This SVG cannot be reopened for editing in Chemvas. "
+            "Open the original .cdxml file, or export it again with "
+            "Editable Chemvas SVG checked."
+        )
     if len(sources) != 1:
         raise ValueError("Invalid editable Chemvas metadata in SVG.")
     payload = _decode_source_element(sources[0])

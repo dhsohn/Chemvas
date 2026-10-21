@@ -45,6 +45,7 @@ from chemvas.ui.window.main_window_context_bar_widgets import (
     BondLengthSpinBox,
     KindMenuButton,
     SegmentedButtonGroup,
+    TextSizeButton,
     action_button,
     atom_symbol_input,
     bond_length_input,
@@ -89,6 +90,7 @@ class ButtonGroupPage:
 class TextContextPage:
     page: QWidget
     buttons: dict[str, QToolButton]
+    size_button: TextSizeButton
 
 
 @dataclass(frozen=True)
@@ -460,11 +462,14 @@ def build_text_page(
     toggle_superscript,
     toggle_subscript,
     adjust_size,
+    set_size,
     set_alignment,
 ) -> TextContextPage:
     icons = window.ui_references.require_icon_factory()
     page, layout = new_context_page()
     layout.addWidget(hint_label(CONTEXT_PAGE_CAPTIONS["text"]))
+    size_button = TextSizeButton(set_size)
+    layout.addWidget(size_button)
     for icon, tip, delta in TEXT_SIZE_ACTION_SPECS:
         layout.addWidget(
             _text_icon_button(
@@ -491,7 +496,7 @@ def build_text_page(
             buttons[key] = button
             layout.addWidget(button)
     layout.addStretch(1)
-    return TextContextPage(page, buttons)
+    return TextContextPage(page, buttons, size_button)
 
 
 def build_orbital_page(

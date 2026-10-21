@@ -236,7 +236,7 @@ def decode_clipboard_selection_payload(
             )
             continue
         # Clipboard MIME is outside the trust boundary: reject any payload whose
-        # content does not pass the same whitelist used for .chemvas files.
+        # content does not pass the same whitelist used for document snapshots.
         if not validate_clipboard_selection_payload(payload):
             continue
         return cast("dict", normalize_json_numbers(payload)), payload_json

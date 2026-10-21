@@ -7,11 +7,11 @@ from PyQt6.QtCore import QPointF
 
 from chemvas.adapters.qt.renderer import Renderer
 from chemvas.bootstrap.document_cli_shared import offscreen_document_scene
-from chemvas.core.document_io import read_document, write_document
 from chemvas.domain.document import CANVAS_FILE_VERSION, Atom, Bond
 from chemvas.features.rendering import line_normal
 from chemvas.ui.canvas.canvas_view import CanvasView
 from chemvas.ui.export.figure_export_service import FigureExportService
+from tests.document_file_helpers import read_document, write_document
 from tests.test_cdxml_export import _simple_state
 
 pytestmark = pytest.mark.usefixtures("qt_application")
@@ -69,7 +69,7 @@ def test_drag_save_reopen_and_undo_redo_preserve_terminal_double_geometry(
             tuple(a + d for a, d in zip(initial[0], delta, strict=True)), abs=1e-7
         )
         state = session.snapshot_state()
-        path = tmp_path / "moved.chemvas"
+        path = tmp_path / "moved.cdxml"
         write_document(path, state, CANVAS_FILE_VERSION)
         before = path.read_bytes()
         with offscreen_document_scene(

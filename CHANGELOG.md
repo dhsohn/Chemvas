@@ -7,6 +7,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.26.0] - 2026-10-22
+
+### Changed
+
+- Use CDXML as the sole working-document format for desktop, CLI and browser saves. **Breaking:** retire opening and saving `.chemvas` files without a compatibility reader or automatic conversion. Existing files are left untouched.
+- Preserve all new-document editing state in an integrity-bound CDXML snapshot. Native objects remain native where supported; other drawing styles include an embedded visual projection. External editors may retain those styles as images and cannot guarantee Chemvas grouping or settings after editing the native XML.
+
+- Match native CDXML per-bond widths and spacing, and retain caption size,
+  baseline alignment, rotation and visibility above graphic backgrounds.
+- Preserve filled half-arrow heads, curved equilibrium shafts, and rounded
+  dashed frame projections when viewing retained CDXML artwork.
+- Retain native CDXML atom font sizes, weight, subscripts, baseline positions,
+  right-aligned labels and stacked hydrogens in the editor and figure rendering.
+
+- Preserve embedded CDXML artwork with bounded PNG previews and allow custom
+  canvases up to 3000 mm for large native project schemes.
+
+- Open supported single-page CDXML documents, edit them on the canvas, and save
+  back through the regular Save/Save As workflow. Preserve native editing state
+  across own saves and reject unsupported imports without replacing the canvas.
+  Preserve native fragments, reaction references and vector objects through edits;
+  document v10 carries the owned XML through saves and recovery.
+
+- Match the font-size popup input height to its Apply button.
+
+- Align image property and canvas dimension fields, and apply the shared input appearance to arrow label editors.
+
+- Align export option rows and use equal numeric field widths in Export Figure and Note Appearance.
+
+- Use consistent thin chevrons and centered button areas for dropdowns, numeric inputs, zoom controls, and toolbar menus, including disabled states.
+
+- Show the selected text size in the toolbar, with point-size entry and a mixed-size indicator.
+- Explain which SVG exports can be reopened and how to recover when a plain SVG is opened.
+
 ### Added
 
 - Inspect saved note indices and create, move, or replace note content and style

@@ -10,10 +10,10 @@ from chemvas.bootstrap.document_cli_shared import (
     offscreen_canvas,
     offscreen_document_scene,
 )
-from chemvas.core.document_io import read_exact_document, write_document
 from chemvas.domain.document import CANVAS_FILE_VERSION
 from chemvas.features.document_composition import compose_document_state
 from chemvas.ui.canvas.graphics_items import AtomLabelItem
+from tests.document_file_helpers import read_exact_document, write_document
 
 pytestmark = pytest.mark.usefixtures("qt_application")
 
@@ -66,7 +66,7 @@ def test_atom_input_and_generated_document_preserve_unicode_and_render_once(tmp_
             generated = scene.state.atom_graphics_state.atom_items[0]
             assert item.glyph_path() == generated.glyph_path()
             assert item.pos() == generated.pos()
-        path = tmp_path / "unicode.chemvas"
+        path = tmp_path / "unicode.cdxml"
         write_document(path, session.snapshot_state(), CANVAS_FILE_VERSION)
     reopened = read_exact_document(path).document
     assert reopened.state["model"]["atoms"]["0"]["element"] == scripted

@@ -65,7 +65,7 @@ def parse_document(payload: object) -> ChemvasDocument:
     return ChemvasDocument(payload=normalized_payload, state=normalized_state)
 
 
-def write_document(
+def write_snapshot(
     path: PathType, state: dict[str, Any], version: int
 ) -> ChemvasDocument:
     document = create_document(state, version)
@@ -73,7 +73,7 @@ def write_document(
 
     def write_payload(tmp: Path) -> None:
         nonlocal source_sha256
-        _write_document_payload(tmp, document.payload)
+        _write_snapshot_payload(tmp, document.payload)
         # Bind the baseline to our exact staged bytes, never a later writer's
         # replacement of the destination after the atomic publication.
         with tmp.open("rb") as source:
@@ -83,7 +83,7 @@ def write_document(
     return replace(document, source_sha256=source_sha256)
 
 
-def _write_document_payload(path: Path, payload: dict[str, Any]) -> None:
+def _write_snapshot_payload(path: Path, payload: dict[str, Any]) -> None:
     with path.open("w", encoding="utf-8") as handle:
         json.dump(payload, handle, indent=2)
     if path.stat().st_size > MAX_DOCUMENT_BYTES:
@@ -169,11 +169,11 @@ def atomic_write_via_temp(path: PathType, writer: Callable[[Path], None]) -> Non
             raise
 
 
-def read_document(path: PathType) -> ChemvasDocument:
-    return read_exact_document(path).document
+def read_snapshot(path: PathType) -> ChemvasDocument:
+    return read_exact_snapshot(path).document
 
 
-def read_exact_document(
+def read_exact_snapshot(
     path: PathType, *, max_bytes: int = MAX_DOCUMENT_BYTES
 ) -> ExactDocumentRead:
     """Read once so callers can hash the exact bytes that were parsed.

@@ -20,16 +20,16 @@ from PIL import Image
 from PyQt6.QtCore import QPointF, QRectF
 from PyQt6.QtWidgets import QApplication
 
-from chemvas.core.document_io import read_document
 from chemvas.ui.canvas import canvas_document_session_service
 from chemvas.ui.canvas.sheet_setup_access import sheet_setup_for
 from chemvas.ui.canvas.sheet_setup_service import change_sheet_setup_for
 from chemvas.ui.history.history_commands import AddSceneItemsCommand
 from chemvas.ui.scene.image_actions import insert_image_bytes
 from tests.canvas_factory import build_canvas_view
+from tests.document_file_helpers import read_document
 
 EXTENDED_DOCUMENT = (
-    Path(__file__).parent / "fixtures" / "document-v8" / "extended.chemvas"
+    Path(__file__).parent / "fixtures" / "document-v8" / "extended.cdxml"
 )
 
 

@@ -139,6 +139,7 @@ class ImagePropertiesDialog(QDialog):
         self._state = dict(state)
         self._ratio = state["pixel_width"] / state["pixel_height"]
         layout = QFormLayout(self)
+        layout.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.AllNonFixedFieldsGrow)
         layout.addRow(
             QLabel(
                 spec["original"].format(

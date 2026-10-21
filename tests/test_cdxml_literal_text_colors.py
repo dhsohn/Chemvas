@@ -1,6 +1,5 @@
 """Literal text colors must survive native default-color elision."""
 
-import json
 import xml.etree.ElementTree as ET
 from copy import deepcopy
 from pathlib import Path
@@ -13,11 +12,12 @@ from chemvas.features.export.cdxml_consumer_validation import (
     _Scene,
     validate_consumer_objects,
 )
+from tests.document_file_helpers import read_payload
 from tests.test_cdxml_export import _export_cdxml, _simple_state
 
 pytestmark = pytest.mark.usefixtures("qt_application")
 
-NATIVE = json.loads(
+NATIVE = read_payload(
     (Path(__file__).parent / "fixtures/native_attached_text_colors.json").read_text()
 )
 

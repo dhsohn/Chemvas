@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 import os
 import shutil
 import subprocess
@@ -9,6 +8,8 @@ import time
 from pathlib import Path
 
 import pytest
+
+from tests.document_file_helpers import read_payload
 
 ROOT = Path(__file__).resolve().parents[1]
 RUNNER = ROOT / "scripts" / "run_test_files.sh"
@@ -202,7 +203,7 @@ def test_coverage_keeps_child_execution_and_reports_failed_runs(tmp_path, fail):
         check=True,
     )
     assert ("FAILED (partial execution)" if fail else "tests passed") in report.stdout
-    data = json.loads((output / "coverage.json").read_text())
+    data = read_payload((output / "coverage.json").read_text())
     files = {Path(name).as_posix(): info for name, info in data["files"].items()}
     assert set(files) == {
         path.relative_to(ROOT).as_posix()

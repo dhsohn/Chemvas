@@ -25,4 +25,4 @@ py -3.13 -m venv .venv-windows
 
 ## Installation & File Association
 
-The installer sets up Chemvas in `%LOCALAPPDATA%\Programs\Chemvas` for the current user (no administrator privileges required) and registers file associations for `.chemvas` documents.
+The installer sets up Chemvas in `%LOCALAPPDATA%\Programs\Chemvas` for the current user (no administrator privileges required) and registers file associations for `.cdxml` documents.

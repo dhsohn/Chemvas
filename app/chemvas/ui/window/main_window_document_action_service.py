@@ -7,7 +7,6 @@ from typing import TYPE_CHECKING
 
 from PyQt6.QtWidgets import QFileDialog, QMessageBox
 
-from chemvas.core.document_io import read_document as default_read_document
 from chemvas.core.molfile import fit_molfile_model, read_molfile
 from chemvas.core.svg_roundtrip import (
     extract_chemvas_document_from_svg as default_read_editable_svg,
@@ -16,6 +15,7 @@ from chemvas.domain.document import (
     MoleculeModel,
     serialize_model_state,
 )
+from chemvas.features.document_files import read_document as default_read_document
 from chemvas.features.export import (
     default_export_path,
     export_error_message,
@@ -50,8 +50,8 @@ from chemvas.ui.window.main_window_document_dialogs import (
     prompt_export_options,
 )
 from chemvas.ui.window.main_window_path_logic import (
-    is_canonical_saved_document_path,
     is_desktop_document_path,
+    is_saved_document_path,
 )
 from chemvas.ui.window.main_window_path_logic import (
     resolve_load_path as default_resolve_load_path,
@@ -145,11 +145,11 @@ class MainWindowDocumentActionService:
         message_box=None,
     ) -> bool:
         message_box = QMessageBox if message_box is None else message_box
-        if not is_canonical_saved_document_path(path):
+        if not is_saved_document_path(path):
             message_box.warning(
                 window,
                 "Save Error",
-                "Chemvas documents must use the .chemvas filename extension.",
+                "Chemvas documents must use the .cdxml filename extension.",
             )
             return False
         # Store an absolute path so the session/recent entries resolve regardless
@@ -293,12 +293,18 @@ class MainWindowDocumentActionService:
             if resolve_save_as_path is None
             else resolve_save_as_path
         )
-        dialog_path, _ = file_dialog.getSaveFileName(
+        dialog_path, selected_filter = file_dialog.getSaveFileName(
             window,
             "Save Drawing As",
             self.default_save_dialog_path(window, canvas=canvas),
-            "Chemvas (*.chemvas);;All Files (*)",
+            "ChemDraw XML (*.cdxml);;All Files (*)",
         )
+        if (
+            dialog_path
+            and not Path(dialog_path).suffix
+            and "*.cdxml" in selected_filter
+        ):
+            dialog_path += ".cdxml"
         path = resolve_save_as_path(dialog_path)
         if path is None:
             return False
@@ -425,7 +431,7 @@ class MainWindowDocumentActionService:
         source_path = self.current_file_path(window)
         if (
             source_path is None
-            or not is_canonical_saved_document_path(source_path)
+            or not is_saved_document_path(source_path)
             or metadata.source_sha256 is None
             or metadata.clean_digest is None
         ):
@@ -474,7 +480,7 @@ class MainWindowDocumentActionService:
             window,
             "Load Drawing",
             "",
-            "Chemvas / Editable SVG / MDL Molfile (*.chemvas *.svg *.mol);;Chemvas (*.chemvas);;Editable SVG (*.svg);;MDL Molfile (*.mol);;All Files (*)",
+            "CDXML / Editable SVG / MDL Molfile (*.cdxml *.svg *.mol);;ChemDraw XML (*.cdxml);;Editable SVG (*.svg);;MDL Molfile (*.mol);;All Files (*)",
         )
         path = (
             resolve_load_path(dialog_path)
@@ -507,7 +513,7 @@ class MainWindowDocumentActionService:
             message_box.warning(
                 window,
                 "Load Error",
-                "Unsupported file type. Open a .chemvas, .svg, or .mol file.",
+                "Unsupported file type. Open a .cdxml, .svg, or .mol file.",
             )
             return False
         read_document = (
@@ -519,13 +525,13 @@ class MainWindowDocumentActionService:
             else read_editable_svg
         )
         # Bind the document to an absolute path up front: a relative path (e.g. a
-        # CLI "chemvas ./file.chemvas") would otherwise be stored as the file
+        # CLI "chemvas ./file.cdxml") would otherwise be stored as the file
         # path and autosaved into the session, then fail to resolve on restore
         # from a different working directory.
         path = os.path.abspath(path)
         # If this exact file is already open, switch to that window instead of
         # spawning a second, independently-editable copy. (Editable SVGs open
-        # unbound to their path, so this only matches real .chemvas documents.)
+        # unbound to their path, so this only matches real .cdxml documents.)
         already_open = find_open_document(path)
         if already_open is not None:
             open_window, open_canvas = already_open
@@ -541,7 +547,7 @@ class MainWindowDocumentActionService:
             if Path(path).suffix.lower() == ".mol":
                 state = self._imported_molfile_state(window, path)
                 target = target_provider() if target_provider is not None else window
-                # An imported MOL has no backing .chemvas document: open it
+                # An imported MOL has no backing .cdxml document: open it
                 # unbound (no file path, not in recents) so it reads as a new
                 # untitled drawing and Save can never overwrite the .mol.
                 target.services.canvas_document_service.open_state(
@@ -588,7 +594,10 @@ class MainWindowDocumentActionService:
                 target.close_after_confirmation()
             message_box.warning(window, "Load Error", f"Failed to load file:\n{exc}")
             return False
-        status_bar_for(target).showMessage(f"Loaded: {path}", 4000)
+        status_bar_for(target).showMessage(
+            f"Loaded: {path}",
+            6000,
+        )
         record_recent(path)
         # Capture the newly-opened document in the session now, so opening a file
         # and quitting before the next timer tick does not drop it from restore.

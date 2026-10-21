@@ -5,9 +5,9 @@ from chemvas.ui.canvas.canvas_scene_items_state import require_scene_record_id
 import pytest
 from PyQt6.QtCore import QPointF
 
-from chemvas.core.document_io import read_document
 from chemvas.ui.canvas.canvas_group_state import register_group_for
 from chemvas.ui.molecule.structure_mutation_access import add_bond_for
+from tests.document_file_helpers import read_document
 from tests.native_canvas_support import app as app
 from tests.native_canvas_support import canvas as canvas
 
@@ -62,7 +62,7 @@ def test_new_geometry_extends_group_and_roundtrips(canvas, tmp_path, kind):
     assert canvas.runtime_state.group_state.groups[group_id] is group
     history.redo()
     assert canvas.services.canvas_document_session_service.snapshot_state() == after
-    path = tmp_path / "extended-group.chemvas"
+    path = tmp_path / "extended-group.cdxml"
     documents = canvas.services.canvas_document_session_service
     assert documents.save_to_file(str(path)) == []
     documents.apply_state(read_document(path).state)

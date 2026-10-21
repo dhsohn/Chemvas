@@ -40,6 +40,7 @@ from chemvas.ui.session.session_snapshot_store import (
 )
 from chemvas.ui.window.main_window_ports import active_canvas_for_window
 from tests.calculation_plan_support import _document_state, _plan
+from tests.document_file_helpers import read_payload
 from tests.runtime_services import canvas_runtime_services
 from tests.runtime_state import canvas_runtime_state
 from tests.subprocess_support import source_subprocess_env
@@ -267,12 +268,12 @@ def test_start_leaves_recovery_guidance_to_the_persistent_notice(qapp):
         current_documents=list,
         recovery_warnings=(warning,),
     )
-    first.statusBar().showMessage("Already open: a.chemvas")
+    first.statusBar().showMessage("Already open: a.cdxml")
 
     service.start(SimpleNamespace(aboutToQuit=_FakeSignal()))
 
     status.set_recovery_notice.assert_called_with(first, warning)
-    assert first.statusBar().messages == [("Already open: a.chemvas", 0)]
+    assert first.statusBar().messages == [("Already open: a.cdxml", 0)]
     service._timer.stop()
 
 
@@ -351,8 +352,8 @@ def test_restore_previous_rebuilds_windows_and_marks_recovered_dirty():
             ),
             RestoredDoc(
                 state={"m": 2},
-                file_path="/a/x.chemvas",
-                display_name="x.chemvas",
+                file_path="/a/x.cdxml",
+                display_name="x.cdxml",
                 dirty=True,
             ),
         ],
@@ -367,7 +368,7 @@ def test_restore_previous_rebuilds_windows_and_marks_recovered_dirty():
     assert [c.window for c in doc_service.opened] == [first, second]
     assert [c.display_name for c in doc_service.opened] == [
         "Canvas 1",
-        "x.chemvas (recovered copy)",
+        "x.cdxml (recovered copy)",
     ]
     # Only the unsaved doc is forced dirty.
     assert doc_service.dirtied == doc_service.opened
@@ -384,10 +385,10 @@ def test_restore_gives_each_doc_its_own_window_when_first_is_occupied():
     result = RestoreResult(
         docs=[
             RestoredDoc(
-                state={"m": 1}, file_path="/a.chemvas", display_name="a", dirty=True
+                state={"m": 1}, file_path="/a.cdxml", display_name="a", dirty=True
             ),
             RestoredDoc(
-                state={"m": 2}, file_path="/b.chemvas", display_name="b", dirty=True
+                state={"m": 2}, file_path="/b.cdxml", display_name="b", dirty=True
             ),
         ]
     )
@@ -563,7 +564,7 @@ def _break_mapping(canvas) -> None:
 
 
 def _snapshot_files(store) -> dict[str, tuple[str, bytes]]:
-    manifest = json.loads((store.session_dir / "session.json").read_bytes())
+    manifest = read_payload((store.session_dir / "session.json").read_bytes())
     return {
         entry["display_name"]: (
             entry["snapshot"],
@@ -655,7 +656,7 @@ def test_stale_plan_save_is_refused_until_undo_restores_recoverable_document(
         assert service.snapshot_now()
         assert _autosave_notice(window)
 
-        path = tmp_path / "mapped.chemvas"
+        path = tmp_path / "mapped.cdxml"
         message_box = mock.Mock()
         message_box.question.return_value = QMessageBox.StandardButton.Yes
         actions = window.services.document_action_service
@@ -676,16 +677,16 @@ def test_stale_plan_save_is_refused_until_undo_restores_recoverable_document(
         assert not session.snapshot_state_with_warnings()[1]
         retained = session.snapshot_state()["calculation_plan"]
         assert actions.save_canvas_to_path(window, str(path), message_box=message_box)
-        from chemvas.core.document_io import read_document
+        from tests.document_file_helpers import read_document
 
         assert read_document(path).state["calculation_plan"] == retained
         assert service.snapshot_now()
         assert not _autosave_notice(window)
-        manifest = json.loads((store.session_dir / "session.json").read_bytes())
+        manifest = read_payload((store.session_dir / "session.json").read_bytes())
         assert manifest["docs"] == [
             {
                 "file_path": str(path),
-                "display_name": "mapped.chemvas",
+                "display_name": "mapped.cdxml",
                 "dirty": False,
                 "snapshot": None,
             }

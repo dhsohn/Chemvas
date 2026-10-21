@@ -11,7 +11,6 @@ from PyQt6.QtCore import QPointF
 from PyQt6.QtGui import QImage
 from PyQt6.QtWidgets import QApplication
 
-from chemvas.core.document_io import read_document, write_document
 from chemvas.core.molfile import parse_molfile, write_molfile
 from chemvas.domain.document import CANVAS_FILE_VERSION, serialize_model_state
 from chemvas.ui.molecule.structure_payload_access import build_structure_payload_for
@@ -21,6 +20,7 @@ from chemvas.ui.scene.scene_clipboard_copy_service import (
 )
 from chemvas.ui.scene.scene_decoration_access import add_mark_for_atom_for
 from tests.canvas_factory import build_canvas_view
+from tests.document_file_helpers import read_document, write_document
 
 # Independent totals: N already carries one radical; O already carries -1.
 # The moved mark contributes only to its explicitly chosen owner.
@@ -162,7 +162,7 @@ def test_rebound_native_and_clipboard_roundtrip_keep_owner_kind_color(
     canvas, item = _drawing(canvas_factory, kind)
     assert canvas.services.canvas_mark_scene_service.rebind_mark(item, 1)
     before = canvas.services.canvas_document_session_service.snapshot_state()
-    path = tmp_path / "rebound.chemvas"
+    path = tmp_path / "rebound.cdxml"
     write_document(path, before, CANVAS_FILE_VERSION)
     original_bytes = path.read_bytes()
     restored = canvas_factory()

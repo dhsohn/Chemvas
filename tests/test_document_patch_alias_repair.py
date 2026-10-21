@@ -10,7 +10,6 @@ from copy import deepcopy
 import pytest
 
 from chemvas.bootstrap import document_patch
-from chemvas.core.document_io import read_document, write_document
 from chemvas.domain.document import (
     CANVAS_FILE_VERSION,
     Atom,
@@ -21,6 +20,12 @@ from chemvas.domain.document import (
     serialize_settings,
 )
 from chemvas.features.document_patch import apply_document_patch, inspect_document_graph
+from tests.document_file_helpers import (
+    read_document,
+    read_payload,
+    write_document,
+    write_payload_text,
+)
 
 
 def _state(alias="OH", repair="relabel"):
@@ -199,13 +204,15 @@ def test_source_alias_error_can_be_repaired_but_inspection_stays_strict(alias, r
     [("OH", "relabel"), ("NH2", "remove_bond"), ("SH", "lower_order")],
 )
 def test_cli_alias_repair_dry_run_publish_and_reopen_match(tmp_path, alias, repair):
-    source = tmp_path / "source.chemvas"
+    source = tmp_path / "source.cdxml"
     patch_file = tmp_path / "repair.json"
-    output = tmp_path / "repaired.chemvas"
+    output = tmp_path / "repaired.cdxml"
     write_document(source, _state(alias, repair), CANVAS_FILE_VERSION)
     before = source.read_bytes()
     digest = hashlib.sha256(before).hexdigest()
-    patch_file.write_text(json.dumps(_patch(digest, _operation(alias, repair))))
+    write_payload_text(
+        patch_file, json.dumps(_patch(digest, _operation(alias, repair)))
+    )
     for command in ("inspect-document",):
         rejected = _cli(command, source)
         assert rejected.returncode == 2
@@ -263,9 +270,9 @@ def test_alias_repair_cannot_publish_an_invalid_candidate(tmp_path, capsys, case
         if (case, dry) == ("new_invalid", False)
         else functools.partial(_cli_in_process, capsys)
     )
-    source = tmp_path / "source.chemvas"
+    source = tmp_path / "source.cdxml"
     patch_file = tmp_path / "repair.json"
-    output = tmp_path / "rejected.chemvas"
+    output = tmp_path / "rejected.cdxml"
     state = _state()
     operation = _operation()
     if case == "exact_noop":
@@ -302,9 +309,9 @@ def test_alias_repair_cannot_publish_an_invalid_candidate(tmp_path, capsys, case
             state["model"]["atoms"][4]["element"] = "N"
     write_document(source, state, CANVAS_FILE_VERSION)
     if case == "broken_source":
-        payload = json.loads(source.read_bytes())
+        payload = read_payload(source.read_bytes())
         payload["state"]["model"]["bonds"][0]["b"] = 999
-        source.write_text(json.dumps(payload))
+        write_payload_text(source, json.dumps(payload))
     before = source.read_bytes()
     patch = _patch(hashlib.sha256(before).hexdigest(), operation)
     if case == "round_trip":
@@ -315,7 +322,7 @@ def test_alias_repair_cannot_publish_an_invalid_candidate(tmp_path, capsys, case
         patch["source_sha256"] = "0" * 64
     elif case == "bad_patch":
         patch["ignore_errors"] = True
-    patch_file.write_text(json.dumps(patch))
+    write_payload_text(patch_file, json.dumps(patch))
     result = run(
         "apply-patch",
         source,
@@ -330,14 +337,14 @@ def test_alias_repair_cannot_publish_an_invalid_candidate(tmp_path, capsys, case
 
 
 def test_cli_alias_repair_preserves_a_matching_plan(tmp_path):
-    source = tmp_path / "source.chemvas"
+    source = tmp_path / "source.cdxml"
     patch_file = tmp_path / "repair.json"
-    output = tmp_path / "repaired.chemvas"
+    output = tmp_path / "repaired.cdxml"
     state = _with_plan(_state())
     write_document(source, state, CANVAS_FILE_VERSION)
     before = source.read_bytes()
-    patch_file.write_text(
-        json.dumps(_patch(hashlib.sha256(before).hexdigest(), _operation()))
+    write_payload_text(
+        patch_file, json.dumps(_patch(hashlib.sha256(before).hexdigest(), _operation()))
     )
     applied = _cli("apply-patch", source, patch_file, "--output", output)
     assert applied.returncode == 0, applied.stderr

@@ -372,3 +372,5 @@ ADR을 언제 쓰는지, 작성 규칙과 템플릿은 [ADR 안내](adr/README.m
 
 - [ADR 0056: Snapshot-bound note patches](adr/0056-snapshot-bound-note-patches.md)
 - [ADR 0057: Bounded spatial layout checks](adr/0057-bounded-spatial-layout-checks.md)
+
+- [ADR 0058: Desktop CDXML documents](adr/0058-desktop-cdxml-documents.md)

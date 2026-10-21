@@ -8,13 +8,13 @@ Chemvas provides a headless CLI for automating document operations without launc
 
 ```mermaid
 flowchart LR
-    compose["compose-document<br/>Composition v1/v2 JSON"] --> doc[("scheme.chemvas")]
+    compose["compose-document<br/>Composition v1/v2 JSON"] --> doc[("scheme.cdxml")]
     template["insert-template"] --> doc
     desktop["Desktop app<br/>File ▸ Save"] --> doc
     doc --> inspect["inspect-document<br/>exact SHA-256 + atom IDs"]
     inspect --> patch["apply-patch<br/>Graph Patch v1"]
     inspect --> layout["layout-document<br/>scheme layout"]
-    patch --> revised[("new .chemvas")]
+    patch --> revised[("new .cdxml")]
     layout --> revised
     revised --> check["check-layout<br/>warnings, exit 0/1/2"]
     revised --> render["render-document<br/>SVG · PDF · PNG"]
@@ -26,10 +26,10 @@ All CLI operations enforce explicit validation contracts:
 
 ## Headless document composition
 
-Generate valid, editable `.chemvas` documents from structured JSON manifests:
+Generate valid, editable `.cdxml` documents from structured JSON manifests:
 
 ```bash
-chemvas compose-document scheme.json --output scheme.chemvas
+chemvas compose-document scheme.json --output scheme.cdxml
 ```
 
 The optional `images` array embeds PNG/JPEG rasters alongside native canvas objects. Paths are relative to the manifest file (see [Image Objects](IMAGE_OBJECTS.md)).
@@ -85,7 +85,7 @@ Supported kinds: `square_pair`, `parentheses_pair`, `braces_pair`, `square_left`
 Validate layout geometry, boundary containment, and overlapping elements:
 
 ```bash
-chemvas check-layout scheme.chemvas > layout-report.json
+chemvas check-layout scheme.cdxml > layout-report.json
 ```
 
 Common diagnostic codes reported:
@@ -98,7 +98,7 @@ Common diagnostic codes reported:
 For quick sheet boundary checks on complex schemes:
 
 ```bash
-chemvas check-layout scheme.chemvas --sheet-only > sheet-report.json
+chemvas check-layout scheme.cdxml --sheet-only > sheet-report.json
 ```
 
 Exit codes: `0` (clean), `1` (warnings detected), `2` (invalid document or error).
@@ -118,8 +118,8 @@ collision checks; it cannot bypass limits needed to construct the geometry.
 Insert standardized ring templates via CLI without requiring RDKit:
 
 ```bash
-chemvas insert-template scheme.chemvas --request ring.json --dry-run
-chemvas insert-template scheme.chemvas --request ring.json --output ring-added.chemvas
+chemvas insert-template scheme.cdxml --request ring.json --dry-run
+chemvas insert-template scheme.cdxml --request ring.json --output ring-added.cdxml
 ```
 
 ```json
@@ -143,14 +143,14 @@ Supported styles: `regular` (sizes 3–12), `benzene`, `chair`, `chair_flip`, an
 Render publication-ready figures directly to SVG, PDF, PNG, or experimental CDXML without launching the desktop GUI:
 
 ```bash
-chemvas render-document scheme.chemvas --output scheme.svg
-chemvas render-document scheme.chemvas --output scheme.pdf --width-mm 174
-chemvas render-document scheme.chemvas --output scheme.png --dpi 600
-chemvas render-document scheme.chemvas --output journal.svg --width-mm 70 --max-height-mm 120
-chemvas render-document scheme.chemvas --output readable.svg --width-mm 174 --min-font-pt 6
-chemvas render-document scheme.chemvas --output scheme-transparent.png \
+chemvas render-document scheme.cdxml --output scheme.svg
+chemvas render-document scheme.cdxml --output scheme.pdf --width-mm 174
+chemvas render-document scheme.cdxml --output scheme.png --dpi 600
+chemvas render-document scheme.cdxml --output journal.svg --width-mm 70 --max-height-mm 120
+chemvas render-document scheme.cdxml --output readable.svg --width-mm 174 --min-font-pt 6
+chemvas render-document scheme.cdxml --output scheme-transparent.png \
   --background transparent
-chemvas render-document scheme.chemvas --output scheme.cdxml --cdxml-label-bindings labels.json
+chemvas render-document scheme.cdxml --output scheme.cdxml --cdxml-label-bindings labels.json
 ```
 
 - `--width-mm`: Scales the figure to fit specific column widths (e.g., 84 mm for single column, 174 mm for double column).
@@ -163,9 +163,9 @@ chemvas render-document scheme.chemvas --output scheme.cdxml --cdxml-label-bindi
 Inspect stable atom IDs and apply targeted graph mutations without rewriting the entire document:
 
 ```bash
-chemvas inspect-document ring-added.chemvas > inspection.json
-chemvas apply-patch ring-added.chemvas patch.json --dry-run
-chemvas apply-patch ring-added.chemvas patch.json --output revised.chemvas
+chemvas inspect-document ring-added.cdxml > inspection.json
+chemvas apply-patch ring-added.cdxml patch.json --dry-run
+chemvas apply-patch ring-added.cdxml patch.json --output revised.cdxml
 ```
 
 Example patch reducing a double bond and adding a carbonyl group:
@@ -248,7 +248,7 @@ To extract atom IDs and compute SHA-256 for a patch request:
 python - <<'PY'
 import hashlib, json
 from pathlib import Path
-data = Path("drawing.chemvas").read_bytes()
+data = Path("drawing.cdxml").read_bytes()
 model = json.loads(data)["state"]["model"]
 print(json.dumps({"source_sha256": hashlib.sha256(data).hexdigest(),
                   "atoms": model["atoms"], "bonds": model["bonds"]}, indent=2))
@@ -273,7 +273,7 @@ Adjust terminal substituent orientation programmatically:
 ## Stored calculation plans
 
 Chemvas does not install a chemistry backend and does not write `machine.json`.
-A calculation plan already stored in a `.chemvas` file is kept when it still
+A calculation plan already stored in a `.cdxml` file is kept when it still
 matches the drawing. Save refuses when the current drawing would drop that plan.
 There is no reaction-mapping panel and no command that creates or exports a plan.
 Graph inspection is `inspect-document`.
@@ -290,7 +290,7 @@ simulate a larger page. The default remains A4 landscape. Available presets are
 }
 ```
 
-For exact width and height, use `Custom` and millimetres (10–2000 per side):
+For exact width and height, use `Custom` and millimetres (10–3000 per side):
 
 ```json
 {

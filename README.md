@@ -11,7 +11,12 @@
 
 <p align="center"><b>English</b> · <a href="https://github.com/dhsohn/Chemvas/blob/main/README.ko.md">한국어</a></p>
 
-Chemvas is an open-source drawing tool for **reaction schemes that you can rebuild**. Every figure comes from an editable `.chemvas` file (JSON, version 9) and one command, so it can be re-rendered at a journal column width after any change. A script or an AI agent can edit the same file through checked patches instead of rewriting it.
+Chemvas is an open-source drawing tool for **reaction schemes that you can rebuild**. Every figure comes from an editable `.cdxml` file and one command, so it can be re-rendered at a journal column width after any change. A script or an AI agent can edit the same file through checked patches instead of rewriting it.
+
+Open supported single-page ChemDraw XML (`.cdxml`) files from File > Open, edit
+on the canvas, and use Save to write CDXML again. Import uses Chemvas drawing
+styles while retaining native fragments, reaction references and vector objects.
+Unsupported edits fail before replacing the file; see [format limits](https://github.com/dhsohn/Chemvas/blob/main/docs/adr/0058-desktop-cdxml-documents.md).
 
 ## What Chemvas is for
 
@@ -35,8 +40,8 @@ Chemvas is an open-source drawing tool for **reaction schemes that you can rebui
 
 Chemvas does not replace ChemDraw for file exchange. Inputs that Chemvas cannot represent exactly are refused with an error rather than drawn incorrectly.
 
-- **Opens:** `.chemvas`; SVG files that Chemvas exported with **Editable Chemvas SVG** checked (other SVG files cannot be opened); 2D MOL V2000 files within the subset Chemvas writes (bond orders 1–3, wedge and hash bonds, charges, radicals).
-- **Refused:** CDX/CDXML, SDF and RXN files; MOL files with 3D coordinates, isotopes, aromatic bond type 4 or V3000.
+- **Opens:** `.cdxml`; SVG files that Chemvas exported with **Editable Chemvas SVG** checked (other SVG files cannot be opened); 2D MOL V2000 files within the subset Chemvas writes (bond orders 1–3, wedge and hash bonds, charges, radicals).
+- **Refused:** binary CDX and multipage CDXML, SDF and RXN files; MOL files with 3D coordinates, isotopes, aromatic bond type 4 or V3000.
 
 ## Install
 
@@ -54,12 +59,12 @@ For local Windows packaging, see the [Windows packaging guide](https://github.co
 ## Quickstart: from a script or agent
 
 ```bash
-chemvas compose-document scheme.json --output scheme.chemvas
-chemvas inspect-document scheme.chemvas > inspection.json
-chemvas apply-patch scheme.chemvas patch.json --dry-run
-chemvas apply-patch scheme.chemvas patch.json --output revised.chemvas
-chemvas check-layout revised.chemvas
-chemvas render-document revised.chemvas --output scheme.svg --width-mm 174
+chemvas compose-document scheme.json --output scheme.cdxml
+chemvas inspect-document scheme.cdxml > inspection.json
+chemvas apply-patch scheme.cdxml patch.json --dry-run
+chemvas apply-patch scheme.cdxml patch.json --output revised.cdxml
+chemvas check-layout revised.cdxml
+chemvas render-document revised.cdxml --output scheme.svg --width-mm 174
 ```
 
 `scheme.json` describes atoms, bonds, arrows and notes. `patch.json` carries the `source_sha256` from `inspection.json` and the operations to apply. Each command writes a new file and refuses to overwrite an existing one, and `check-layout` exits with status 1 when it finds warnings. The formats and a worked example with images are in the [Agent CLI guide](https://github.com/dhsohn/Chemvas/blob/main/docs/AGENT_CLI.md).
@@ -71,7 +76,7 @@ chemvas render-document revised.chemvas --output scheme.svg --width-mm 174
 1. Choose the **Ring** tool (`J`) and click the left side of the canvas to place benzene. Choose **Bond** (`X`), drag one bond out from a ring atom to a new carbon, then drag a second bond from that carbon to a terminal atom. Hover the terminal atom, press `o`, then press **Enter** and set the label to `OH`.
 2. Place a second benzene to the right. Drag one bond out from a ring atom to a new carbon, then drag a second bond from that carbon to a terminal atom. Hover the second bond and press `2` so only that bond becomes a double bond, then hover the terminal atom and press `o`. Select the **Arrow** tool, drag between the structures, and double-click the arrow to add condition labels.
 3. Select both molecules (**Edit ▸ Select All**) and align them (**Edit ▸ Align ▸ Middle**).
-4. Save the document (`.chemvas`). Export via **File ▸ Export Figure…** → **Plain SVG**, **Fit 2-column (174 mm)**.
+4. Save the document (`.cdxml`). Export via **File ▸ Export Figure…** → **Plain SVG**, **Fit 2-column (174 mm)**.
 
 For detailed instructions and example files, see the [step-by-step guide](https://github.com/dhsohn/Chemvas/blob/main/docs/FIRST_SCHEME.md).
 
@@ -81,7 +86,7 @@ For detailed instructions and example files, see the [step-by-step guide](https:
 
 - [Headless & Agent CLI](https://github.com/dhsohn/Chemvas/blob/main/docs/AGENT_CLI.md) · [Publication Schemes](https://github.com/dhsohn/Chemvas/blob/main/docs/PUBLICATION_SCHEMES.md) · [Scheme Layout](https://github.com/dhsohn/Chemvas/blob/main/docs/SCHEME_LAYOUT.md)
 - [Drawing Tools & Shortcuts](https://github.com/dhsohn/Chemvas/blob/main/docs/REFERENCE.md) · [MOL interchange](https://github.com/dhsohn/Chemvas/blob/main/docs/REFERENCE.md#chemistry-io) · [Image Objects](https://github.com/dhsohn/Chemvas/blob/main/docs/IMAGE_OBJECTS.md) · [Document compatibility](https://github.com/dhsohn/Chemvas/blob/main/docs/DOCUMENT_COMPATIBILITY.md)
-- [Examples](https://github.com/dhsohn/Chemvas/tree/main/examples): Sample `.chemvas` documents and the scripts that build the publication figures.
+- [Examples](https://github.com/dhsohn/Chemvas/tree/main/examples): Sample `.cdxml` documents and the scripts that build the publication figures.
 - [Architecture](https://github.com/dhsohn/Chemvas/blob/main/docs/ARCHITECTURE.md) · [Contributing](https://github.com/dhsohn/Chemvas/blob/main/CONTRIBUTING.md) · [Security](https://github.com/dhsohn/Chemvas/blob/main/SECURITY.md) · [Changelog](https://github.com/dhsohn/Chemvas/blob/main/CHANGELOG.md) · [Releasing](https://github.com/dhsohn/Chemvas/blob/main/RELEASING.md) · [License (MIT)](https://github.com/dhsohn/Chemvas/blob/main/LICENSE)
 
 Feedback and bug reports: [GitHub Issues](https://github.com/dhsohn/Chemvas/issues).

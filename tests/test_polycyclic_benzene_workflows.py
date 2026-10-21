@@ -6,9 +6,9 @@ from itertools import combinations
 import pytest
 from PyQt6.QtCore import QPointF
 
-from chemvas.core.document_io import read_document, write_document
 from chemvas.features.rendering import overvalent_atom_ids
 from chemvas.ui.molecule.structure_build_committer import StructureBuildCommitter
+from tests.document_file_helpers import read_document, write_document
 from tests.gui_workflow_support import _click, _tool
 from tests.gui_workflow_support import app as app
 from tests.gui_workflow_support import drawing as drawing
@@ -60,7 +60,7 @@ def test_third_benzene_delete_history_repeated_placement_and_reopen(
         } == original_atoms
         assert canvas.model.bonds[:11] == original_bonds
         third_state = document.snapshot_state()
-        third_path = tmp_path / f"three-{side}-{cycle}.chemvas"
+        third_path = tmp_path / f"three-{side}-{cycle}.cdxml"
         write_document(third_path, third_state, canvas.FILE_FORMAT_VERSION)
         third_bytes = third_path.read_bytes()
         added = set(canvas.model.atoms) - original_atoms.keys()
@@ -80,7 +80,7 @@ def test_third_benzene_delete_history_repeated_placement_and_reopen(
         assert document.snapshot_state() == third_state
         history.redo()
         assert document.snapshot_state() == repaired_state
-        repaired_path = tmp_path / f"two-{side}-{cycle}.chemvas"
+        repaired_path = tmp_path / f"two-{side}-{cycle}.cdxml"
         write_document(repaired_path, repaired_state, canvas.FILE_FORMAT_VERSION)
         for path, expected in (
             (third_path, third_state),

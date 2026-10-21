@@ -1639,7 +1639,7 @@ $('file').onchange = async () => {
   $('file').value = '';
   if (!file) return;
   if (file.size > ui.max_document_bytes) { notice(`The browser adapter opens files up to ${ui.max_document_bytes / 1048576} MiB.`, true); return; }
-  await loadDocument(file.text().then(text => api('open', text)), file.name);
+  await loadDocument(file.text().then(text => api('open', {cdxml: text})), file.name);
 };
 // File > Save copy: the session's document, as a download. An open note is
 // committed first, as leaving it would, and a note that was not saved stops the
@@ -1656,9 +1656,9 @@ $('save').onclick = async () => {
     const current = () => !editor.busy && !loading && editor.info?.session === session && editor.info?.revision === revision && editor.name === name;
     // The session holds embedded images; the browser's copy carries references.
     try {
-      const {document} = await api('session', {session, revision, action: 'export'});
+      const {cdxml} = await api('session', {session, revision, action: 'save_cdxml'});
       if (current()) {
-        download(JSON.stringify(document, null, 2) + '\n', name.replace(/\.chemvas$/i, '') + '-web-copy.chemvas', 'application/json');
+        download(cdxml, name.replace(/\.cdxml$/i, '') + '-web-copy.cdxml', 'chemical/x-cdxml');
         notice('Save copy requested. Check your downloads before closing; the original file has not changed.');
       }
     } catch (error) { if (current()) notice(error.message, true); }
@@ -1681,7 +1681,7 @@ $('export-figure').onclick = async () => {
     try {
       const {svg} = await api('session', {session, revision, action: 'export_figure', format: 'svg', scope: 'sheet'});
       if (current()) {
-        download(svg, name.replace(/\.chemvas$/i, '') + '.svg', 'image/svg+xml');
+        download(svg, name.replace(/\.cdxml$/i, '') + '.svg', 'image/svg+xml');
         if (figureRefusal === noticeSerial) notice();
         figureRefusal = null;
       }
@@ -1705,7 +1705,7 @@ $('export-mol').onclick = async () => {
     try {
       const {molfile} = await api('session', {session, revision, action: 'export_mol', selection: selectedItems()});
       if (current()) {
-        download(molfile, name.replace(/\.chemvas$/i, '') + '.mol', 'chemical/x-mdl-molfile');
+        download(molfile, name.replace(/\.cdxml$/i, '') + '.mol', 'chemical/x-mdl-molfile');
         if (molRefusal === noticeSerial) notice();
         molRefusal = null;
       }

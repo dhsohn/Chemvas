@@ -21,6 +21,7 @@ from chemvas.bootstrap import (
     document_render,
     document_template,
 )
+from tests.document_file_helpers import read_payload, write_payload_text
 
 ROOT = Path(__file__).resolve().parents[1]
 RECIPE = ROOT / "examples" / "publication_scheme.py"
@@ -93,10 +94,10 @@ def test_publication_recipe_preserves_common_physical_scale_and_real_scripts(
         receipt = figure["layout_check"]
         report_path = directory / receipt["report"]
         assert receipt["sha256"] == hashlib.sha256(report_path.read_bytes()).hexdigest()
-        qa = json.loads(report_path.read_text())
+        qa = read_payload(report_path.read_text())
         assert qa["ok"] and qa["warning_count"] == 0
         assert qa["source_sha256"] == figure["source_sha256"]
-        state = json.loads(path.read_text())["state"]
+        state = read_payload(path.read_text())["state"]
         assert len(state["notes"]) == 2  # captions only, no duplicate heading
         for note in state["notes"]:
             assert "vertical-align:sub" in note["html"].replace(" ", "")
@@ -123,7 +124,7 @@ def test_publication_recipe_preserves_common_physical_scale_and_real_scripts(
 
 def test_publication_template_and_terminal_angle_are_native_and_regular(publication):
     directory, _ = publication
-    state = json.loads((directory / "methoxy.chemvas").read_text())["state"]
+    state = read_payload((directory / "methoxy.cdxml").read_text())["state"]
     atoms = state["model"]["atoms"]
     assert len(state["ring_fills"]) == 1
     ring = state["ring_fills"][0]
@@ -147,16 +148,16 @@ def test_publication_alignment_does_not_move_captions_or_x(publication):
     directory, manifest = publication
     for figure in manifest["figures"]:
         name = Path(figure["document"]).stem
-        before = json.loads((directory / f"{name}-arranged.chemvas").read_text())[
+        before = read_payload((directory / f"{name}-arranged.cdxml").read_text())[
             "state"
         ]
-        after = json.loads((directory / figure["document"]).read_text())["state"]
+        after = read_payload((directory / figure["document"]).read_text())["state"]
         assert before["notes"] == after["notes"]
         assert before["groups"] == after["groups"]
         assert before["model"]["bonds"] == after["model"]["bonds"]
         for atom_id, atom in before["model"]["atoms"].items():
             assert atom["x"] == after["model"]["atoms"][atom_id]["x"]
-        report = json.loads((directory / f"{name}-alignment-report.json").read_text())
+        report = read_payload((directory / f"{name}-alignment-report.json").read_text())
         assert report["mode"] == "align-y"
         assert report["part_count"] == (3 if name == "independent-parts" else 2)
 
@@ -190,7 +191,7 @@ def test_publication_recipe_stops_on_layout_warning(monkeypatch):
 
     monkeypatch.setattr(subprocess, "run", warned)
     with pytest.raises(RuntimeError, match="check-layout"):
-        namespace["command"]("check-layout", "synthetic.chemvas")
+        namespace["command"]("check-layout", "synthetic.cdxml")
 
 
 @pytest.mark.parametrize("stage", ["check-layout", "render-document"])
@@ -223,9 +224,9 @@ def test_publication_rejects_outside_molecules_before_export(tmp_path, monkeypat
     def displaced(*args):
         called.append(args[0])
         report = _command_in_process(*args)
-        if args[0] == "layout-document" and Path(args[-1]).name == "pair.chemvas":
+        if args[0] == "layout-document" and Path(args[-1]).name == "pair.cdxml":
             path = Path(args[-1])
-            native = json.loads(path.read_text())
+            native = read_payload(path.read_text())
             # Notes stay inside. The failure must be the molecular footprint,
             # not the pre-existing note-only boundary check.
             for atom in native["state"]["model"]["atoms"].values():
@@ -233,7 +234,7 @@ def test_publication_rejects_outside_molecules_before_export(tmp_path, monkeypat
             for ring in native["state"]["ring_fills"]:
                 for point in ring["points"]:
                     point[0] += 1000
-            path.write_text(json.dumps(native))
+            write_payload_text(path, json.dumps(native))
         return report
 
     monkeypatch.setitem(namespace["figure"].__globals__, "command", displaced)
@@ -249,7 +250,7 @@ def test_publication_refuses_changed_native_bytes(
     publication, tmp_path, monkeypatch, when
 ):
     directory, manifest = publication
-    source = tmp_path / "native.chemvas"
+    source = tmp_path / "native.cdxml"
     source.write_bytes((directory / manifest["figures"][0]["document"]).read_bytes())
     expected = hashlib.sha256(source.read_bytes()).hexdigest()
     namespace = runpy.run_path(str(RECIPE))
@@ -272,9 +273,9 @@ def test_publication_examples_fit_native_sheet_without_scaling(publication):
     from PyQt6.QtWidgets import QApplication
 
     from chemvas.bootstrap.document_cli_shared import offscreen_canvas
-    from chemvas.core.document_io import read_document
     from chemvas.ui.canvas.sheet_setup_access import sheet_rect_for
     from chemvas.ui.export.export_scope import collect_export_items, content_bounds
+    from tests.document_file_helpers import read_document
 
     application = QApplication.instance() or QApplication([])
     directory, manifest = publication

@@ -40,8 +40,8 @@ def read_json_request(
 
 
 def validate_source_document(source: Path) -> None:
-    if source.suffix.lower() != ".chemvas":
-        raise ValueError("input must use the .chemvas filename extension")
+    if source.suffix.lower() != ".cdxml":
+        raise ValueError("input must use the .cdxml filename extension")
     if not source.is_file():
         raise ValueError(f"input document does not exist: {source}")
 
@@ -61,7 +61,12 @@ def json_text(payload: object) -> str:
 def encode_cli_document(
     payload: object, *, max_bytes: int, description: str = "document"
 ) -> bytes:
-    content = json_text(payload).encode("utf-8")
+    from chemvas.core.document_io import parse_document
+    from chemvas.ui.export.cdxml_document_writer import serialize_cdxml_document
+
+    state = parse_document(payload).state
+    with offscreen_canvas(state, command="save-document") as (canvas, _):
+        content = serialize_cdxml_document(canvas, state)
     if len(content) > max_bytes:
         raise ValueError(f"{description} exceeds the {max_bytes}-byte limit")
     return content

@@ -11,7 +11,6 @@ import pytest
 from PyQt6.QtCore import QPointF, QRectF
 from PyQt6.QtWidgets import QApplication
 
-from chemvas.core.document_io import read_document, write_document
 from chemvas.domain.document import CANVAS_FILE_VERSION
 from chemvas.ui.canvas.canvas_atom_graphics_state import visible_atom_item_for
 from chemvas.ui.canvas.canvas_document_metadata_state import (
@@ -29,6 +28,7 @@ from chemvas.ui.scene.scene_decoration_access import (
 from chemvas.ui.scene.scene_signal_blocking import blocked_scene_signals
 from chemvas.ui.transactions.document import DocumentSavepoint
 from tests.canvas_factory import build_canvas_view
+from tests.document_file_helpers import read_document, write_document
 
 
 @pytest.fixture(scope="module")
@@ -84,7 +84,7 @@ def _transform(canvas, kind):
 
 
 def test_nudge_and_undo_restore_exact_saved_example(canvas):
-    source = Path(__file__).resolve().parents[1] / "examples/first-scheme.chemvas"
+    source = Path(__file__).resolve().parents[1] / "examples/first-scheme.cdxml"
     canvas.services.canvas_document_session_service.restore_state(
         read_document(source).state
     )
@@ -162,7 +162,7 @@ def test_2d_transforms_preserve_depth_and_exact_history(canvas, tmp_path, kind):
     history.redo()
     assert canvas.services.canvas_document_session_service.snapshot_state() == after
     assert canvas.runtime_state.atom_coords_3d_state.atom_coords_3d == after_coords
-    path = tmp_path / "transformed.chemvas"
+    path = tmp_path / "transformed.cdxml"
     write_document(path, after, CANVAS_FILE_VERSION)
     reopened = read_document(path)
     assert len(reopened.state["perspective"]["atom_coords_3d"]) == len(ids)

@@ -1,4 +1,3 @@
-import json
 from shutil import copyfile
 
 import pytest
@@ -21,6 +20,7 @@ from chemvas.ui.window.main_window_ports import (
     history_service_for_window,
 )
 from tests.canvas_factory import build_canvas_view
+from tests.document_file_helpers import read_payload
 from tests.gui_workflow_support import _click, _key, _redo, _tool
 from tests.gui_workflow_support import app as app
 from tests.gui_workflow_support import drawing as drawing
@@ -76,7 +76,7 @@ def test_note_spaces_survive_document_undo_redo(drawing, tmp_path):
     window, canvas = drawing
     text = "  k1 = 0.1   k2 = 0.2  "
     note = _note(window, canvas, text)
-    _save(window, canvas, tmp_path / "spaces.chemvas")
+    _save(window, canvas, tmp_path / "spaces.cdxml")
     _tool(window, "note")
     _click(canvas, note.sceneBoundingRect().center())
     _key(canvas, Qt.Key.Key_End)
@@ -93,10 +93,10 @@ def test_note_spaces_survive_file_open(drawing, tmp_path, monkeypatch):
     window, canvas = drawing
     text = "  k1 = 0.1   k2 = 0.2  "
     _note(window, canvas, text)
-    saved, reopened = tmp_path / "spaces.chemvas", tmp_path / "reopen.chemvas"
+    saved, reopened = tmp_path / "spaces.cdxml", tmp_path / "reopen.cdxml"
     _save(window, canvas, saved)
     copyfile(saved, reopened)
-    assert json.loads(saved.read_text())["state"]["notes"][0]["text"] == text
+    assert read_payload(saved.read_text())["state"]["notes"][0]["text"] == text
     monkeypatch.setattr(
         QFileDialog, "getOpenFileName", lambda *a, **kw: (str(reopened), "")
     )
@@ -128,7 +128,7 @@ def test_unselected_annotation_moves_on_first_drag(drawing, tmp_path, kind):
         _tool(window, "select")
         _click(canvas, QPointF(160, 130))
         item = canvas.runtime_state.shape_items()[-1]
-    _save(window, canvas, tmp_path / "annotation.chemvas")
+    _save(window, canvas, tmp_path / "annotation.cdxml")
     baseline = canvas.services.canvas_document_session_service.snapshot_state()
     center = item.sceneBoundingRect().center()
     history = history_service_for_window(window)
@@ -189,7 +189,7 @@ def test_first_drag_moves_notes_only_group_as_unit(
         _click(canvas, QPointF(20, -20))
         assert arrow.isSelected()
     assert not canvas.runtime_state.selection_state.selected_notes
-    _save(window, canvas, tmp_path / "note-group.chemvas")
+    _save(window, canvas, tmp_path / "note-group.cdxml")
     baseline = canvas.services.canvas_document_session_service.snapshot_state()
     arrow_before = arrow_state_dict_for(canvas, arrow)
     notes = (first, second)
@@ -276,7 +276,7 @@ def test_group_copy_paste_preserves_independent_group_and_undo(drawing, clipboar
 def test_escape_rolls_back_drag_without_history_or_dirty_change(drawing, tmp_path):
     window, canvas = drawing
     arrow = _arrow(window, canvas)
-    _save(window, canvas, tmp_path / "arrow.chemvas")
+    _save(window, canvas, tmp_path / "arrow.cdxml")
     before = arrow_state_dict_for(canvas, arrow)
     history = history_service_for_window(window)
     count = len(history.state.history)
@@ -420,7 +420,7 @@ def test_grouped_paste_failure_restores_document_and_history(
 def test_copied_groups_survive_save_open(drawing, clipboard, tmp_path, monkeypatch):
     window, canvas = drawing
     _copy_pair(window, canvas, grouped=True)
-    saved, reopened = tmp_path / "groups.chemvas", tmp_path / "reopen.chemvas"
+    saved, reopened = tmp_path / "groups.cdxml", tmp_path / "reopen.cdxml"
     _save(window, canvas, saved)
     copyfile(saved, reopened)
     monkeypatch.setattr(
@@ -450,7 +450,7 @@ def test_copied_groups_survive_save_open(drawing, clipboard, tmp_path, monkeypat
 def test_escape_cancels_arrow_endpoint_drag(drawing, tmp_path):
     window, canvas = drawing
     arrow = _arrow(window, canvas)
-    _save(window, canvas, tmp_path / "handle.chemvas")
+    _save(window, canvas, tmp_path / "handle.cdxml")
     _click(canvas, QPointF(20, -20))
     _click(canvas, QPointF(20, -20))
     handle = canvas.runtime_state.handle_state.active_handles[0]

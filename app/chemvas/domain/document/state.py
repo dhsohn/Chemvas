@@ -683,13 +683,13 @@ def _extract_wrapped_document_state(payload: Mapping[str, object]) -> StateDict:
 
 
 # --- Shared field validators -------------------------------------------------
-# The .chemvas file loader and the clipboard-paste loader enforce the same
+# The document snapshot loader and the clipboard-paste loader enforce the same
 # structural rules. Each rule lives exactly once below, parameterized by the
 # per-boundary error message (and id validator, where the encodings differ),
 # so the two trust boundaries cannot silently drift apart.
 
 
-# --- .chemvas file validation -------------------------------------------------
+# --- document snapshot validation -------------------------------------------------
 
 
 def _serialized_atom_annotations(

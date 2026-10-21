@@ -9,21 +9,23 @@ from chemvas.ui.window.recent_documents_store import (
     record_recent,
     save_recent,
 )
+from tests.document_file_helpers import read_payload, write_payload_text
 
 
 def test_load_prunes_legacy_document_paths(tmp_path):
     recent = tmp_path / "recent.json"
-    canonical = tmp_path / "drawing.chemvas"
+    canonical = tmp_path / "drawing.cdxml"
     legacy = tmp_path / "legacy-document.json"
     canonical.write_text("{}")
     legacy.write_text("{}")
-    recent.write_text(
+    write_payload_text(
+        recent,
         json.dumps(
             {
                 "version": 1,
                 "paths": [str(legacy), str(canonical)],
             }
-        )
+        ),
     )
 
     assert load_recent(path=recent) == [str(canonical)]
@@ -41,19 +43,19 @@ def test_record_ignores_legacy_document_paths(tmp_path):
 def test_record_stores_absolute_paths(tmp_path, monkeypatch):
     recent = tmp_path / "recent.json"
     monkeypatch.chdir(tmp_path)
-    (tmp_path / "rel.chemvas").write_text("{}")
+    (tmp_path / "rel.cdxml").write_text("{}")
 
-    record_recent("rel.chemvas", path=recent)
+    record_recent("rel.cdxml", path=recent)
 
     stored = load_recent(path=recent)
-    assert stored == [str(tmp_path / "rel.chemvas")]
+    assert stored == [str(tmp_path / "rel.cdxml")]
 
 
 def test_load_prunes_entries_whose_files_vanished(tmp_path):
     recent = tmp_path / "recent.json"
-    present = tmp_path / "here.chemvas"
+    present = tmp_path / "here.cdxml"
     present.write_text("{}")
-    save_recent([str(present), str(tmp_path / "gone.chemvas")], path=recent)
+    save_recent([str(present), str(tmp_path / "gone.cdxml")], path=recent)
 
     assert load_recent(path=recent) == [str(present)]
 
@@ -69,36 +71,36 @@ def test_load_is_forgiving_of_a_missing_or_broken_file(tmp_path):
 
 def test_clear_empties_the_list(tmp_path):
     recent = tmp_path / "recent.json"
-    present = tmp_path / "a.chemvas"
+    present = tmp_path / "a.cdxml"
     present.write_text("{}")
     record_recent(str(present), path=recent)
 
     clear_recent(path=recent)
 
     assert load_recent(path=recent) == []
-    assert json.loads(recent.read_text(encoding="utf-8"))["paths"] == []
+    assert read_payload(recent.read_text(encoding="utf-8"))["paths"] == []
 
 
 def test_most_recent_first_ordering(tmp_path):
     recent = tmp_path / "recent.json"
     for name in ("a", "b", "c"):
-        target = tmp_path / f"{name}.chemvas"
+        target = tmp_path / f"{name}.cdxml"
         target.write_text("{}")
         record_recent(str(target), path=recent)
 
     loaded = load_recent(path=recent)
     assert [Path(p).name for p in loaded] == [
-        "c.chemvas",
-        "b.chemvas",
-        "a.chemvas",
+        "c.cdxml",
+        "b.cdxml",
+        "a.cdxml",
     ]
 
 
 def test_record_dedupes_symlinks_preserving_the_latest_spelling(tmp_path):
     recent = tmp_path / "recent.json"
-    target = tmp_path / "target.chemvas"
+    target = tmp_path / "target.cdxml"
     target.write_text("{}")
-    link = tmp_path / "link.chemvas"
+    link = tmp_path / "link.cdxml"
     link.symlink_to(target)
     record_recent(str(link), path=recent)
     assert record_recent(str(target), path=recent) == [str(target)]
@@ -107,9 +109,9 @@ def test_record_dedupes_symlinks_preserving_the_latest_spelling(tmp_path):
 
 def test_load_dedupes_existing_symlink_entries_without_rewriting(tmp_path):
     recent = tmp_path / "recent.json"
-    target = tmp_path / "target.chemvas"
+    target = tmp_path / "target.cdxml"
     target.write_text("{}")
-    link = tmp_path / "link.chemvas"
+    link = tmp_path / "link.cdxml"
     link.symlink_to(target)
     save_recent([str(link), str(target)], path=recent)
     before = recent.read_bytes()
@@ -119,7 +121,7 @@ def test_load_dedupes_existing_symlink_entries_without_rewriting(tmp_path):
 
 def test_invalid_recent_path_does_not_block_other_entries(tmp_path):
     recent = tmp_path / "recent.json"
-    target = tmp_path / "target.chemvas"
+    target = tmp_path / "target.cdxml"
     target.write_text("{}")
-    save_recent(["invalid\0.chemvas", str(target)], path=recent)
+    save_recent(["invalid\0.cdxml", str(target)], path=recent)
     assert load_recent(path=recent) == [str(target)]

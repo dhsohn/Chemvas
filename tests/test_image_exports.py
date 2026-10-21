@@ -19,8 +19,7 @@ from chemvas.bootstrap.document_cli_shared import (
     graphics_record_count,
     offscreen_canvas,
 )
-from chemvas.core import document_io, svg_roundtrip
-from chemvas.core.document_io import read_document, read_exact_document, write_document
+from chemvas.core import svg_roundtrip
 from chemvas.domain.document import (
     CANVAS_FILE_VERSION,
     AnnotationCollection,
@@ -36,6 +35,11 @@ from chemvas.ui.export.export_render_service import (
 )
 from chemvas.ui.export.export_scope import collect_export_items, content_bounds
 from chemvas.ui.export.layout_qa_service import check_canvas_layout
+from tests.document_file_helpers import (
+    read_document,
+    read_exact_document,
+    write_document,
+)
 
 
 @pytest.fixture(scope="module", autouse=True)
@@ -253,7 +257,7 @@ def test_zero_opacity_image_survives_native_and_mixed_editable_svg(tmp_path):
     data = _source_bytes(image_format="JPEG")
     state = _state(data, x=200_000, y=200_000, opacity=0)
     state["images"].append(image_state_from_bytes(_source_bytes(), x=50, y=70))
-    native = tmp_path / "hidden-image.chemvas"
+    native = tmp_path / "hidden-image.cdxml"
     write_document(native, state, CANVAS_FILE_VERSION)
     assert read_document(native).state["images"] == state["images"]
 
@@ -340,7 +344,7 @@ def test_sixteen_bit_png_source_survives_native_and_svg_export(tmp_path):
     assert image.constBits().asstring(
         image.sizeInBytes()
     ) == original.constBits().asstring(original.sizeInBytes())
-    path = tmp_path / "sixteen-bit.chemvas"
+    path = tmp_path / "sixteen-bit.cdxml"
     write_document(path, _state(data), CANVAS_FILE_VERSION)
     assert (
         base64.b64decode(read_document(path).state["images"][0]["data_base64"]) == data
@@ -372,7 +376,7 @@ def test_native_editable_svg_roundtrip_keeps_original_encoded_bytes(
 def test_cli_render_and_editable_svg_support_image_larger_than_old_envelopes(tmp_path):
     data = _source_bytes(size=(1500, 1500))
     state = _state(data, x=50, y=70, width=200, height=200)
-    path = tmp_path / "source.chemvas"
+    path = tmp_path / "source.cdxml"
     write_document(path, state, CANVAS_FILE_VERSION)
     assert path.stat().st_size > 8 * 1024 * 1024
     assert read_document(path).state["images"] == state["images"]
@@ -431,7 +435,7 @@ def test_graph_patch_retains_embedded_image_bytes_and_geometry():
 
 
 def test_document_and_svg_envelope_limits_fail_before_parsing(tmp_path, monkeypatch):
-    path = tmp_path / "oversized.chemvas"
+    path = tmp_path / "oversized.cdxml"
     path.write_bytes(b" " * 65)
     with pytest.raises(ValueError, match="64-byte limit"):
         read_exact_document(path, max_bytes=64)
@@ -460,11 +464,11 @@ def test_editable_svg_writer_rejects_unreadable_metadata_without_overwrite(
 def test_native_writer_rejects_unreadable_document_without_overwrite(
     tmp_path, monkeypatch
 ):
-    path = tmp_path / "existing.chemvas"
+    path = tmp_path / "existing.cdxml"
     original = b"existing document"
     path.write_bytes(original)
-    monkeypatch.setattr(document_io, "MAX_DOCUMENT_BYTES", 64)
-    with pytest.raises(ValueError, match="output document exceeds"):
+    monkeypatch.setattr("chemvas.features.cdxml_document.MAX_DOCUMENT_BYTES", 64)
+    with pytest.raises(ValueError, match="CDXML document exceeds"):
         write_document(path, _state(_source_bytes()), CANVAS_FILE_VERSION)
     assert path.read_bytes() == original
     assert list(tmp_path.iterdir()) == [path]

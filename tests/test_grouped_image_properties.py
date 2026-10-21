@@ -17,10 +17,10 @@ from PyQt6.QtWidgets import (
     QMessageBox,
 )
 
-from chemvas.core.document_io import read_document
 from chemvas.domain.document import image_state_from_bytes
 from chemvas.ui.canvas.canvas_group_state import register_group_for
 from chemvas.ui.scene.image_actions import ImagePropertiesDialog
+from tests.document_file_helpers import read_document
 from tests.gui_workflow_support import app as app
 from tests.gui_workflow_support import fresh_window as fresh_window
 from tests.gui_workflow_support import qt_errors as qt_errors
@@ -96,7 +96,7 @@ def test_choose_grouped_panel_changes_only_target_and_reopens(
     assert canvas.services.canvas_document_session_service.snapshot_state() == before
     canvas.services.history_service.redo()
     assert canvas.services.canvas_document_session_service.snapshot_state() == after
-    path = tmp_path / "panels.chemvas"
+    path = tmp_path / "panels.cdxml"
     session = canvas.services.canvas_document_session_service
     assert session.save_to_file(str(path)) == []
     session.apply_state(read_document(path).state)

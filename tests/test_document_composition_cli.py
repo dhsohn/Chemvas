@@ -10,9 +10,9 @@ from types import SimpleNamespace
 import pytest
 
 from chemvas.bootstrap import document_composition
-from chemvas.core.document_io import read_document
 from chemvas.domain.document import CANVAS_FILE_VERSION
 from chemvas.domain.document.inspection import inspect_components
+from tests.document_file_helpers import read_document, write_payload_text
 
 
 def _composition() -> dict[str, object]:
@@ -46,8 +46,8 @@ def test_compose_document_public_cli_writes_reopenable_canonical_document(
     tmp_path: Path,
 ) -> None:
     request = tmp_path / "scheme.json"
-    request.write_text(json.dumps(_composition()), encoding="utf-8")
-    output = tmp_path / "scheme.chemvas"
+    write_payload_text(request, json.dumps(_composition()), encoding="utf-8")
+    output = tmp_path / "scheme.cdxml"
 
     result = _run("compose-document", str(request), "--output", str(output))
 
@@ -78,9 +78,9 @@ def test_compose_document_invalid_arrow_label_is_actionable_and_writes_nothing(
         },
     ]
     request = tmp_path / "invalid-label.json"
-    request.write_text(json.dumps(composition), encoding="utf-8")
+    write_payload_text(request, json.dumps(composition), encoding="utf-8")
     before = request.read_bytes()
-    output = tmp_path / "scheme.chemvas"
+    output = tmp_path / "scheme.cdxml"
 
     result = _run("compose-document", str(request), "--output", str(output))
 
@@ -102,8 +102,8 @@ def test_compose_document_synchronizes_atom_annotations_and_electronic_marks(
     atoms[1]["formal_charge"] = 1
     atoms[1]["radical_electrons"] = 1
     request = tmp_path / "charged.json"
-    request.write_text(json.dumps(composition), encoding="utf-8")
-    output = tmp_path / "charged.chemvas"
+    write_payload_text(request, json.dumps(composition), encoding="utf-8")
+    output = tmp_path / "charged.cdxml"
 
     result = _run("compose-document", str(request), "--output", str(output))
 
@@ -172,8 +172,8 @@ def test_compose_document_builds_scene_objects_and_structured_note_style(
         }
     )
     request = tmp_path / "scene.json"
-    request.write_text(json.dumps(composition), encoding="utf-8")
-    output = tmp_path / "scene.chemvas"
+    write_payload_text(request, json.dumps(composition), encoding="utf-8")
+    output = tmp_path / "scene.cdxml"
 
     result = _run("compose-document", str(request), "--output", str(output))
 
@@ -203,8 +203,8 @@ def test_compose_document_rejects_wrongly_typed_settings_value_cleanly(
     composition = _composition()
     composition["settings"] = {"bond_length_px": None}
     request = tmp_path / "scheme.json"
-    request.write_text(json.dumps(composition), encoding="utf-8")
-    output = tmp_path / "scheme.chemvas"
+    write_payload_text(request, json.dumps(composition), encoding="utf-8")
+    output = tmp_path / "scheme.cdxml"
 
     result = _run("compose-document", str(request), "--output", str(output))
 
@@ -242,7 +242,7 @@ def test_compose_document_refuses_a_number_it_cannot_parse_cleanly(
     )
     request = tmp_path / "scheme.json"
     request.write_text(poisoned, encoding="utf-8")
-    output = tmp_path / "scheme.chemvas"
+    output = tmp_path / "scheme.cdxml"
 
     result = _run("compose-document", str(request), "--output", str(output))
 

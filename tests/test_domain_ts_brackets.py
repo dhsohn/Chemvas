@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 import re
 from dataclasses import FrozenInstanceError, replace
 from decimal import Decimal
@@ -18,6 +17,7 @@ from chemvas.domain.document import (
 )
 from chemvas.domain.document.schema import VALID_TS_BRACKET_KINDS
 from chemvas.features.annotations import BRACKET_MENU_SPECS, DEFAULT_BRACKET_KIND
+from tests.document_file_helpers import read_payload
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
@@ -34,10 +34,10 @@ BASE = {
 def _document_ts_bracket_states() -> list[dict]:
     states: list[dict] = []
     for path in [
-        *sorted((REPO_ROOT / "tests" / "fixtures").rglob("*.chemvas")),
-        *sorted((REPO_ROOT / "examples").rglob("*.chemvas")),
+        *sorted((REPO_ROOT / "tests" / "fixtures").rglob("*.cdxml")),
+        *sorted((REPO_ROOT / "examples").rglob("*.cdxml")),
     ]:
-        document = json.loads(path.read_text(encoding="utf-8"))
+        document = read_payload(path.read_text(encoding="utf-8"))
         state = document.get("state", document)
         states.extend(state.get("ts_brackets", []))
     return states

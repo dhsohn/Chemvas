@@ -33,12 +33,12 @@ See the [Windows build guide](windows/README.md) for building the standalone Inn
 
 ## Linux Desktop Integration
 
-Register desktop icons and `.chemvas` MIME associations:
+Register desktop icons and `.cdxml` MIME associations:
 
 ```bash
 xdg-mime install --novendor packaging/linux/chemvas.xml
 xdg-icon-resource install --context mimetypes --size 256 \
-  app/chemvas/assets/icon/chemvas-256.png application-x-chemvas
+  app/chemvas/assets/icon/chemvas-256.png chemical-x-cdxml
 install -Dm644 app/chemvas/assets/icon/chemvas-256.png \
   ~/.local/share/icons/hicolor/256x256/apps/chemvas.png
 desktop-file-install --dir="$HOME/.local/share/applications" packaging/linux/chemvas.desktop

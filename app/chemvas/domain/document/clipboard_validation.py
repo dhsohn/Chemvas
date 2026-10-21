@@ -47,7 +47,7 @@ def validate_clipboard_selection_payload(payload: Mapping[str, object]) -> bool:
 
     Clipboard MIME data sits outside the application's trust boundary (any other
     app or script can inject it), so paste input is held to the same standard as
-    ``.chemvas`` file loading. This verifies the envelope and structural content.
+    internal snapshot loading. This verifies the envelope and structural content.
     Returns ``True`` only when every section is well-formed, otherwise ``False``
     so the caller can reject the whole paste rather than build invalid scene state.
     """

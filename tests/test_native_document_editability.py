@@ -15,13 +15,13 @@ from PyQt6.QtWidgets import QApplication, QToolButton
 
 from chemvas.bootstrap.document_cli_shared import offscreen_canvas
 from chemvas.bootstrap.main_window import build_main_window
-from chemvas.core.document_io import read_document
 from chemvas.features.document_composition import compose_document_state
 from chemvas.ui.export.layout_qa_service import check_canvas_layout
 from chemvas.ui.window.main_window_ports import (
     active_canvas_for_window,
     set_zoom_percent_for_window,
 )
+from tests.document_file_helpers import read_document
 
 
 @pytest.fixture(scope="module", autouse=True)
@@ -155,8 +155,8 @@ def redo(canvas):
 
 
 def exercise_saved_editable_document(directory, *, capture=False):
-    original_path = directory / "original.chemvas"
-    edited_path = directory / "edited.chemvas"
+    original_path = directory / "original.cdxml"
+    edited_path = directory / "edited.cdxml"
     original = write_synthetic_native(original_path)
     original_bytes = original_path.read_bytes()
     original_mtime = original_path.stat().st_mtime_ns
@@ -245,7 +245,7 @@ def exercise_saved_editable_document(directory, *, capture=False):
 
 
 def test_saved_outside_molecular_bond_is_rejected_without_open_normalization(tmp_path):
-    path = tmp_path / "outside.chemvas"
+    path = tmp_path / "outside.cdxml"
     original = write_synthetic_native(path, outside=True)
     before_bytes = path.read_bytes()
     before_mtime = path.stat().st_mtime_ns

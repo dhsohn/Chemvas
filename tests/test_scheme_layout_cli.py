@@ -11,9 +11,9 @@ import pytest
 
 from chemvas.bootstrap import document_layout
 from chemvas.bootstrap.document_cli_shared import json_text, offscreen_canvas
-from chemvas.core.document_io import read_document
 from chemvas.domain.document import CANVAS_FILE_VERSION, build_document_payload
 from chemvas.features.document_composition import compose_document_state
+from tests.document_file_helpers import read_document, read_payload, write_payload_text
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -74,10 +74,10 @@ def _source_state() -> dict:
 
 def _files(tmp_path: Path) -> tuple[Path, Path, Path]:
     source, layout, output = (
-        tmp_path / name
-        for name in ("source.chemvas", "layout.json", "arranged.chemvas")
+        tmp_path / name for name in ("source.cdxml", "layout.json", "arranged.cdxml")
     )
-    source.write_text(
+    write_payload_text(
+        source,
         json_text(build_document_payload(_source_state(), CANVAS_FILE_VERSION)),
         encoding="utf-8",
     )
@@ -103,7 +103,7 @@ def _files(tmp_path: Path) -> tuple[Path, Path, Path]:
             }
         ],
     }
-    layout.write_text(json.dumps(request), encoding="utf-8")
+    write_payload_text(layout, json.dumps(request), encoding="utf-8")
     return source, layout, output
 
 
@@ -140,7 +140,7 @@ def _baseline(item) -> float:
 
 def _align_files(tmp_path):
     source, layout, output = _files(tmp_path)
-    request = json.loads(layout.read_text())
+    request = read_payload(layout.read_text())
     for key in ("gap", "caption_gap", "line_gap"):
         request.pop(key)
     request["mode"] = "align-y"
@@ -148,7 +148,7 @@ def _align_files(tmp_path):
     for block in request["rows"][0]["blocks"]:
         block.pop("anchor_atom")
     request["rows"][0]["blocks"][0]["parts"] = [[0, 1, 2], [3]]
-    layout.write_text(json.dumps(request), encoding="utf-8")
+    write_payload_text(layout, json.dumps(request), encoding="utf-8")
     return source, layout, output
 
 
@@ -188,9 +188,9 @@ def test_align_y_cli_preserves_source_notes_and_x_and_moves_explicit_parts(
 def test_align_y_cli_partition_failure_publishes_nothing(tmp_path) -> None:
     source, layout, output = _align_files(tmp_path)
     original_bytes = source.read_bytes()
-    request = json.loads(layout.read_text())
+    request = read_payload(layout.read_text())
     request["rows"][0]["blocks"][0]["parts"] = [[0], [1, 2], [3]]
-    layout.write_text(json.dumps(request), encoding="utf-8")
+    write_payload_text(layout, json.dumps(request), encoding="utf-8")
     result = _run(source, layout, output)
     assert result.returncode == 2
     assert "must not cut bonds" in result.stderr
@@ -262,14 +262,14 @@ def test_layout_cli_failures_preserve_inputs_and_write_nothing(
     tmp_path: Path, failure: str
 ) -> None:
     source, layout, output = _files(tmp_path)
-    request = json.loads(layout.read_text())
+    request = read_payload(layout.read_text())
     if failure == "stale":
         request["source_sha256"] = "0" * 64
     elif failure == "duplicate":
         request["rows"][0]["blocks"][1]["captions"].append(0)
     elif failure == "partial":
         request["rows"][0]["blocks"][0]["atoms"].remove(1)
-    layout.write_text(json.dumps(request))
+    write_payload_text(layout, json.dumps(request))
     if failure == "json":
         layout.write_text('{"format":1,"format":2}')
     if failure == "overwrite":
@@ -290,9 +290,9 @@ def test_layout_rejects_invalid_input_before_opening_qt(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     source, layout, output = _files(tmp_path)
-    request = json.loads(layout.read_text())
+    request = read_payload(layout.read_text())
     request["source_sha256"] = "f" * 64
-    layout.write_text(json.dumps(request))
+    write_payload_text(layout, json.dumps(request))
 
     def unexpected(*args, **kwargs):
         pytest.fail("invalid input must not open a canvas")
@@ -317,10 +317,10 @@ def test_comparison_caption_and_color_cli_options_preserve_source_and_graph(
     tmp_path: Path,
 ) -> None:
     source, layout, output = _files(tmp_path)
-    request = json.loads(layout.read_text())
+    request = read_payload(layout.read_text())
     request["rows"][0]["column_group"] = "controls"
     request.update(caption_alignment="structure", arrow_color="#000")
-    layout.write_text(json.dumps(request))
+    write_payload_text(layout, json.dumps(request))
     before = source.read_bytes(), layout.read_bytes()
     original = read_document(source).state
 
@@ -354,10 +354,10 @@ def test_explicit_default_caption_policy_produces_identical_document_bytes(
 ) -> None:
     source, layout, output = _files(tmp_path)
     assert _run(source, layout, output).returncode == 0
-    request = json.loads(layout.read_text())
+    request = read_payload(layout.read_text())
     request["caption_alignment"] = "row"
-    layout.write_text(json.dumps(request))
-    second = tmp_path / "explicit-default.chemvas"
+    write_payload_text(layout, json.dumps(request))
+    second = tmp_path / "explicit-default.cdxml"
     result = _run(source, layout, second)
     assert result.returncode == 0, result.stderr
     assert second.read_bytes() == output.read_bytes()
@@ -371,10 +371,10 @@ def test_invalid_semantic_options_fail_before_qt_and_publish_nothing(
     tmp_path: Path, monkeypatch, field, value
 ) -> None:
     source, layout, output = _files(tmp_path)
-    request = json.loads(layout.read_text())
+    request = read_payload(layout.read_text())
     target = request["rows"][0] if field == "column_group" else request
     target[field] = value
-    layout.write_text(json.dumps(request))
+    write_payload_text(layout, json.dumps(request))
     before = source.read_bytes(), layout.read_bytes()
 
     def unexpected(*_args, **_kwargs):
@@ -404,10 +404,10 @@ def test_width_limited_cli_wraps_without_losing_the_connecting_arrow(
     before = source.read_bytes()
     initial = _run(source, layout, baseline)
     assert initial.returncode == 0, initial.stderr
-    request = json.loads(layout.read_text())
+    request = read_payload(layout.read_text())
     request["max_row_width"] = json.loads(initial.stdout)["layout_width"] - 1
-    layout.write_text(json.dumps(request))
-    output = tmp_path / "wrapped.chemvas"
+    write_payload_text(layout, json.dumps(request))
+    output = tmp_path / "wrapped.cdxml"
 
     result = _run(source, layout, output)
 
@@ -437,9 +437,9 @@ def test_invalid_or_impossible_row_width_publishes_nothing(
     tmp_path: Path, width: object
 ) -> None:
     source, layout, output = _files(tmp_path)
-    request = json.loads(layout.read_text())
+    request = read_payload(layout.read_text())
     request["max_row_width"] = width
-    layout.write_text(json.dumps(request))
+    write_payload_text(layout, json.dumps(request))
     before = source.read_bytes(), layout.read_bytes()
 
     result = _run(source, layout, output)
@@ -455,7 +455,7 @@ def test_layout_cli_accepts_fractional_distances_without_relaxing_integer_ids(
     tmp_path: Path,
 ) -> None:
     source, layout, output = _files(tmp_path)
-    request = json.loads(layout.read_text())
+    request = read_payload(layout.read_text())
     request.update(
         gap=12.25,
         row_gap=18.5,
@@ -463,14 +463,14 @@ def test_layout_cli_accepts_fractional_distances_without_relaxing_integer_ids(
         line_gap=4.75,
         max_row_width=220.25,
     )
-    layout.write_text(json.dumps(request))
+    write_payload_text(layout, json.dumps(request))
     result = _run(source, layout, output)
     assert result.returncode == 0, result.stderr
     assert json.loads(result.stdout)["layout_width"] <= 220.25
 
     request["rows"][0]["blocks"][0]["atoms"][0] = 0.0
-    layout.write_text(json.dumps(request))
-    refused = tmp_path / "fractional-id.chemvas"
+    write_payload_text(layout, json.dumps(request))
+    refused = tmp_path / "fractional-id.cdxml"
     result = _run(source, layout, refused)
     assert result.returncode == 2
     assert not refused.exists()
@@ -512,11 +512,12 @@ def test_mixed_connectors_keep_independent_captions_through_save_and_svg(tmp_pat
         }
     )
     source, layout, output = (
-        tmp_path / name
-        for name in ("source.chemvas", "layout.json", "arranged.chemvas")
+        tmp_path / name for name in ("source.cdxml", "layout.json", "arranged.cdxml")
     )
-    source.write_text(
-        json_text(build_document_payload(state, CANVAS_FILE_VERSION)), encoding="utf-8"
+    write_payload_text(
+        source,
+        json_text(build_document_payload(state, CANVAS_FILE_VERSION)),
+        encoding="utf-8",
     )
     request = {
         "format": "chemvas-scheme-layout",
@@ -534,7 +535,7 @@ def test_mixed_connectors_keep_independent_captions_through_save_and_svg(tmp_pat
             }
         ],
     }
-    layout.write_text(json.dumps(request), encoding="utf-8")
+    write_payload_text(layout, json.dumps(request), encoding="utf-8")
     source_bytes, request_bytes = source.read_bytes(), layout.read_bytes()
     result = _run(source, layout, output)
     assert result.returncode == 0, result.stderr

@@ -132,7 +132,7 @@ class MacosAppIdentityTest(unittest.TestCase):
 
     def test_preserves_application_bundle_names_and_unknown_identifiers(self) -> None:
         for name, identifier in (
-            ("Chemvas", "org.example.chemvas"),
+            ("Chemvas", "org.example.cdxml"),
             ("Chemvas", "org.python.python"),
             ("Python", "org.example.other"),
             ("Python", None),

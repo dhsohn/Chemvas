@@ -135,8 +135,23 @@ def test_offscreen_canvas_preserves_an_existing_application_font(monkeypatch) ->
 
 @pytest.mark.parametrize("extra_bytes", [-1, 0, 1])
 def test_cli_document_encoding_counts_utf8_bytes_and_preserves_format(extra_bytes):
-    payload = {"text": "한글", "x": 1.25}
-    expected = '{\n  "text": "한글",\n  "x": 1.25\n}\n'.encode()
+    from chemvas.domain.document import CANVAS_FILE_VERSION, build_document_payload
+    from chemvas.features.document_composition import compose_document_state
+
+    payload = build_document_payload(
+        compose_document_state(
+            {
+                "format": "chemvas-document-composition",
+                "version": 1,
+                "atoms": [],
+                "bonds": [],
+                "notes": [{"text": "한글", "x": 1.25, "y": 0}],
+            }
+        ),
+        CANVAS_FILE_VERSION,
+    )
+    expected = document_cli_shared.encode_cli_document(payload, max_bytes=10_000_000)
+    assert expected.startswith(b"<?xml")
     limit = len(expected) + extra_bytes
     if extra_bytes < 0:
         with pytest.raises(

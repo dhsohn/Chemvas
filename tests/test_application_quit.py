@@ -20,7 +20,7 @@ from chemvas.adapters.qt.file_open_events import FileOpenEventFilter
 from chemvas.bootstrap.file_open import open_document
 from chemvas.bootstrap.window_registry import open_new_window
 from chemvas.shell.window_registry import open_windows
-from chemvas.core.document_io import read_document, write_document
+from tests.document_file_helpers import read_document, write_document
 from chemvas.domain.document import CANVAS_FILE_VERSION
 from chemvas.features.session import is_quit_pending, is_quitting
 from chemvas.ui.session.app_data_paths import sessions_dir
@@ -43,7 +43,7 @@ for name in "abc":
     window = open_new_window(windows[-1] if windows else None)
     canvas = active_canvas_for_window(window)
     add_bond_between_points_for(canvas, QPointF(0, 0), QPointF(40, 0))
-    assert window.services.document_action_service.save_canvas_to_path(window, str(root / (name + ".chemvas")))
+    assert window.services.document_action_service.save_canvas_to_path(window, str(root / (name + ".cdxml")))
     windows.append(window)
 for window in (() if mode == "clean" else (windows[0], windows[2])):
     add_bond_between_points_for(active_canvas_for_window(window), QPointF(0, 80), QPointF(40, 80))
@@ -51,13 +51,13 @@ if mode in {"save-as", "save-as-cancel"}:
     window = open_new_window(windows[-1])
     add_bond_between_points_for(active_canvas_for_window(window), QPointF(0, 0), QPointF(40, 0))
     windows.append(window)
-    QFileDialog.getSaveFileName = staticmethod(lambda *a, **k: (str(root / "new.chemvas") if mode == "save-as" else "", ""))
+    QFileDialog.getSaveFileName = staticmethod(lambda *a, **k: (str(root / "new.cdxml") if mode == "save-as" else "", ""))
 
 store = new_session_store(sessions_dir())
 service = SessionRecoveryService(store, open_new_window=open_new_window, interval_ms=20)
 service.start(app)
-incoming = root / "incoming.chemvas"
-write_document(incoming, read_document(root / "b.chemvas").state, CANVAS_FILE_VERSION)
+incoming = root / "incoming.cdxml"
+write_document(incoming, read_document(root / "b.cdxml").state, CANVAS_FILE_VERSION)
 file_filter = FileOpenEventFilter(open_document, parent=app)
 app.installEventFilter(file_filter)
 class SyntheticFileOpen(QEvent):
@@ -134,17 +134,17 @@ QTimer.singleShot(4000, lambda: os._exit(91))
 assert app.exec() == 0
 assert mode not in cancelled_modes, "Quit should have been cancelled"
 manifest = json.loads((store.session_dir / "session.json").read_text())
-expected = {"a.chemvas", "b.chemvas", "c.chemvas"}
+expected = {"a.cdxml", "b.cdxml", "c.cdxml"}
 if mode == "save-as":
-    expected.add("new.chemvas")
+    expected.add("new.cdxml")
 assert {entry["display_name"] for entry in manifest["docs"]} == expected, manifest
 assert manifest["clean_exit"]
 assert not open_windows()
 for name in "abc":
-    bonds = read_document(root / (name + ".chemvas")).state["model"]["bonds"]
+    bonds = read_document(root / (name + ".cdxml")).state["model"]["bonds"]
     assert len(bonds) == (1 if name == "b" or mode in {"discard", "clean"} else 2)
 if mode == "save-as":
-    assert len(read_document(root / "new.chemvas").state["model"]["bonds"]) == 1
+    assert len(read_document(root / "new.cdxml").state["model"]["bonds"]) == 1
 assert len(prompts) == (0 if mode == "clean" else 3 if mode == "save-as" else 2), prompts
 print("quit preserved all documents", flush=True)
 """
@@ -194,7 +194,7 @@ from PyQt6.QtCore import QEvent, QObject, QPointF, QTimer
 from PyQt6.QtWidgets import QApplication, QMessageBox
 from chemvas.bootstrap.window_registry import open_new_window
 from chemvas.shell.window_registry import open_windows
-from chemvas.core.document_io import read_document
+from chemvas.features.document_files import read_document
 from chemvas.domain.document import validate_calculation_plan
 from chemvas.features.session import is_quit_pending, is_quitting
 from chemvas.ui.session.app_data_paths import sessions_dir
@@ -222,8 +222,8 @@ documents.replace_canvas_with_state(windows[0], first, state=state, file_path=No
 for name, window in zip("abc", windows):
     if name != "a":
         add_bond_between_points_for(active_canvas_for_window(window), QPointF(0, 0), QPointF(40, 0))
-    assert window.services.document_action_service.save_canvas_to_path(window, str(root / (name + ".chemvas")))
-original_file = (root / "a.chemvas").read_bytes()
+    assert window.services.document_action_service.save_canvas_to_path(window, str(root / (name + ".cdxml")))
+original_file = (root / "a.cdxml").read_bytes()
 if mode == "untitled-discard":
     documents.set_file_path(first, None)
     documents.set_display_name(first, "Unsaved plan")
@@ -240,9 +240,9 @@ assert service.snapshot_now(), "Autosave must keep saving the other windows"
 manifest_path = store.session_dir / "session.json"
 before_snapshot = manifest_path.read_bytes()
 # The stale drawing keeps its last entry instead of one that omits its plan.
-kept = [] if mode == "untitled-discard" else [("a.chemvas", False)]
+kept = [] if mode == "untitled-discard" else [("a.cdxml", False)]
 assert [(entry["display_name"], entry["dirty"]) for entry in json.loads(before_snapshot)["docs"]] == (
-    kept + [("b.chemvas", False), ("c.chemvas", True)]
+    kept + [("b.cdxml", False), ("c.cdxml", True)]
 )
 before_history = first.services.history_service.capture_stack_snapshot()
 answers = []
@@ -287,7 +287,7 @@ if cancelled:
         assert calculation_plan_for(first) == raw_plan
         assert first.services.history_service.capture_stack_snapshot() == before_history
         assert manifest_path.read_bytes() == before_snapshot
-        assert (root / "a.chemvas").read_bytes() == original_file
+        assert (root / "a.cdxml").read_bytes() == original_file
         print(json.dumps({"mode": mode, "cancelled_safely": True, "answers": answers}), flush=True)
         os._exit(0)
 
@@ -303,11 +303,11 @@ assert not cancelled, "Quit should have remained cancelled"
 manifest = json.loads(manifest_path.read_text())
 assert manifest["clean_exit"]
 assert not open_windows()
-expected = {"b.chemvas", "c.chemvas"} if mode == "untitled-discard" else {"a.chemvas", "b.chemvas", "c.chemvas"}
+expected = {"b.cdxml", "c.cdxml"} if mode == "untitled-discard" else {"a.cdxml", "b.cdxml", "c.cdxml"}
 assert {Path(entry["file_path"]).name for entry in manifest["docs"]} == expected
 assert all(not entry["dirty"] and entry["snapshot"] is None for entry in manifest["docs"])
-assert len(read_document(root / "c.chemvas").state["model"]["bonds"]) == 2
-assert (root / "a.chemvas").read_bytes() == original_file
+assert len(read_document(root / "c.cdxml").state["model"]["bonds"]) == 2
+assert (root / "a.cdxml").read_bytes() == original_file
 restored = new_session_store(sessions_dir()).consume_previous_sessions()
 assert restored.docs == []
 assert restored.recovered_unsaved == 0

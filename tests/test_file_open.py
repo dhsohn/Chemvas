@@ -37,11 +37,11 @@ class FileOpenEventFilterTest(unittest.TestCase):
         event_filter = FileOpenEventFilter(opened.append)
 
         handled = event_filter.eventFilter(
-            None, _FakeEvent(QEvent.Type.FileOpen, "/tmp/molecule.chemvas")
+            None, _FakeEvent(QEvent.Type.FileOpen, "/tmp/molecule.cdxml")
         )
 
         self.assertTrue(handled)
-        self.assertEqual(opened, ["/tmp/molecule.chemvas"])
+        self.assertEqual(opened, ["/tmp/molecule.cdxml"])
 
     def test_empty_path_is_swallowed_without_calling_handler(self) -> None:
         opened: list[str] = []
@@ -74,16 +74,16 @@ class OpenDocumentRoutingTest(unittest.TestCase):
         cls.app.setQuitOnLastWindowClosed(False)
 
     def setUp(self) -> None:
-        from chemvas.core.document_io import write_document
         from chemvas.domain.document import CANVAS_FILE_VERSION
         from chemvas.features.document_composition import compose_document_state
         from chemvas.shell.window_registry import reset_window_registry
+        from tests.document_file_helpers import write_document
 
         reset_window_registry()
         directory = tempfile.TemporaryDirectory()
         self.addCleanup(directory.cleanup)
-        self.example = str(Path(directory.name) / "first.chemvas")
-        self.other = str(Path(directory.name) / "second.chemvas")
+        self.example = str(Path(directory.name) / "first.cdxml")
+        self.other = str(Path(directory.name) / "second.cdxml")
         for path, element in ((self.example, "O"), (self.other, "N")):
             state = compose_document_state(
                 {
@@ -408,7 +408,7 @@ class OpenDocumentRoutingTest(unittest.TestCase):
         self.assertIs(open_windows()[0], window)
 
     def test_new_chemvas_window_keeps_its_ui_callbacks(self) -> None:
-        self._assert_new_document_window_keeps_its_ui_callbacks(".chemvas")
+        self._assert_new_document_window_keeps_its_ui_callbacks(".cdxml")
 
     def test_new_editable_svg_window_keeps_its_ui_callbacks(self) -> None:
         self._assert_new_document_window_keeps_its_ui_callbacks(".svg")
@@ -418,7 +418,6 @@ class OpenDocumentRoutingTest(unittest.TestCase):
 
     def _assert_new_document_window_keeps_its_ui_callbacks(self, suffix: str) -> None:
         from chemvas.bootstrap.window_registry import open_new_window
-        from chemvas.core.document_io import write_document
         from chemvas.core.molfile import write_molfile
         from chemvas.core.svg_roundtrip import (
             CHEMVAS_SVG_SCOPE_SHEET,
@@ -435,13 +434,14 @@ class OpenDocumentRoutingTest(unittest.TestCase):
             set_zoom_percent_for_window,
             tool_mode_controller_for_window,
         )
+        from tests.document_file_helpers import write_document
 
         reference = open_new_window()
         reference_services = reference.services
         reference_canvas = active_canvas_for_window(reference)
         add_bond_between_points_for(reference_canvas, QPointF(-20, 0), QPointF(20, 0))
         with tempfile.TemporaryDirectory() as temp_dir:
-            reference_path = Path(temp_dir) / "reference.chemvas"
+            reference_path = Path(temp_dir) / "reference.cdxml"
             self.assertTrue(
                 reference_services.document_action_service.save_canvas_to_path(
                     reference, str(reference_path)
@@ -533,11 +533,11 @@ class OpenDocumentRoutingTest(unittest.TestCase):
         from chemvas.shell.window_registry import open_windows
 
         with tempfile.TemporaryDirectory() as temp_dir:
-            source = Path(temp_dir) / "source.chemvas"
+            source = Path(temp_dir) / "source.cdxml"
             source.write_bytes(Path(self.example).read_bytes())
-            symlink = Path(temp_dir) / "symlink.chemvas"
+            symlink = Path(temp_dir) / "symlink.cdxml"
             symlink.symlink_to(source)
-            hard_link = Path(temp_dir) / "hard-link.chemvas"
+            hard_link = Path(temp_dir) / "hard-link.cdxml"
             os.link(source, hard_link)
 
             window = open_new_window()
@@ -555,9 +555,9 @@ class OpenDocumentRoutingTest(unittest.TestCase):
         from chemvas.bootstrap.window_registry import open_new_window
 
         with tempfile.TemporaryDirectory() as temp_dir:
-            source = Path(temp_dir) / "source.chemvas"
+            source = Path(temp_dir) / "source.cdxml"
             source.write_bytes(Path(self.example).read_bytes())
-            alias = Path(temp_dir) / "alias.chemvas"
+            alias = Path(temp_dir) / "alias.cdxml"
             alias.symlink_to(source)
             original_bytes = source.read_bytes()
 

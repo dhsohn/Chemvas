@@ -6,8 +6,9 @@ Chemvas exports editable CDXML (ChemDraw XML) through File > Export Figure
 (`.cdxml` format) and the CLI `render-document --output file.cdxml`.
 
 ChemDraw checks are bounded to the cases described below; they do not establish
-whole-document visual equivalence. CDXML import is not supported;
-the `.chemvas` format remains the document truth.
+whole-document visual equivalence. The desktop now opens and saves a supported
+single-page native CDXML documents; see [desktop editing limits](adr/0058-desktop-cdxml-documents.md).
+The `.cdxml` format remains the default document format.
 
 ## Supported
 
@@ -80,7 +81,7 @@ Each meaning takes exactly its own field as an exact `str` (`element` for
 A binding with an extra or conflicting field, a missing or non-`str` value, or
 an unknown meaning is refused; it is never dropped or converted.
 
-Bindings are not stored in the `.chemvas` file. The CLI reads the explicit
+Bindings are not stored in the `.cdxml` file. The CLI reads the explicit
 sidecar; the GUI passes none, so an ambiguous `Ar` refuses there. The typed export
 plan separates displayed text from chemical meaning. The `ARY` query represents
 an unspecified aryl group, not a concrete molecular structure or formula.
@@ -109,14 +110,14 @@ sidecar written by the person who drew the figure and knows what each label
 means. Chemvas never writes one by itself and never guesses a meaning:
 
 ```bash
-chemvas render-document doc.chemvas --output out.cdxml --cdxml-label-bindings labels.json
+chemvas render-document doc.cdxml --output out.cdxml --cdxml-label-bindings labels.json
 ```
 
 ```json
 {
   "format": "chemvas-cdxml-label-bindings",
   "version": 1,
-  "source_sha256": "<SHA-256 of the exact .chemvas bytes>",
+  "source_sha256": "<SHA-256 of the exact .cdxml bytes>",
   "bindings": [
     {"atom_id": 1, "expected_label": "Ar", "meaning": "generic_aryl"},
     {"atom_id": 4, "expected_label": "Ar", "meaning": "aryl_fragment", "fragment": "Ph"},
@@ -125,7 +126,7 @@ chemvas render-document doc.chemvas --output out.cdxml --cdxml-label-bindings la
 }
 ```
 
-- `source_sha256` is the SHA-256 of the exact input `.chemvas` bytes. Editing
+- `source_sha256` is the SHA-256 of the exact input `.cdxml` bytes. Editing
   or replacing the document changes it, and a sidecar written for other bytes
   is refused. The CLI reads the document once; the digest, the label check and
   the exported drawing all come from those same bytes.
@@ -156,7 +157,7 @@ remaining chemical bond on that Ar refuses. See
 ChemDraw 25.0.2.14 was observed to relabel prior node encodings as argon;
 consumer display, metadata retention, and chemical roundtrip are not verified.
 
-The sidecar does not change the `.chemvas` schema or the GUI. Bindings for a
+The sidecar does not change the `.cdxml` schema or the GUI. Bindings for a
 real figure must come from its author; a test fixture's bindings say nothing
 about any real `Ar` or `Hᵃ`.
 
@@ -228,16 +229,25 @@ replacement is performed.
 
 - **GUI**: File > Export Figure > CDXML format. The dialog label reads
   "CDXML - ChemDraw XML (not verified in ChemDraw)".
-- **CLI**: `chemvas render-document doc.chemvas --output out.cdxml`
+- **CLI**: `chemvas render-document doc.cdxml --output out.cdxml`
   (also accepts `--width-mm`, `--background`, and `--cdxml-label-bindings`
   for the sidecar above). `--min-font-pt` is not supported for CDXML output.
 
 ## Source format
 
-The `.chemvas` source document is never modified by export. Preflight checks
+The `.cdxml` source document is never modified by export. Preflight checks
 run before output is written, preserving existing destination files on error.
-CDXML import is not supported; `.chemvas` remains the editable source document,
-and CLI export is not a roundtrip.
+The desktop can open supported single-page `.cdxml` files, edit them and save
+back with File > Save or Save As. `.cdxml` remains the default source format;
+the CLI figure-export command is not a document roundtrip.
+
+Desktop CDXML Save includes native objects plus an integrity-bound Chemvas
+snapshot comment. If another editor changes the native XML, Chemvas imports
+those objects instead of restoring stale snapshot data. Imported external files
+use Chemvas drawing styles while retaining their native XML, nested fragments,
+reaction references and vector graphics. Unsupported objects reject import;
+unsupported edits reject save before replacement. Supported inputs and
+limits are listed in [ADR 0058](adr/0058-desktop-cdxml-documents.md).
 
 ## Limitations
 
@@ -353,7 +363,7 @@ not dimensions to copy:
 ```json
 {
   "version": 2,
-  "source_sha256": "<exact .chemvas SHA-256>",
+  "source_sha256": "<exact .cdxml SHA-256>",
   "producer_sha256": "<uncorrected CDXML SHA-256>",
   "consumer_sha256": "<saved consumer CDXML SHA-256>",
   "consumer_file": "consumer-saved.cdxml",
@@ -436,7 +446,7 @@ molecules/graphics are outside this placement operation.
 output path for the second pass:
 
 ```sh
-chemvas render-document input.chemvas --output corrected.cdxml \
+chemvas render-document input.cdxml --output corrected.cdxml \
   --width-mm 170 --cdxml-layout-reference layout.json
 ```
 
@@ -524,7 +534,7 @@ The output must be a new `.cdxml` path. This command preserves all bytes outside
 color-table component values, checks matching logical colors on corresponding
 objects and text, and requires the exact measured four-place native values.
 Nearby edited values and unknown writer versions are refused.
-It does not modify `.chemvas` documents or apply the reported nearest stable
+It does not modify `.cdxml` documents or apply the reported nearest stable
 colors. Inputs are limited to 64 MiB each and canonical eight-bit producer RGB.
 
 The JSON report's `full_fidelity_accepted` remains `false`: an exit code of zero

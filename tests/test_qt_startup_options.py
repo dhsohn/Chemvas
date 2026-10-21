@@ -65,7 +65,7 @@ def test_qt_value_options_require_a_value(prefix: str) -> None:
 @pytest.mark.parametrize("prefix", ["-", "--"])
 @pytest.mark.parametrize("option", FLAG_OPTIONS)
 def test_current_qt_flag_options_are_forwarded(prefix: str, option: str) -> None:
-    application._validate_desktop_arguments([prefix + option, "actual.chemvas"])
+    application._validate_desktop_arguments([prefix + option, "actual.cdxml"])
 
 
 @pytest.mark.parametrize("prefix", ["-", "--"])
@@ -143,7 +143,7 @@ def _desktop_process(
                 ["-qwindowicon", "-missing.png"],
                 ["-qwindowgeometry", "-10-20"],
                 ["-qwindowtitle", "--"],
-                ["-qwindowtitle", "not-the-document.chemvas"],
+                ["-qwindowtitle", "not-the-document.cdxml"],
             ],
             id="value-options",
         ),
@@ -166,7 +166,7 @@ def test_real_qt_consumes_supported_options_before_document_selection(
     # Qt parses argv once, so one process checks a whole family of options: any
     # token Qt leaves behind is rejected or breaks the exact document arguments.
     options = [token for group in option_groups for token in group]
-    documents = ["./-그림 & OH.chemvas", "./--style=Fusion.svg"]
+    documents = ["./-그림 & OH.cdxml", "./--style=Fusion.svg"]
     result = _desktop_process(tmp_path, [*options, *documents], documents)
     assert result.returncode == 7, result.stderr
     assert "desktop reached with exact document arguments" in result.stdout
@@ -176,7 +176,7 @@ def test_real_qt_consumes_supported_options_before_document_selection(
     "options",
     [
         ["-nograb"],
-        ["-title", "title.chemvas"],
+        ["-title", "title.cdxml"],
         ["-display", ":0"],
     ],
 )
@@ -185,7 +185,7 @@ def test_backend_specific_options_left_by_qt_cannot_become_documents(
 ) -> None:
     # Xcb options are not consumed by offscreen. The second validation boundary
     # must reject them before any window/session or accidental document opening.
-    result = _desktop_process(tmp_path, [*options, "actual.chemvas"], [])
+    result = _desktop_process(tmp_path, [*options, "actual.cdxml"], [])
     assert result.returncode == 2, result.stderr
     assert "unrecognized argument:" in result.stderr
     assert "window requested" not in result.stdout
@@ -200,9 +200,9 @@ def test_backend_specific_options_left_by_qt_cannot_become_documents(
         ["-cmap"],
         ["-im", "none"],
         ["-inputstyle", "onthespot"],
-        ["--", "-style=Fusion.chemvas"],
+        ["--", "-style=Fusion.cdxml"],
         ["-name=title"],
-        ["-bogus.chemvas"],
+        ["-bogus.cdxml"],
         ["-name", "title", "--bogus"],
     ],
 )

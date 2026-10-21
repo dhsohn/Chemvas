@@ -28,6 +28,7 @@ from chemvas.bootstrap.web_drafts import (
 )
 from chemvas.core.document_io import ATOMIC_STAGING_PREFIX, ATOMIC_STAGING_SUFFIX
 from chemvas.domain.document import extract_document_state
+from tests.document_file_helpers import read_payload, write_payload_text
 
 BOND = {"kind": "bond", "start": [0, 0], "end": [20, 0], "style": "single"}
 
@@ -77,7 +78,7 @@ class Window:
                 "revision": 0,
                 "action": "load",
                 "document": document or new_document(),
-                "name": "Work.chemvas",
+                "name": "Work.cdxml",
             },
         )
         assert status == 200, self.info
@@ -135,7 +136,7 @@ def test_one_draft_survives_close_and_restarts_and_recovers_without_copies(tmp_p
         text = path.read_text(encoding="utf-8")
         stored = json.loads(text)
         assert stored["format"] == DRAFT_FORMAT
-        assert stored["name"] == "Work.chemvas"
+        assert stored["name"] == "Work.cdxml"
         # The complete document in the existing representation, no credential.
         assert state_of(stored["document"]) == state_of(edited["document"])
         extract_document_state(stored["document"])
@@ -152,13 +153,13 @@ def test_one_draft_survives_close_and_restarts_and_recovers_without_copies(tmp_p
                 (entry["id"], entry["name"], entry["open"], entry["problem"])
                 for entry in window.drafts()
             ]
-            assert listed == [(draft_id, "Work.chemvas", False, None)]
+            assert listed == [(draft_id, "Work.cdxml", False, None)]
             assert state_of(window.info["document"]) == state_of(new_document())
             recovered = window.send("recover_draft", draft=draft_id)
             assert state_of(recovered["document"]) == state_of(edited["document"])
             assert recovered["dirty"] is True
             assert recovered["can_undo"] is False
-            assert recovered["name"] == "Work.chemvas"
+            assert recovered["name"] == "Work.cdxml"
             # Recovering again elsewhere cannot make a second copy.
             other = Window(server)
             status, refused = other.request("recover_draft", draft=draft_id)
@@ -181,8 +182,8 @@ def test_clean_state_removes_the_draft_and_a_download_does_not(tmp_path):
         window.edit(BOND)
         assert len(draft_files(root)) == 1
         # Save copy is a download request: no proof of a saved file.
-        exported = window.send("export")
-        assert exported["document"]
+        exported = window.send("save_cdxml")
+        assert read_payload(exported["cdxml"])["state"]
         assert len(draft_files(root)) == 1
         assert window.send("read")["dirty"] is True
         undone = window.send("undo")
@@ -196,11 +197,11 @@ def test_clean_state_removes_the_draft_and_a_download_does_not(tmp_path):
 
 def test_opened_originals_are_never_written(tmp_path):
     root = tmp_path / "drafts"
-    original = tmp_path / "original.chemvas"
-    original.write_text(json.dumps(new_document()), encoding="utf-8")
+    original = tmp_path / "original.cdxml"
+    write_payload_text(original, json.dumps(new_document()), encoding="utf-8")
     before = original.read_bytes()
     with running(root) as server:
-        window = Window(server, json.loads(before))
+        window = Window(server, read_payload(before))
         window.edit(BOND)
         window.edit(bond_at(40))
         window.send("undo")
@@ -219,7 +220,7 @@ def test_replacing_a_drawing_discards_its_draft_and_stale_requests_change_nothin
         window.edit(BOND)
         [first] = draft_files(root)
         # The browser asked before replacing: the replaced work's draft goes.
-        window.send("load", document=new_document(), name="Next.chemvas")
+        window.send("load", document=new_document(), name="Next.cdxml")
         assert draft_files(root) == []
         stale_revision = window.info["revision"]
         window.edit(bond_at(40))
@@ -260,7 +261,7 @@ def test_a_failed_write_keeps_the_edit_and_the_previous_draft(tmp_path, monkeypa
         monkeypatch.undo()
         saved = window.edit(bond_at(80))
         assert saved["recovery"]["state"] == "saved"
-        stored = json.loads(path.read_text(encoding="utf-8"))
+        stored = read_payload(path.read_text(encoding="utf-8"))
         assert state_of(stored["document"]) == state_of(saved["document"])
 
 
@@ -304,7 +305,7 @@ def test_a_second_running_server_works_without_drafts(tmp_path):
     later = BrowserDraftStore(root)
     try:
         assert later.available
-        assert [entry.name for entry in later.entries()] == ["Work.chemvas"]
+        assert [entry.name for entry in later.entries()] == ["Work.cdxml"]
     finally:
         later.close()
 
@@ -331,7 +332,7 @@ def test_recovering_an_open_window_needs_takeover_and_closes_it(tmp_path):
         # The draft is now this window's: later edits update the same file.
         rescuer.edit(bond_at(40))
         assert draft_files(root) == [path]
-        stored = json.loads(path.read_text(encoding="utf-8"))
+        stored = read_payload(path.read_text(encoding="utf-8"))
         assert state_of(stored["document"]) == state_of(rescuer.info["document"])
 
 
@@ -385,7 +386,7 @@ def test_refused_takeovers_leave_the_holder_open_and_unchanged(tmp_path, monkeyp
         # A draft file that no longer opens as a drawing: refused, claim kept.
         damaged = json.loads(content)
         damaged["document"] = {"type": "chemvas", "version": 9, "state": {}}
-        path.write_text(json.dumps(damaged), encoding="utf-8")
+        write_payload_text(path, json.dumps(damaged), encoding="utf-8")
         status, refused = rescuer.request(
             "recover_draft", draft=path.stem, takeover=True
         )
@@ -503,7 +504,7 @@ def test_concurrent_takeovers_and_a_delayed_edit_hand_the_draft_over_once(
         else:
             assert "ended" in edit_reply["error"]
             assert len(recovered["model"]["atoms"]) == 2
-        stored = json.loads(path.read_text(encoding="utf-8"))
+        stored = read_payload(path.read_text(encoding="utf-8"))
         assert state_of(stored["document"]) == recovered
         assert draft_files(root) == [path]
 
@@ -524,7 +525,7 @@ def test_a_failed_removal_of_the_replaced_draft_stays_visible_and_listed(
             return unlink(self, *args, **kwargs)
 
         monkeypatch.setattr(Path, "unlink", refuse)
-        replaced = window.send("load", document=new_document(), name="Next.chemvas")
+        replaced = window.send("load", document=new_document(), name="Next.cdxml")
         monkeypatch.undo()
         assert replaced["recovery"]["state"] == "failed"
         assert "could not be removed" in replaced["recovery"]["message"]
@@ -609,7 +610,7 @@ def test_undo_to_the_drafted_drawing_clears_a_failed_write(tmp_path, monkeypatch
             "state": "saved",
             "message": None,
         }
-        stored = json.loads(path.read_text(encoding="utf-8"))
+        stored = read_payload(path.read_text(encoding="utf-8"))
         assert stored["document"]["state"] == state_of(undone["document"])
 
 
@@ -637,13 +638,11 @@ def test_a_failed_first_write_is_not_reported_once_its_drawing_is_gone(
         assert window.send("read")["recovery"] == CLEAN
         # File > New after the browser asked to discard the unprotected work.
         assert window.edit(BOND)["recovery"]["state"] == "failed"
-        renewed = window.send("load", document=new_document(), name="New.chemvas")
+        renewed = window.send("load", document=new_document(), name="New.cdxml")
         assert renewed["recovery"] == CLEAN
         # File > Open.
         assert window.edit(BOND)["recovery"]["state"] == "failed"
-        opened = window.send(
-            "load", document=renewed["document"], name="Opened.chemvas"
-        )
+        opened = window.send("load", document=renewed["document"], name="Opened.cdxml")
         assert opened["recovery"] == CLEAN
         # Recovering another draft needs no write; it is protected as it is.
         assert window.edit(BOND)["recovery"]["state"] == "failed"
@@ -674,7 +673,7 @@ def test_a_failed_removal_replaces_an_earlier_failed_write_report(
             return unlink(self, *args, **kwargs)
 
         monkeypatch.setattr(Path, "unlink", refuse)
-        replaced = window.send("load", document=new_document(), name="Next.chemvas")
+        replaced = window.send("load", document=new_document(), name="Next.cdxml")
         monkeypatch.undo()
         assert replaced["recovery"]["state"] == "failed"
         assert "could not be removed" in replaced["recovery"]["message"]
@@ -707,7 +706,7 @@ def test_links_and_unsafe_names_in_the_folder_are_not_drafts(tmp_path):
         {
             "format": DRAFT_FORMAT,
             "version": 1,
-            "name": "Elsewhere.chemvas",
+            "name": "Elsewhere.cdxml",
             "saved_at": time.time(),
             "document": new_document(),
         }
@@ -753,12 +752,13 @@ def test_damaged_and_foreign_drafts_are_kept_until_discarded(tmp_path):
     damaged = root / ("a" * 24 + ".json")
     damaged.write_text("{", encoding="utf-8")
     newer = root / ("b" * 24 + ".json")
-    newer.write_text(
+    write_payload_text(
+        newer,
         json.dumps(
             {
                 "format": DRAFT_FORMAT,
                 "version": 2,
-                "name": "Future.chemvas",
+                "name": "Future.cdxml",
                 "saved_at": time.time(),
                 "document": new_document(),
             }
@@ -766,12 +766,13 @@ def test_damaged_and_foreign_drafts_are_kept_until_discarded(tmp_path):
         encoding="utf-8",
     )
     invalid = root / ("c" * 24 + ".json")
-    invalid.write_text(
+    write_payload_text(
+        invalid,
         json.dumps(
             {
                 "format": DRAFT_FORMAT,
                 "version": 1,
-                "name": "Broken.chemvas",
+                "name": "Broken.cdxml",
                 "saved_at": time.time(),
                 "document": {"type": "chemvas", "version": 9, "state": {}},
             }
@@ -828,15 +829,15 @@ def test_store_refuses_writers_that_do_not_hold_the_draft(tmp_path):
     draft, document = "d" * 24, new_document()
     try:
         owner, stranger = object(), object()
-        store.write(draft, owner, name="A.chemvas", document=document)
+        store.write(draft, owner, name="A.cdxml", document=document)
         path = tmp_path / f"{draft}.json"
         content = path.read_bytes()
         with pytest.raises(DraftError, match="Another window"):
-            store.write(draft, stranger, name="B.chemvas", document=document)
+            store.write(draft, stranger, name="B.cdxml", document=document)
         # A closed window's released draft cannot be written by anyone.
         store.release(draft, owner)
         with pytest.raises(DraftError, match="Another window"):
-            store.write(draft, owner, name="C.chemvas", document=document)
+            store.write(draft, owner, name="C.cdxml", document=document)
         assert path.read_bytes() == content
         # A stale discard from a non-owner removes nothing.
         store.discard(draft, stranger)

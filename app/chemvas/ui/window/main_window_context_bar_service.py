@@ -22,6 +22,7 @@ from chemvas.ui.window.main_window_config import TOOL_CONTEXT_PAGE_KEYS
 from chemvas.ui.window.main_window_context_bar_pages import bond_label_for_state
 from chemvas.ui.window.main_window_context_bar_widgets import (
     KindMenuButton,
+    TextSizeButton,
     ToolOptionsStack,
 )
 from chemvas.ui.window.main_window_ports import (
@@ -70,6 +71,7 @@ class MainWindowContextBarService:
         self._page_builder = page_builder
         self._annotations: dict[str, AnnotationContextPage] = {}
         self._text_buttons: dict[str, QToolButton] = {}
+        self._text_size_button: TextSizeButton | None = None
         self._text_observer: _TextOptionsObserver | None = None
         self._observed_viewport: QWidget | None = None
         self._color_group: QButtonGroup | None = None
@@ -108,6 +110,7 @@ class MainWindowContextBarService:
         self._pages = context_pages.pages
         self._annotations = context_pages.annotations
         self._text_buttons = context_pages.text.buttons
+        self._text_size_button = context_pages.text.size_button
         self._text_observer = _TextOptionsObserver(
             window, lambda: self.reflect_text_state(window)
         )
@@ -201,9 +204,14 @@ class MainWindowContextBarService:
             return
         controller = note_controller_for_window(window) if canvas is not None else None
         state = controller.text_format_state() if controller is not None else {}
+        if self._text_size_button is not None:
+            self._text_size_button.sync_size(
+                state.get("size"),
+                enabled=bool(controller and controller.text_format_targets()),
+            )
         for name, button in self._text_buttons.items():
             blocked = button.blockSignals(True)
-            button.setChecked(state.get(name, False))
+            button.setChecked(bool(state.get(name, False)))
             button.blockSignals(blocked)
 
     def reflect_color_state(self, window: MainWindowLike) -> None:

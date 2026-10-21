@@ -11,9 +11,14 @@ import pytest
 
 from chemvas.bootstrap import document_template as cli
 from chemvas.bootstrap.document_cli_shared import json_text
-from chemvas.core.document_io import read_document, write_document
 from chemvas.domain.document import CANVAS_FILE_VERSION
 from chemvas.features.document_composition import compose_document_state
+from tests.document_file_helpers import (
+    read_document,
+    read_payload,
+    write_document,
+    write_payload_text,
+)
 
 # The in-process commands must share one application: creating and
 # destroying a QApplication per call crashes Qt on Linux.
@@ -22,8 +27,7 @@ pytestmark = pytest.mark.usefixtures("qt_application")
 
 def _files(tmp_path):
     source, request, output = (
-        tmp_path / name
-        for name in ("source.chemvas", "template.json", "inserted.chemvas")
+        tmp_path / name for name in ("source.cdxml", "template.json", "inserted.cdxml")
     )
     state = compose_document_state(
         {
@@ -155,14 +159,14 @@ def test_public_cli_bond_anchor_style_boundary_is_explicit_and_preserves_source(
     )
     write_document(source, state, CANVAS_FILE_VERSION)
     original = source.read_bytes()
-    raw = json.loads(request.read_text())
+    raw = read_payload(request.read_text())
     raw.update(
         source_sha256=hashlib.sha256(original).hexdigest(),
         style=ring_style,
         position=[20, 20],
         anchor={"kind": "bond", "a": 0, "b": 1},
     )
-    request.write_text(json.dumps(raw))
+    write_payload_text(request, json.dumps(raw))
     dry = run(source, request, "--dry-run")
     written = run(source, request, "--output", output)
     assert source.read_bytes() == original
@@ -210,9 +214,9 @@ def test_cli_refuses_invalid_input_or_destination_before_native_work(
 ):
     source, request, output = _files(tmp_path)
     if case == "hash":
-        raw = json.loads(request.read_text())
+        raw = read_payload(request.read_text())
         raw["source_sha256"] = "b" * 64
-        request.write_text(json.dumps(raw))
+        write_payload_text(request, json.dumps(raw))
     elif case == "duplicate":
         request.write_text('{"version":1,"version":1}')
     elif case == "nan":
@@ -226,13 +230,13 @@ def test_cli_refuses_invalid_input_or_destination_before_native_work(
     elif case == "existing_output":
         output.write_bytes(b"do not overwrite")
     elif case == "symlink":
-        output.symlink_to(tmp_path / "missing.chemvas")
+        output.symlink_to(tmp_path / "missing.cdxml")
     elif case == "source_output":
         output = source
     elif case == "output_extension":
         output = output.with_suffix(".json")
     else:
-        output = tmp_path / "missing" / "new.chemvas"
+        output = tmp_path / "missing" / "new.cdxml"
     original = source.read_bytes()
     prior_output = output.read_bytes() if output.is_file() else None
     monkeypatch.setattr(

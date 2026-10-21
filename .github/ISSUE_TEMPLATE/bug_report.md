@@ -18,8 +18,8 @@ Steps to reproduce the behavior:
 **Expected behavior**
 What you expected to happen instead.
 
-**Screenshot or `.chemvas` file**
-If it's a drawing/rendering issue, attach a screenshot or a small `.chemvas` file
+**Screenshot or `.cdxml` file**
+If it's a drawing/rendering issue, attach a screenshot or a small `.cdxml` file
 that reproduces it — this helps a lot.
 
 **Environment**

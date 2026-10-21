@@ -10,9 +10,9 @@ from pathlib import Path
 import pytest
 
 from chemvas.bootstrap.document_cli_shared import json_text
-from chemvas.core.document_io import write_document
 from chemvas.domain.document import CANVAS_FILE_VERSION
 from chemvas.features.document_composition import compose_document_state
+from tests.document_file_helpers import write_document, write_payload_text
 
 
 @pytest.mark.parametrize("surrogate", ["\ud800", "\udce9", "\udfff"])
@@ -66,8 +66,8 @@ def test_public_cli_byte_paths_emit_parseable_utf8_json(
     request = None
     if command == "compose-document":
         request = tmp_path / _byte_name("요청", "json")
-        request.write_text(
-            json.dumps(_composition(), ensure_ascii=False), encoding="utf-8"
+        write_payload_text(
+            request, json.dumps(_composition(), ensure_ascii=False), encoding="utf-8"
         )
         request_bytes = request.read_bytes()
         output = tmp_path / _byte_name("결과", "chemvas")

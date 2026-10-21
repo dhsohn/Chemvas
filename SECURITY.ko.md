@@ -26,7 +26,7 @@ GitHub의 비공개 제보 기능을 사용합니다:
 - Chemvas 버전(`chemvas --version` 또는 **About Chemvas** 대화상자), Python 버전,
   운영체제, RDKit 추가 기능 설치 여부
 - 영향을 받는 진입점: 데스크톱 앱, 특정 CLI 명령, Python API 중 무엇인지
-- 문제를 일으키는 최소 입력 파일(`.chemvas`, Chemvas SVG, composition/patch/plan
+- 문제를 일으키는 최소 입력 파일(`.cdxml`, Chemvas SVG, composition/patch/plan
   JSON, 이미지)과 정확한 재현 절차 또는 명령
 - 관찰한 영향과 기대한 동작
 

@@ -8,7 +8,6 @@ from PyQt6.QtWidgets import QGraphicsItem, QGraphicsScene, QGraphicsView
 
 from chemvas.core.document_io import (
     atomic_write_text,
-    write_document,
 )
 from chemvas.core.molfile import export_molfile_block
 from chemvas.core.svg_roundtrip import (
@@ -81,7 +80,7 @@ from chemvas.ui.transactions.scene_rect import (
     SceneRectStateSnapshot,
     scene_rect_is_automatic,
 )
-from chemvas.ui.window.main_window_path_logic import is_canonical_saved_document_path
+from chemvas.ui.window.main_window_path_logic import is_saved_document_path
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -503,6 +502,13 @@ class CanvasDocumentSessionService:
             note_item_factory=lambda: new_note_item_for(self.canvas),
         )
         restore_document_groups(self.canvas, state)
+        from chemvas.ui.canvas.canvas_cdxml_source import (
+            normalize_initial_cdxml_projection,
+            restore_cdxml_source,
+        )
+
+        restore_cdxml_source(self.canvas, state)
+        normalize_initial_cdxml_projection(self.canvas, state)
         apply_sheet_scene_rect_for(self.canvas)
         self.hit_testing_service.mark_spatial_index_dirty()
 
@@ -580,18 +586,22 @@ class CanvasDocumentSessionService:
         return snapshot_canvas_document_state_with_warnings(self.canvas)
 
     def save_to_file(self, path: str) -> list[str]:
-        if not is_canonical_saved_document_path(path):
-            msg = "Chemvas documents must use the .chemvas filename extension."
+        if not is_saved_document_path(path):
+            msg = "Chemvas documents must use the .cdxml filename extension."
             raise ValueError(msg)
         require_preserved_calculation_plan_for(self.canvas)
         state, warnings = self.snapshot_state_with_warnings()
-        document = write_document(path, state, file_format_version_for(self.canvas))
-        self.canvas.runtime_state.document_metadata_state.set_source_sha256(
-            document.source_sha256
-        )
+        from chemvas.ui.export.cdxml_document_writer import save_cdxml_document
+
+        digest = save_cdxml_document(self.canvas, path, state)
+        self.canvas.runtime_state.document_metadata_state.set_source_sha256(digest)
         return warnings
 
     def export_mol(self, path: str, *, selected_only: bool = False) -> None:
+        if self.canvas.runtime_state.document_metadata_state.cdxml_source is not None:
+            raise ValueError(
+                "This native CDXML document retains chemical definitions outside the drawing projection. Save as CDXML to preserve them; MOL conversion is unavailable."
+            )
         if selected_only:
             export_model, atom_annotations = build_selected_mol_export_payload_for(
                 self.canvas

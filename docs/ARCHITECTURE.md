@@ -393,3 +393,5 @@ process locking and envelope storage ([ADR 0032](adr/0032-browser-clipboard-and-
 
 - [ADR 0056: Snapshot-bound note patches](adr/0056-snapshot-bound-note-patches.md)
 - [ADR 0057: Bounded spatial layout checks](adr/0057-bounded-spatial-layout-checks.md)
+
+- [ADR 0058: Desktop CDXML documents](adr/0058-desktop-cdxml-documents.md)

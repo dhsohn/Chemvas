@@ -7,6 +7,8 @@ import os
 import subprocess
 import sys
 
+from tests.document_file_helpers import write_payload_text
+
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 import pytest
@@ -101,8 +103,8 @@ def test_composition_charge_avoids_bonds_without_changing_chemistry(build):
 @pytest.mark.parametrize("build", [nitro_composition, ammonium_composition])
 def test_compose_then_check_layout_public_cli_accepts_default_charges(tmp_path, build):
     source = tmp_path / "composition.json"
-    output = tmp_path / "charged.chemvas"
-    source.write_text(json.dumps(build()), encoding="utf-8")
+    output = tmp_path / "charged.cdxml"
+    write_payload_text(source, json.dumps(build()), encoding="utf-8")
     original = source.read_bytes()
     prefix = [
         sys.executable,

@@ -7,5 +7,5 @@ Exec=chemvas %f
 Icon=chemvas
 Terminal=false
 Categories=Education;Science;Chemistry;Graphics;2DGraphics;
-MimeType=application/x-chemvas;
+MimeType=chemical/x-cdxml;
 StartupWMClass=Chemvas

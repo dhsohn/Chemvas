@@ -21,6 +21,7 @@ from xml.etree import ElementTree as ET
 import pytest
 
 from chemvas.bootstrap.web_adapter import BrowserSession, edit_document, new_document
+from tests.document_file_helpers import write_payload_text
 
 ROOT = Path(__file__).resolve().parents[1]
 SVG_ROOT = "{http://www.w3.org/2000/svg}svg"
@@ -61,7 +62,7 @@ def unchanged(session):
 def native_svg(source, tmp_path):
     """The desktop's whole-canvas plain SVG for ``source``, from its offscreen owner."""
     document = tmp_path / "source.json"
-    document.write_text(json.dumps(source), encoding="utf-8")
+    write_payload_text(document, json.dumps(source), encoding="utf-8")
     path = tmp_path / "native.svg"
     result = subprocess.run(
         [

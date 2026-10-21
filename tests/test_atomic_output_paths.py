@@ -16,11 +16,10 @@ from chemvas.core.document_io import (
     atomic_create_bytes,
     atomic_write_text,
     atomic_write_via_temp,
-    read_document,
-    write_document,
 )
 from chemvas.domain.document import CANVAS_FILE_VERSION
 from chemvas.features.document_composition import compose_document_state
+from tests.document_file_helpers import read_document, write_document
 
 
 @pytest.fixture(scope="module", autouse=True)
@@ -63,7 +62,7 @@ def _write(kind, path):
 @pytest.mark.parametrize("basename", ["korean", "ascii"])
 def test_full_length_multibyte_basename_is_usable(tmp_path, kind, basename):
     # 80 Korean syllables + extension fits a 255-byte filesystem component.
-    suffix = ".chemvas" if kind == "save" else "." + kind
+    suffix = ".cdxml" if kind == "save" else "." + kind
     prefix = "가" * 80 if basename == "korean" else "a" * (255 - len(suffix))
     path = tmp_path / (prefix + suffix)
     assert len(os.fsencode(path.name)) <= os.pathconf(tmp_path, "PC_NAME_MAX")

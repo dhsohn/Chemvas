@@ -14,16 +14,16 @@ CHEMVAS_FILE_TYPE = "chemvas"
 
 # New documents use this version. Supported durable readers are independent:
 # advancing the writer must not retire v7 (docs/DOCUMENT_COMPATIBILITY.md).
-CANVAS_FILE_VERSION = 9
+CANVAS_FILE_VERSION = 10
 
 
-SUPPORTED_FILE_VERSIONS = frozenset((7, 8, 9))
+SUPPORTED_FILE_VERSIONS = frozenset((7, 8, 9, 10))
 
 
-DOCUMENT_SCHEMA_READERS = {(8, 1): "0.18.0", (9, 1): "0.23.0"}
+DOCUMENT_SCHEMA_READERS = {(8, 1): "0.18.0", (9, 1): "0.23.0", (10, 1): "0.26.0"}
 
 
-DOCUMENT_SCHEMAS = {8: 1, 9: 1}
+DOCUMENT_SCHEMAS = {8: 1, 9: 1, 10: 1}
 
 
 # ``last_smiles_input`` and ``calculation_plan`` belong to retired features.
@@ -46,7 +46,7 @@ CANVAS_STATE_KEYS = frozenset(
 
 
 OPTIONAL_CANVAS_STATE_KEYS = frozenset(
-    ("perspective", "groups", "calculation_plan", "images")
+    ("perspective", "groups", "calculation_plan", "images", "cdxml_source")
 )
 
 
@@ -104,6 +104,8 @@ VALID_BOND_ORDERS = frozenset((1, 2, 3))
 VALID_BOND_STYLES = frozenset(
     (
         "single",
+        "wavy",
+        "hash_plain",
         "double",
         "double_center",
         "double_outer",

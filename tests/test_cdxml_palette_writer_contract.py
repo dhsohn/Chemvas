@@ -9,9 +9,10 @@ from pathlib import Path
 import pytest
 
 from chemvas.features.export import recover_native_cdxml_palette
+from tests.document_file_helpers import read_payload
 
 ROOT = Path(__file__).parents[1]
-FIXTURE = json.loads(
+FIXTURE = read_payload(
     (ROOT / "tests/fixtures/native_cdxml_palette_writer.json").read_text()
 )
 NATIVE = FIXTURE["native_xml"].encode()

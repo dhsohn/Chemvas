@@ -121,23 +121,18 @@ def test_changelog_latest_release_matches_package_version():
     )
 
 
-def test_docs_document_current_file_format_version():
-    version = _canvas_file_version()
-    # The format example lives in the reference doc...
-    text = _collapse(_read(REFERENCE))
-    found = re.findall(r'"type"\s*:\s*"chemvas"\s*,\s*"version"\s*:\s*(\d+)', text)
-    assert found, f"{REFERENCE.name}: no {{'type':'chemvas',...}} format example found"
-    for got in found:
-        assert int(got) == version, (
-            f"{REFERENCE.name}: file-format example shows version {got}, but the "
-            f"app writes CANVAS_FILE_VERSION={version}"
-        )
-    # ...while the READMEs still name the current document version in prose.
-    for path in READMES:
-        assert re.search(rf"version\s*{version}\b", _collapse(_read(path))), (
-            f"{path.name}: does not state the current .chemvas document version "
-            f"(app writes CANVAS_FILE_VERSION={version})"
-        )
+def test_docs_document_current_working_format():
+    import xml.etree.ElementTree as ET
+
+    from chemvas.features.document_files import read_document
+    from chemvas.ui.window.main_window_path_logic import resolve_save_as_path
+
+    extension = Path(resolve_save_as_path("example")).suffix
+    for path in (*READMES, REFERENCE):
+        assert f"`{extension}`" in _read(path)
+    example = ROOT / "examples" / f"first-scheme{extension}"
+    assert ET.fromstring(example.read_bytes()).tag == "CDXML"
+    assert read_document(example).payload["version"] == _canvas_file_version()
 
 
 def test_readmes_show_the_published_install_command():

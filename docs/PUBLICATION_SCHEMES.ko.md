@@ -2,7 +2,7 @@
 
 [English](PUBLICATION_SCHEMES.md)
 
-일관된 물리적 크기, 깔끔한 조판, 편집 가능한 원본 `.chemvas` 파일을 보존하면서 논문용 화학 반응식 그림을 프로그래밍 방식으로 생성하는 방법입니다.
+일관된 물리적 크기, 깔끔한 조판, 편집 가능한 원본 `.cdxml` 파일을 보존하면서 논문용 화학 반응식 그림을 프로그래밍 방식으로 생성하는 방법입니다.
 
 저장소 루트에서 예제 스크립트를 실행합니다:
 
@@ -16,7 +16,7 @@ python examples/publication_scheme.py --output-dir /absolute/existing-parent/new
 
 ![independent-parts.png: one caption describing two independently aligned molecular parts](../examples/publication-independent-parts.png)
 
-지정한 출력 디렉터리에는 편집 가능한 `.chemvas` 문서 원본과 고해상도 출력 파일(SVG, 600 DPI PNG), 레이아웃 진단 보고서, 종합 `manifest.json`이 함께 생성됩니다.
+지정한 출력 디렉터리에는 편집 가능한 `.cdxml` 문서 원본과 고해상도 출력 파일(SVG, 600 DPI PNG), 레이아웃 진단 보고서, 종합 `manifest.json`이 함께 생성됩니다.
 
 ## 출판 그림 작성을 위한 모범 사례
 

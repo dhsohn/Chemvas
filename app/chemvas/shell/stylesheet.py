@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 from chemvas.shell.palette import PALETTE
@@ -209,8 +210,9 @@ def main_window_scrollbar_stylesheet(palette: Mapping[str, str]) -> str:
 
 
 def main_window_form_stylesheet(palette: Mapping[str, str]) -> str:
+    icons = (Path(__file__).resolve().parents[1] / "assets" / "icon").as_posix()
     return f"""
-            QLineEdit, QComboBox, QSpinBox {{
+            QLineEdit, QPlainTextEdit, QComboBox, QSpinBox {{
                 background: {palette["surface_input"]};
                 border: 1px solid {palette["border_strong"]};
                 border-radius: 8px;
@@ -219,7 +221,7 @@ def main_window_form_stylesheet(palette: Mapping[str, str]) -> str:
                 selection-background-color: {palette["checked_bg"]};
                 selection-color: {palette["checked_text"]};
             }}
-            QLineEdit:focus, QComboBox:focus, QSpinBox:focus, QDoubleSpinBox:focus {{
+            QLineEdit:focus, QPlainTextEdit:focus, QComboBox:focus, QSpinBox:focus, QDoubleSpinBox:focus {{
                 border-color: {palette["accent"]};
             }}
             QSpinBox, QDoubleSpinBox {{
@@ -229,30 +231,107 @@ def main_window_form_stylesheet(palette: Mapping[str, str]) -> str:
                 padding: 2px 6px;
                 color: {palette["text"]};
             }}
-            QAbstractSpinBox::up-button, QAbstractSpinBox::down-button {{
-                background: {palette["surface_bar"]};
-                border-left: 1px solid {palette["border_strong"]};
-                width: 14px;
+            QComboBox {{
+                padding-right: 32px;
+            }}
+            QComboBox::drop-down {{
+                subcontrol-origin: padding;
+                subcontrol-position: top right;
+                width: 30px;
+                border: none;
+                background: transparent;
+            }}
+            QComboBox::down-arrow {{
+                image: url("{icons}/chevron-down.svg");
+                width: 16px;
+                height: 16px;
+            }}
+            QComboBox::down-arrow:disabled {{
+                image: url("{icons}/chevron-down-disabled.svg");
+            }}
+            QSpinBox, QDoubleSpinBox {{
+                padding-right: 29px;
+            }}
+            QSpinBox#rotateAngleInput, QDoubleSpinBox#bondLengthInput {{
+                padding-right: 6px;
+            }}
+            QSpinBox::up-button, QDoubleSpinBox::up-button,
+            QSpinBox::down-button, QDoubleSpinBox::down-button {{
+                subcontrol-origin: border;
+                width: 26px;
+                border: none;
+                background: transparent;
+                margin-right: 3px;
+            }}
+            QSpinBox::up-button, QDoubleSpinBox::up-button {{
+                subcontrol-position: top right;
+                border-top-right-radius: 7px;
+                margin-top: 1px;
+            }}
+            QSpinBox::down-button, QDoubleSpinBox::down-button {{
+                subcontrol-position: bottom right;
+                border-bottom-right-radius: 7px;
+                margin-bottom: 1px;
+            }}
+            QSpinBox::up-button:hover, QDoubleSpinBox::up-button:hover,
+            QSpinBox::down-button:hover, QDoubleSpinBox::down-button:hover {{
+                background: {palette["hover"]};
+            }}
+            QSpinBox::up-button:pressed, QDoubleSpinBox::up-button:pressed,
+            QSpinBox::down-button:pressed, QDoubleSpinBox::down-button:pressed {{
+                background: {palette["pressed"]};
+            }}
+            QSpinBox::up-arrow, QDoubleSpinBox::up-arrow {{
+                image: url("{icons}/chevron-up.svg");
+                width: 12px;
+                height: 12px;
+                position: relative;
+                top: 1px;
+            }}
+            QSpinBox::down-arrow, QDoubleSpinBox::down-arrow {{
+                image: url("{icons}/chevron-down.svg");
+                width: 12px;
+                height: 12px;
+                position: relative;
+                top: 1px;
+            }}
+            QSpinBox::up-arrow:disabled, QSpinBox::up-arrow:off,
+            QDoubleSpinBox::up-arrow:disabled, QDoubleSpinBox::up-arrow:off {{
+                image: url("{icons}/chevron-up-disabled.svg");
+            }}
+            QSpinBox::down-arrow:disabled, QSpinBox::down-arrow:off,
+            QDoubleSpinBox::down-arrow:disabled, QDoubleSpinBox::down-arrow:off {{
+                image: url("{icons}/chevron-down-disabled.svg");
+            }}
+            QToolButton::menu-indicator, QPushButton::menu-indicator {{
+                image: url("{icons}/chevron-down.svg");
+                width: 12px;
+                height: 12px;
+                subcontrol-origin: padding;
+                subcontrol-position: center right;
+                right: 3px;
+            }}
+            QToolButton::menu-indicator:disabled, QPushButton::menu-indicator:disabled {{
+                image: url("{icons}/chevron-down-disabled.svg");
             }}
             QFrame#spinFrame {{
                 background: {palette["surface_input"]};
                 border: 1px solid {palette["border_strong"]};
                 border-radius: 8px;
             }}
-            QFrame#spinFrame QDoubleSpinBox {{
+            QFrame#spinFrame QSpinBox, QFrame#spinFrame QDoubleSpinBox {{
                 background: transparent;
                 border: none;
                 padding: 2px 6px;
                 color: {palette["text"]};
             }}
-            QToolButton#spinUpButton {{
-                background: {palette["surface_bar"]};
-                border-left: 1px solid {palette["border_strong"]};
-                border-bottom: 1px solid {palette["border_strong"]};
+            QToolButton#spinUpButton, QToolButton#spinDownButton {{
+                background: transparent;
+                border: none;
+                padding: 0px;
             }}
-            QToolButton#spinDownButton {{
-                background: {palette["surface_bar"]};
-                border-left: 1px solid {palette["border_strong"]};
+            QToolButton#spinUpButton:hover, QToolButton#spinDownButton:hover {{
+                background: {palette["hover"]};
             }}
             QComboBox QAbstractItemView {{
                 background: {palette["surface_input"]};
@@ -345,8 +424,8 @@ def main_window_form_stylesheet(palette: Mapping[str, str]) -> str:
                 border-radius: 2px;
             }}
             QSlider::handle:horizontal {{
-                width: 12px;
-                height: 12px;
+                width: 16px;
+                height: 16px;
                 background: {palette["accent"]};
                 border-radius: 8px;
                 margin: -5px 0;

@@ -12,10 +12,12 @@ from PyQt6.QtWidgets import (
     QFileDialog,
     QFormLayout,
     QFrame,
+    QGridLayout,
     QHBoxLayout,
     QLabel,
     QLineEdit,
     QPushButton,
+    QSizePolicy,
     QSpinBox,
     QVBoxLayout,
 )
@@ -90,30 +92,37 @@ def _export_dimension_spin(
     spin.setDecimals(2)
     spin.setValue(value)
     spin.setSuffix(suffix)
+    spin.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
     return spin
 
 
 def _add_export_limits(layout: QVBoxLayout) -> _ExportLimitControls:
-    controls_layout = QFormLayout()
+    controls_layout = QGridLayout()
+    controls_layout.setHorizontalSpacing(16)
+    controls_layout.setVerticalSpacing(10)
+    controls_layout.setColumnStretch(1, 1)
     layout.addLayout(controls_layout)
     width_label = QLabel("Custom width:")
     width = _export_dimension_spin(
         "exportWidthSpin", value=84.0, maximum=5080.0, suffix=" mm"
     )
     width_label.setBuddy(width)
-    controls_layout.addRow(width_label, width)
+    controls_layout.addWidget(width_label, 0, 0, Qt.AlignmentFlag.AlignVCenter)
+    controls_layout.addWidget(width, 0, 1)
     height_check = QCheckBox("Limit exported height")
     height_check.setObjectName("exportMaxHeightCheck")
     height = _export_dimension_spin(
         "exportMaxHeightSpin", value=240.0, maximum=5080.0, suffix=" mm"
     )
-    controls_layout.addRow(height_check, height)
+    controls_layout.addWidget(height_check, 1, 0, Qt.AlignmentFlag.AlignVCenter)
+    controls_layout.addWidget(height, 1, 1)
     font_check = QCheckBox("Minimum exported font size")
     font_check.setObjectName("exportMinFontCheck")
     font = _export_dimension_spin(
         "exportMinFontSpin", value=6.0, maximum=1000.0, suffix=" pt"
     )
-    controls_layout.addRow(font_check, font)
+    controls_layout.addWidget(font_check, 2, 0, Qt.AlignmentFlag.AlignVCenter)
+    controls_layout.addWidget(font, 2, 1)
     explanation = QLabel(
         "Minimum font checking is available only for whole-canvas SVG and PNG. "
         "It checks the exported text size; it does not resize text. "
@@ -261,15 +270,20 @@ def prompt_export_options(window: MainWindowLike) -> FigureExportOptions | None:
         editable_svg_check.setEnabled(editable_enabled)
         if not editable_enabled:
             editable_svg_check.setChecked(False)
-        editable_svg_warning.setVisible(
-            editable_enabled and editable_svg_check.isChecked()
-        )
+        editable_svg_warning.setVisible(editable_enabled)
         editable_svg_warning.setText(
-            "Embeds selected objects, fully selected groups and styles, "
-            "not the whole sheet. Reopens as a new drawing using the original "
-            "sheet settings."
-            if scope_combo.currentData() == "selection"
-            else "Embeds the whole drawing as Chemvas document data in SVG metadata."
+            "Plain SVG is for publication and viewing; it cannot be reopened "
+            "for editing in Chemvas. Keep the original .cdxml file, or "
+            "check Editable Chemvas SVG to reopen and edit the export."
+            if not editable_svg_check.isChecked()
+            else (
+                "Reopen and edit this SVG in Chemvas. Embeds selected objects, "
+                "fully selected groups and styles, not the whole sheet. "
+                "Reopens as a new drawing using the original sheet settings."
+                if scope_combo.currentData() == "selection"
+                else "Reopen and edit this SVG in Chemvas. Embeds the whole drawing "
+                "as Chemvas document data in SVG metadata."
+            )
         )
         limits.sync(
             sizing=size_combo.currentData(), fmt=fmt, scope=scope_combo.currentData()
@@ -402,6 +416,7 @@ def prompt_sheet_setup(
     layout.addWidget(orientation_combo)
 
     dimensions = QFormLayout()
+    dimensions.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.AllNonFixedFieldsGrow)
     width = QDoubleSpinBox()
     width.setObjectName("sheetWidthSpin")
     height = QDoubleSpinBox()

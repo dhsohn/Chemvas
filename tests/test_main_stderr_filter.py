@@ -63,7 +63,7 @@ class MainStderrFilterTest(unittest.TestCase):
     def test_main_dispatches_document_patch_commands_before_qt_startup(self) -> None:
         for command in ("inspect-document", "apply-patch"):
             with self.subTest(command=command):
-                argv = ["chemvas", command, "input.chemvas"]
+                argv = ["chemvas", command, "input.cdxml"]
                 with (
                     mock.patch.object(sys, "argv", argv),
                     mock.patch(
@@ -77,7 +77,7 @@ class MainStderrFilterTest(unittest.TestCase):
                 run.assert_called_once_with(argv[1:])
 
     def test_main_dispatches_document_render_without_desktop_startup(self) -> None:
-        argv = ["chemvas", "render-document", "input.chemvas"]
+        argv = ["chemvas", "render-document", "input.cdxml"]
         with (
             mock.patch.object(sys, "argv", argv),
             mock.patch("chemvas.bootstrap.document_render.run", return_value=0) as run,
@@ -329,7 +329,7 @@ class MainStderrFilterTest(unittest.TestCase):
         self.assertEqual(argv, ["chemvas", path])
 
     def test_main_loads_startup_canvas_file_argument(self) -> None:
-        self._assert_main_loads_startup_file("/tmp/start.chemvas")
+        self._assert_main_loads_startup_file("/tmp/start.cdxml")
 
     def test_main_module_executes_main_when_run_as_script(self) -> None:
         events: list[str] = []

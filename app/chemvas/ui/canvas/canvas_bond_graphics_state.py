@@ -7,6 +7,9 @@ from typing import Any
 @dataclass(slots=True)
 class CanvasBondGraphicsState:
     bond_items: dict[int, list[Any]] = field(default_factory=dict)
+    native_metrics: dict[tuple[int, int], dict[str, float]] = field(
+        default_factory=dict
+    )
 
 
 def set_bond_items_for(canvas: Any, items: dict[int, list[Any]]) -> None:
@@ -22,6 +25,7 @@ def pop_bond_items_for(canvas: Any, bond_id: int) -> list[Any] | None:
 
 def clear_bond_graphics_for(canvas: Any) -> None:
     set_bond_items_for(canvas, {})
+    canvas.runtime_state.bond_graphics_state.native_metrics.clear()
 
 
 __all__ = [

@@ -2,13 +2,13 @@
 
 [한국어](FIRST_SCHEME.ko.md) · [Back to the introduction](../README.md)
 
-Learn how to draw a reaction scheme, save the editable `.chemvas` document, and export a publication-ready vector figure. This tutorial walks through creating a simple benzyl alcohol oxidation scheme.
+Learn how to draw a reaction scheme, save the editable `.cdxml` document, and export a publication-ready vector figure. This tutorial walks through creating a simple benzyl alcohol oxidation scheme.
 
 ![The completed scheme, exported from Chemvas](../examples/first-scheme.png)
 
 ## Start with the finished drawing
 
-You can download the completed file [first-scheme.chemvas](https://raw.githubusercontent.com/dhsohn/Chemvas/main/examples/first-scheme.chemvas) and open it directly (**File ▸ Open**).
+You can download the completed file [first-scheme.cdxml](https://raw.githubusercontent.com/dhsohn/Chemvas/main/examples/first-scheme.cdxml) and open it directly (**File ▸ Open**).
 
 Open, edit, and export with the standard installation:
 
@@ -43,7 +43,7 @@ chemvas
 
 1. Select both molecules and the arrow (**Edit ▸ Select All** or `Ctrl+A`).
 2. Align their vertical centers with **Edit ▸ Align ▸ Middle**.
-3. Save the editable document via **File ▸ Save As…** as `first-scheme.chemvas`.
+3. Save the editable document via **File ▸ Save As…** as `first-scheme.cdxml`.
 
 ## 4. Export the figure
 
@@ -57,18 +57,18 @@ Choose **File ▸ Export Figure…**:
 | Background | White | Opaque white background |
 | Editable Chemvas SVG | Unchecked | Standard vector graphics |
 
-Click **Export** and save as `first-scheme.svg`. Arrow and atom labels are exported as vector outlines to preserve formatting across any viewer. Keep the `.chemvas` file for future editing.
+Click **Export** and save as `first-scheme.svg`. Arrow and atom labels are exported as vector outlines to preserve formatting across any viewer. Keep the `.cdxml` file for future editing.
 
 You can also download the pre-exported [SVG](https://raw.githubusercontent.com/dhsohn/Chemvas/main/examples/first-scheme.svg) and [300 DPI PNG](https://raw.githubusercontent.com/dhsohn/Chemvas/main/examples/first-scheme.png).
 
 ## Command-line workflow
 
-You can also inspect, validate, and render `.chemvas` files directly from your terminal:
+You can also inspect, validate, and render `.cdxml` files directly from your terminal:
 
 ```bash
-chemvas inspect-document first-scheme.chemvas
-chemvas check-layout first-scheme.chemvas
-chemvas render-document first-scheme.chemvas --output first-scheme-rendered.svg
+chemvas inspect-document first-scheme.cdxml
+chemvas check-layout first-scheme.cdxml
+chemvas render-document first-scheme.cdxml --output first-scheme-rendered.svg
 ```
 
 - `inspect-document`: Summarizes atoms, bonds, labels, and document metadata as JSON.

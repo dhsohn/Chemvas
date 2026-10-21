@@ -11,7 +11,13 @@
 
 <p align="center"><a href="https://github.com/dhsohn/Chemvas/blob/main/README.md">English</a> · <b>한국어</b></p>
 
-Chemvas는 **다시 만들 수 있는 반응식 그림**을 위한 오픈소스 드로잉 도구입니다. 모든 그림은 편집 가능한 `.chemvas` 파일(JSON, version 9)과 명령 한 줄에서 나오므로, 내용을 고친 뒤에도 논문 단 너비에 맞춰 다시 렌더링할 수 있습니다. 스크립트나 AI 에이전트는 파일을 통째로 다시 쓰는 대신 검사를 거치는 패치로 같은 파일을 편집할 수 있습니다.
+Chemvas는 **다시 만들 수 있는 반응식 그림**을 위한 오픈소스 드로잉 도구입니다. 모든 그림은 편집 가능한 `.cdxml` 파일과 명령 한 줄에서 나오므로, 내용을 고친 뒤에도 논문 단 너비에 맞춰 다시 렌더링할 수 있습니다. 스크립트나 AI 에이전트는 파일을 통째로 다시 쓰는 대신 검사를 거치는 패치로 같은 파일을 편집할 수 있습니다.
+
+파일 > 열기에서 지원되는 단일 페이지 `.cdxml`을 열어 수정하고 일반 저장으로
+다시 CDXML로 저장할 수 있습니다. 외부 파일은 Chemvas 그리기 스타일로 표시하며,
+중첩 축약 구조·반응 참조·벡터 객체는 원본 XML로 보존합니다.
+보존할 수 없는 수정은 파일을 덮어쓰기 전에 거절합니다.
+[지원 범위](https://github.com/dhsohn/Chemvas/blob/main/docs/adr/0058-desktop-cdxml-documents.md)
 
 ## Chemvas로 하는 일
 
@@ -35,8 +41,8 @@ Chemvas는 **다시 만들 수 있는 반응식 그림**을 위한 오픈소스 
 
 Chemvas는 파일 교환 면에서 ChemDraw를 대신하지 못합니다. Chemvas가 정확히 표현할 수 없는 입력은 잘못 그리는 대신 오류로 거부합니다.
 
-- **열 수 있는 파일:** `.chemvas`, **Editable Chemvas SVG**를 켜고 Chemvas에서 내보낸 SVG(다른 SVG 파일은 열 수 없음), Chemvas가 쓰는 범위(결합 차수 1–3, 쐐기·해시 결합, 전하, 라디칼) 안의 2D MOL V2000 파일.
-- **거부하는 입력:** CDX/CDXML, SDF, RXN 파일. 3D 좌표, 동위원소, 방향족 결합 유형 4, V3000을 쓴 MOL 파일.
+- **열 수 있는 파일:** `.cdxml`, **Editable Chemvas SVG**를 켜고 Chemvas에서 내보낸 SVG(다른 SVG 파일은 열 수 없음), Chemvas가 쓰는 범위(결합 차수 1–3, 쐐기·해시 결합, 전하, 라디칼) 안의 2D MOL V2000 파일.
+- **거부하는 입력:** 바이너리 CDX·여러 페이지 CDXML, SDF, RXN 파일. 3D 좌표, 동위원소, 방향족 결합 유형 4, V3000을 쓴 MOL 파일.
 
 ## 설치
 
@@ -54,12 +60,12 @@ Windows 로컬 빌드 및 패키징은 [패키징 안내](https://github.com/dhs
 ## 빠른 시작: 스크립트나 에이전트에서
 
 ```bash
-chemvas compose-document scheme.json --output scheme.chemvas
-chemvas inspect-document scheme.chemvas > inspection.json
-chemvas apply-patch scheme.chemvas patch.json --dry-run
-chemvas apply-patch scheme.chemvas patch.json --output revised.chemvas
-chemvas check-layout revised.chemvas
-chemvas render-document revised.chemvas --output scheme.svg --width-mm 174
+chemvas compose-document scheme.json --output scheme.cdxml
+chemvas inspect-document scheme.cdxml > inspection.json
+chemvas apply-patch scheme.cdxml patch.json --dry-run
+chemvas apply-patch scheme.cdxml patch.json --output revised.cdxml
+chemvas check-layout revised.cdxml
+chemvas render-document revised.cdxml --output scheme.svg --width-mm 174
 ```
 
 `scheme.json`에는 원자, 결합, 화살표, 노트를 적습니다. `patch.json`에는 `inspection.json`의 `source_sha256`과 적용할 연산을 적습니다. 각 명령은 새 파일에 쓰고 기존 파일은 덮어쓰지 않으며, `check-layout`은 경고를 찾으면 종료 코드 1을 반환합니다. 형식과 그림이 있는 예제는 [에이전트 CLI 안내](https://github.com/dhsohn/Chemvas/blob/main/docs/AGENT_CLI.ko.md)에 있습니다.
@@ -71,7 +77,7 @@ chemvas render-document revised.chemvas --output scheme.svg --width-mm 174
 1. **Ring** 도구(`J`)로 왼쪽 캔버스에 벤젠을 놓습니다. **Bond**(`X`)로 고리 원자에서 결합을 하나 끌어 새 탄소를 만든 뒤, 그 탄소에서 말단 원자까지 두 번째 결합을 끌어 냅니다. 말단 원자 위에서 `o`를 누른 뒤 **Enter**로 라벨을 `OH`로 바꿉니다.
 2. 오른쪽에도 벤젠을 놓습니다. 고리 원자에서 결합을 하나 끌어 새 탄소를 만든 뒤, 그 탄소에서 말단 원자까지 두 번째 결합을 끌어 냅니다. 두 번째 결합 위에서 `2`를 눌러 그 결합만 이중결합으로 바꾸고, 말단 원자 위에서 `o`를 누릅니다. **Arrow** 도구로 두 구조 사이를 드래그하고, 화살표를 더블클릭해 반응 조건을 입력합니다.
 3. **Edit ▸ Select All**로 전체를 선택하고 **Edit ▸ Align ▸ Middle**로 가운데 정렬합니다.
-4. `.chemvas`로 저장하고, **File ▸ Export Figure…** 메뉴에서 **Plain SVG**와 **Fit 2-column (174 mm)** 옵션을 선택해 출력합니다.
+4. `.cdxml`로 저장하고, **File ▸ Export Figure…** 메뉴에서 **Plain SVG**와 **Fit 2-column (174 mm)** 옵션을 선택해 출력합니다.
 
 자세한 튜토리얼과 예제 파일은 [단계별 안내](https://github.com/dhsohn/Chemvas/blob/main/docs/FIRST_SCHEME.ko.md)를 참고하세요.
 
@@ -81,7 +87,7 @@ chemvas render-document revised.chemvas --output scheme.svg --width-mm 174
 
 - [헤드리스 & 에이전트 CLI](https://github.com/dhsohn/Chemvas/blob/main/docs/AGENT_CLI.ko.md) · [논문 그림 작성 예제](https://github.com/dhsohn/Chemvas/blob/main/docs/PUBLICATION_SCHEMES.ko.md) · [반응 도식 배치](https://github.com/dhsohn/Chemvas/blob/main/docs/SCHEME_LAYOUT.ko.md)
 - [그리기 도구 및 단축키](https://github.com/dhsohn/Chemvas/blob/main/docs/REFERENCE.ko.md) · [MOL 입출력](https://github.com/dhsohn/Chemvas/blob/main/docs/REFERENCE.ko.md#화학-입출력) · [이미지 객체](https://github.com/dhsohn/Chemvas/blob/main/docs/IMAGE_OBJECTS.ko.md) · [문서 호환성 정책](https://github.com/dhsohn/Chemvas/blob/main/docs/DOCUMENT_COMPATIBILITY.ko.md)
-- [예제 모음](https://github.com/dhsohn/Chemvas/tree/main/examples): 샘플 `.chemvas` 문서와 논문 그림을 만드는 스크립트.
+- [예제 모음](https://github.com/dhsohn/Chemvas/tree/main/examples): 샘플 `.cdxml` 문서와 논문 그림을 만드는 스크립트.
 - [기여 안내](https://github.com/dhsohn/Chemvas/blob/main/CONTRIBUTING.ko.md) · [아키텍처](https://github.com/dhsohn/Chemvas/blob/main/docs/ARCHITECTURE.ko.md) · [보안 정책](https://github.com/dhsohn/Chemvas/blob/main/SECURITY.ko.md) · [변경 이력](https://github.com/dhsohn/Chemvas/blob/main/CHANGELOG.md) · [릴리스](https://github.com/dhsohn/Chemvas/blob/main/RELEASING.ko.md) · [라이선스 (MIT)](https://github.com/dhsohn/Chemvas/blob/main/LICENSE)
 
 문의 및 버그 제보: [GitHub Issues](https://github.com/dhsohn/Chemvas/issues).

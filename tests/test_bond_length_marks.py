@@ -6,7 +6,6 @@ from PyQt6.QtGui import QColor, QImage
 from PyQt6.QtTest import QTest
 from PyQt6.QtWidgets import QApplication, QGraphicsTextItem
 
-from chemvas.core.document_io import read_document
 from chemvas.ui.annotations.state import mark_state_dict_for, scene_item_state_for
 from chemvas.ui.export.export_render_service import export_scene
 from chemvas.ui.molecule.structure_mutation_access import add_bond_for
@@ -16,6 +15,7 @@ from chemvas.ui.scene.scene_decoration_access import (
 )
 from chemvas.ui.window.main_window_context_bar_widgets import bond_length_input
 from tests.canvas_factory import build_canvas_view
+from tests.document_file_helpers import read_document
 
 
 @pytest.fixture
@@ -117,7 +117,7 @@ def test_bound_mark_with_legal_absolute_anchor_undo_preserves_missing_offsets(
     canvas.services.scene_item_controller.apply_scene_item_state(item, state)
     assert (
         canvas.services.canvas_document_session_service.save_to_file(
-            str(tmp_path / "absolute-anchor.chemvas")
+            str(tmp_path / "absolute-anchor.cdxml")
         )
         == []
     )
@@ -225,7 +225,7 @@ def test_rescaled_figure_pixels_match_saved_reopened_document(drawing, tmp_path,
     add_mark_for_atom_for(canvas, atom_id, QPointF(20, 10), kind=kind)
     canvas.services.geometry_controller.set_bond_length(60)
     before = canvas.services.canvas_document_session_service.snapshot_state()
-    path = tmp_path / "rescaled.chemvas"
+    path = tmp_path / "rescaled.cdxml"
     assert canvas.services.canvas_document_session_service.save_to_file(str(path)) == []
     export_scene(
         canvas.scene(), str(tmp_path / "live.png"), fmt="png", margin=8, dpi=96

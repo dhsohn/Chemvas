@@ -12,6 +12,7 @@ from chemvas.features.rendering import (
 from chemvas.features.rendering import (
     strip_corners as strip_corners_shape,
 )
+from chemvas.ui.canvas.native_document_layout import native_bond_style
 from chemvas.ui.molecule.bond_geometry_plan_service import BondGeometryPlanService
 from chemvas.ui.molecule.bond_geometry_update_service import BondGeometryUpdateService
 from chemvas.ui.molecule.bond_graphics_build_service import BondGraphicsBuildService
@@ -260,6 +261,14 @@ class BondRenderer:
     def update_bond_geometry(
         self, bond_id: int, *, allow_topology_rebuild: bool = False
     ) -> None:
+        with native_bond_style(self.context, bond_id):
+            self._update_bond_geometry(
+                bond_id, allow_topology_rebuild=allow_topology_rebuild
+            )
+
+    def _update_bond_geometry(
+        self, bond_id: int, *, allow_topology_rebuild: bool
+    ) -> None:
         self._relayout_bond_atom_labels(bond_id)
         if allow_topology_rebuild and self.geometry_updater.topology_is_stale(bond_id):
             # A gesture or history step just finished: keeping the mid-gesture
@@ -290,8 +299,9 @@ class BondRenderer:
         )
 
     def add_bond_graphics(self, bond_id: int) -> None:
-        self._relayout_bond_atom_labels(bond_id)
-        self.graphics_builder.add_bond_graphics(bond_id)
+        with native_bond_style(self.context, bond_id):
+            self._relayout_bond_atom_labels(bond_id)
+            self.graphics_builder.add_bond_graphics(bond_id)
 
     def _relayout_bond_atom_labels(self, bond_id: int) -> None:
         bonds = self.context.model.bonds

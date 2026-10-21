@@ -58,17 +58,17 @@ Name: "{userprograms}\Chemvas\Chemvas"; Filename: "{app}\chemvas.exe"
 
 [Registry]
 ; Advertise an alternative handler. Windows retains the user's default choice.
-Root: HKCU; Subkey: "Software\Classes\.chemvas\OpenWithProgids"; ValueType: string; ValueName: "Chemvas.Document"; ValueData: ""
+Root: HKCU; Subkey: "Software\Classes\.cdxml\OpenWithProgids"; ValueType: string; ValueName: "Chemvas.Document"; ValueData: ""
 Root: HKCU; Subkey: "Software\Classes\Chemvas.Document"; ValueType: string; ValueName: ""; ValueData: "Chemvas Drawing"
 Root: HKCU; Subkey: "Software\Classes\Chemvas.Document\DefaultIcon"; ValueType: string; ValueName: ""; ValueData: """{app}\chemvas.exe"",0"
 Root: HKCU; Subkey: "Software\Classes\Chemvas.Document\shell\open\command"; ValueType: string; ValueName: ""; ValueData: """{app}\chemvas.exe"" ""%1"""
 Root: HKCU; Subkey: "Software\Classes\Applications\chemvas.exe"; ValueType: string; ValueName: "FriendlyAppName"; ValueData: "Chemvas"
-Root: HKCU; Subkey: "Software\Classes\Applications\chemvas.exe\SupportedTypes"; ValueType: string; ValueName: ".chemvas"; ValueData: ""
+Root: HKCU; Subkey: "Software\Classes\Applications\chemvas.exe\SupportedTypes"; ValueType: string; ValueName: ".cdxml"; ValueData: ""
 Root: HKCU; Subkey: "Software\Classes\Applications\chemvas.exe\shell\open\command"; ValueType: string; ValueName: ""; ValueData: """{app}\chemvas.exe"" ""%1"""
 Root: HKCU; Subkey: "Software\Chemvas\Capabilities"; ValueType: string; ValueName: "ApplicationName"; ValueData: "Chemvas"
 Root: HKCU; Subkey: "Software\Chemvas\Capabilities"; ValueType: string; ValueName: "ApplicationDescription"; ValueData: "Draw and edit chemical structures and reaction schemes."
 Root: HKCU; Subkey: "Software\Chemvas\Capabilities"; ValueType: string; ValueName: "ApplicationIcon"; ValueData: """{app}\chemvas.exe"",0"
-Root: HKCU; Subkey: "Software\Chemvas\Capabilities\FileAssociations"; ValueType: string; ValueName: ".chemvas"; ValueData: "Chemvas.Document"
+Root: HKCU; Subkey: "Software\Chemvas\Capabilities\FileAssociations"; ValueType: string; ValueName: ".cdxml"; ValueData: "Chemvas.Document"
 Root: HKCU; Subkey: "Software\RegisteredApplications"; ValueType: string; ValueName: "Chemvas"; ValueData: "Software\Chemvas\Capabilities"
 
 [Code]
@@ -95,8 +95,8 @@ begin
   begin
     RegDeleteKeyIncludingSubkeys(HKCU, 'Software\Classes\Chemvas.Document');
     if RegistryStringMatches(
-      'Software\Classes\.chemvas\OpenWithProgids', 'Chemvas.Document', '') then
-      RegDeleteValue(HKCU, 'Software\Classes\.chemvas\OpenWithProgids', 'Chemvas.Document');
+      'Software\Classes\.cdxml\OpenWithProgids', 'Chemvas.Document', '') then
+      RegDeleteValue(HKCU, 'Software\Classes\.cdxml\OpenWithProgids', 'Chemvas.Document');
   end;
   if RegistryStringMatches(
     'Software\Classes\Applications\chemvas.exe\shell\open\command', '', OwnCommand) then

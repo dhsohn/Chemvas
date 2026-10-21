@@ -6,6 +6,7 @@ import subprocess
 import sys
 from typing import TYPE_CHECKING
 
+from tests.document_file_helpers import write_payload_text
 from tests.scene_render_context import attach_scene_render_context
 
 if TYPE_CHECKING:
@@ -16,10 +17,10 @@ from PyQt6.QtGui import QTextCharFormat, QTextCursor, QTextDocument
 from PyQt6.QtWidgets import QApplication, QGraphicsTextItem
 
 from chemvas.bootstrap import document_composition, document_render
-from chemvas.core.document_io import read_document, write_document
 from chemvas.domain.document import CANVAS_FILE_VERSION
 from chemvas.features.document_composition import compose_document_state
 from tests.canvas_factory import build_canvas_view
+from tests.document_file_helpers import read_document, write_document
 
 
 @pytest.fixture(scope="module")
@@ -93,7 +94,8 @@ def test_compose_ts_bracket_renders_a_native_object(
         "bottom": 70,
     }
     request = tmp_path / "bracket.json"
-    request.write_text(
+    write_payload_text(
+        request,
         json.dumps(
             {
                 "format": "chemvas-document-composition",
@@ -105,7 +107,7 @@ def test_compose_ts_bracket_renders_a_native_object(
         ),
         encoding="utf-8",
     )
-    output = tmp_path / "bracket.chemvas"
+    output = tmp_path / "bracket.cdxml"
     result = run("compose-document", str(request), "--output", str(output))
     assert result.returncode == 0, result.stderr
     assert read_document(output).state["ts_brackets"] == [
@@ -190,11 +192,12 @@ def test_cli_note_newlines_match_native_plain_text_after_roundtrip(
         for index, text in enumerate(run_texts)
     ]
     request = tmp_path / "crlf.json"
-    request.write_text(
+    write_payload_text(
+        request,
         json.dumps(_composition(notes=[{"x": 0, "y": 0, "runs": runs}])),
         encoding="utf-8",
     )
-    output = tmp_path / "crlf.chemvas"
+    output = tmp_path / "crlf.cdxml"
     result = _run_in_process(
         capsys, "compose-document", str(request), "--output", str(output)
     )

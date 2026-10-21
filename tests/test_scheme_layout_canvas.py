@@ -14,7 +14,6 @@ from PyQt6.QtCore import QPointF
 from PyQt6.QtWidgets import QApplication
 
 from chemvas.bootstrap.document_cli_shared import offscreen_canvas
-from chemvas.core.document_io import read_exact_document, write_document
 from chemvas.domain.document import CANVAS_FILE_VERSION, build_document_payload
 from chemvas.features.document_composition import compose_document_state
 from chemvas.features.scheme_layout import LayoutRow, validate_layout_request
@@ -25,6 +24,7 @@ from chemvas.ui.canvas.graphics_items import note_paint_scene_path
 from chemvas.ui.dialogs import scheme_layout_service
 from chemvas.ui.dialogs.scheme_layout_service import arrange_canvas
 from chemvas.ui.export.export_scope import content_bounds, export_item_closure
+from tests.document_file_helpers import read_exact_document, write_document
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -428,8 +428,8 @@ def test_saved_group_reopens_moves_as_unit_and_undo_redo(
 ) -> None:
     source = _state()
     source_path, candidate_path = (
-        tmp_path / "source.chemvas",
-        tmp_path / "layout.chemvas",
+        tmp_path / "source.cdxml",
+        tmp_path / "layout.cdxml",
     )
     write_document(source_path, source, CANVAS_FILE_VERSION)
     original_bytes = source_path.read_bytes()
@@ -833,7 +833,7 @@ def test_align_y_keeps_notes_x_groups_and_geometry_but_centers_separate_products
         assert candidate["ts_brackets"][0][key] - original["ts_brackets"][0][
             key
         ] == pytest.approx(placements[1]["dy"])
-    output = tmp_path / "aligned.chemvas"
+    output = tmp_path / "aligned.cdxml"
     write_document(output, candidate, CANVAS_FILE_VERSION)
     reopened = read_exact_document(output).document
     assert reopened.state["notes"] == candidate["notes"]

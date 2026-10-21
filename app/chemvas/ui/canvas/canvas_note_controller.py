@@ -689,14 +689,16 @@ class CanvasNoteController:
         cursor.select(QTextCursor.SelectionType.Document)
         return cursor
 
-    def text_format_state(self) -> dict[str, bool]:
+    def text_format_state(self) -> dict[str, bool | float | None]:
         """Only mark a format active when the entire current target shares it."""
         formats = []
+        sizes = []
         alignments = []
         for item in self.text_format_targets():
             cursor = self._text_format_cursor(item)
             if not cursor.hasSelection():
                 formats.append(cursor.charFormat())
+                sizes.append(self._text_point_size(cursor.charFormat(), item))
                 alignments.append(cursor.blockFormat().alignment())
                 continue
             start, end = cursor.selectionStart(), cursor.selectionEnd()
@@ -715,9 +717,11 @@ class CanvasNoteController:
                         and fragment.position() + fragment.length() > start
                     ):
                         formats.append(fragment.charFormat())
+                        sizes.append(self._text_point_size(fragment.charFormat(), item))
                     iterator = iterator.__iadd__(1)
                 block = block.next()
         return {
+            "size": sizes[0] if sizes and len(set(sizes)) == 1 else None,
             "bold": bool(formats)
             and all(f.fontWeight() > QFont.Weight.Normal for f in formats),
             "italic": bool(formats) and all(f.fontItalic() for f in formats),
@@ -787,17 +791,28 @@ class CanvasNoteController:
 
         self._merge_text_char_format(mutate)
 
+    @staticmethod
+    def _text_point_size(current: QTextCharFormat, item: QGraphicsTextItem) -> float:
+        size = current.fontPointSize()
+        if size <= 0:
+            font = current.font().resolve(item.font())
+            size = font.pointSizeF()
+            if size <= 0:
+                size = QFontInfo(font).pointSizeF()
+        return size
+
+    def set_text_size(self, size: float) -> None:
+        low, high = TEXT_POINT_SIZE_RANGE
+        if not low <= size <= high:
+            raise ValueError(f"Font size must be between {low:g} and {high:g} pt.")
+        self._merge_text_char_format(lambda _current, fmt: fmt.setFontPointSize(size))
+
     def adjust_text_size(self, delta: int) -> None:
         def apply(item: QGraphicsTextItem) -> None:
             cursor = self._text_format_cursor(item)
 
             def stepped_format(current: QTextCharFormat) -> QTextCharFormat:
-                size = current.fontPointSize()
-                if size <= 0:
-                    font = current.font().resolve(item.font())
-                    size = font.pointSizeF()
-                    if size <= 0:
-                        size = QFontInfo(font).pointSizeF()
+                size = self._text_point_size(current, item)
                 fmt = QTextCharFormat()
                 low, high = TEXT_POINT_SIZE_RANGE
                 fmt.setFontPointSize(max(low, min(high, size + delta)))

@@ -4,6 +4,7 @@ from chemvas.domain.document import (
     CLIPBOARD_SELECTION_VERSION,
     validate_clipboard_selection_payload,
 )
+from tests.document_file_helpers import read_payload
 
 
 def _valid_payload() -> dict:
@@ -500,8 +501,8 @@ def test_transform_fields_require_v3_and_survive_decoding():
         decode_clipboard_selection_payload,
     )
 
-    state = json.loads(
-        (Path(__file__).parent / "fixtures/document-v8/extended.chemvas").read_text()
+    state = read_payload(
+        (Path(__file__).parent / "fixtures/document-v8/extended.cdxml").read_text()
     )["state"]
     for collection, kind, field in (
         ("notes", "note", "rotation"),

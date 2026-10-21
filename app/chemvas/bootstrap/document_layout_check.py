@@ -14,7 +14,7 @@ from chemvas.bootstrap.document_cli_shared import (
     offscreen_document_scene,
     validate_source_document,
 )
-from chemvas.core.document_io import read_exact_document
+from chemvas.features.document_files import read_exact_document
 
 MAX_LAYOUT_TEXT_CHARACTERS = 100_000
 
@@ -60,7 +60,7 @@ def _argument_parser() -> argparse.ArgumentParser:
         "check-layout",
         help="report deterministic layout warnings",
     )
-    check.add_argument("document", help="input .chemvas document")
+    check.add_argument("document", help="input .cdxml document")
     check.add_argument(
         "--sheet-only",
         action="store_true",

@@ -29,9 +29,9 @@ def test_finds_the_window_and_canvas_showing_the_path():
     a, b = object(), object()
     window = _window([a, b])
     result = find_open_document(
-        "/lab/y.chemvas",
+        "/lab/y.cdxml",
         windows=[window],
-        path_of=_paths({id(a): "/lab/x.chemvas", id(b): "/lab/y.chemvas"}),
+        path_of=_paths({id(a): "/lab/x.cdxml", id(b): "/lab/y.cdxml"}),
     )
     assert result == (window, b)
 
@@ -40,7 +40,7 @@ def test_returns_none_when_no_window_has_the_path():
     a = object()
     window = _window([a])
     result = find_open_document(
-        "/lab/z.chemvas", windows=[window], path_of=_paths({id(a): "/lab/x.chemvas"})
+        "/lab/z.cdxml", windows=[window], path_of=_paths({id(a): "/lab/x.cdxml"})
     )
     assert result is None
 
@@ -49,9 +49,9 @@ def test_matches_regardless_of_path_spelling():
     a = object()
     window = _window([a])
     result = find_open_document(
-        "/lab/sub/../x.chemvas",
+        "/lab/sub/../x.cdxml",
         windows=[window],
-        path_of=_paths({id(a): "/lab/x.chemvas"}),
+        path_of=_paths({id(a): "/lab/x.cdxml"}),
     )
     assert result == (window, a)
 
@@ -60,7 +60,7 @@ def test_ignores_unsaved_canvases_with_no_path():
     a = object()
     window = _window([a])
     result = find_open_document(
-        "/lab/x.chemvas", windows=[window], path_of=_paths({})
+        "/lab/x.cdxml", windows=[window], path_of=_paths({})
     )  # path_of → None
     assert result is None
 
@@ -70,16 +70,16 @@ def test_scans_multiple_windows_and_returns_first_match():
     first = _window([a])
     second = _window([b])
     result = find_open_document(
-        "/lab/x.chemvas",
+        "/lab/x.cdxml",
         windows=[first, second],
-        path_of=_paths({id(a): "/other.chemvas", id(b): "/lab/x.chemvas"}),
+        path_of=_paths({id(a): "/other.cdxml", id(b): "/lab/x.cdxml"}),
     )
     assert result == (second, b)
 
 
 def test_matches_an_existing_symlink_alias(tmp_path):
-    source = tmp_path / "source.chemvas"
-    alias = tmp_path / "alias.chemvas"
+    source = tmp_path / "source.cdxml"
+    alias = tmp_path / "alias.cdxml"
     source.write_text("document", encoding="utf-8")
     alias.symlink_to(source)
     canvas = object()
@@ -95,8 +95,8 @@ def test_matches_an_existing_symlink_alias(tmp_path):
 
 
 def test_matches_an_existing_hard_link_alias(tmp_path):
-    source = tmp_path / "source.chemvas"
-    alias = tmp_path / "alias.chemvas"
+    source = tmp_path / "source.cdxml"
+    alias = tmp_path / "alias.cdxml"
     source.write_text("document", encoding="utf-8")
     os.link(source, alias)
     canvas = object()
@@ -112,7 +112,7 @@ def test_matches_an_existing_hard_link_alias(tmp_path):
 
 
 def test_can_exclude_the_canvas_being_saved(tmp_path):
-    path = tmp_path / "source.chemvas"
+    path = tmp_path / "source.cdxml"
     path.write_text("document", encoding="utf-8")
     canvas = object()
     window = _window([canvas])
@@ -129,7 +129,7 @@ def test_can_exclude_the_canvas_being_saved(tmp_path):
 
 def test_normalized_key_is_absolute_and_platform_normalized(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
-    key = normalized_path_key("a.chemvas")
+    key = normalized_path_key("a.cdxml")
     assert os.path.isabs(key)
     assert key == os.path.normcase(key)
 
@@ -142,8 +142,8 @@ def test_missing_path_case_folds_on_a_case_insensitive_macos_volume(monkeypatch)
         lambda _path: True,
     )
 
-    assert normalized_path_key("/Lab/Foo.chemvas") == normalized_path_key(
-        "/Lab/foo.chemvas"
+    assert normalized_path_key("/Lab/Foo.cdxml") == normalized_path_key(
+        "/Lab/foo.cdxml"
     )
 
 
@@ -155,8 +155,8 @@ def test_missing_path_preserves_case_on_a_case_sensitive_macos_volume(monkeypatc
         lambda _path: False,
     )
 
-    assert normalized_path_key("/Lab/Foo.chemvas") != normalized_path_key(
-        "/Lab/foo.chemvas"
+    assert normalized_path_key("/Lab/Foo.cdxml") != normalized_path_key(
+        "/Lab/foo.cdxml"
     )
 
 
@@ -177,7 +177,7 @@ def test_case_probe_never_uses_the_parent_side_of_a_mount(monkeypatch):
 
     assert (
         open_document_lookup._path_is_on_case_insensitive_volume(
-            str(mount / "new.chemvas")
+            str(mount / "new.cdxml")
         )
         is False
     )
@@ -202,7 +202,7 @@ def test_case_probe_fails_closed_after_an_unconfirmed_same_device_probe(monkeypa
 
     assert (
         open_document_lookup._path_is_on_case_insensitive_volume(
-            str(project / "new.chemvas")
+            str(project / "new.cdxml")
         )
         is False
     )
@@ -211,15 +211,15 @@ def test_case_probe_fails_closed_after_an_unconfirmed_same_device_probe(monkeypa
 
 @pytest.mark.skipif(sys.platform != "linux", reason="Linux path keys preserve case")
 def test_key_is_case_sensitive_on_linux():
-    assert normalized_path_key("/Lab/Foo.chemvas") != normalized_path_key(
-        "/Lab/foo.chemvas"
+    assert normalized_path_key("/Lab/Foo.cdxml") != normalized_path_key(
+        "/Lab/foo.cdxml"
     )
 
 
 @pytest.mark.skipif(sys.platform != "win32", reason="Windows path keys ignore case")
 def test_key_is_case_insensitive_on_windows():
-    assert normalized_path_key("C:/Lab/Foo.chemvas") == normalized_path_key(
-        "C:/Lab/foo.chemvas"
+    assert normalized_path_key("C:/Lab/Foo.cdxml") == normalized_path_key(
+        "C:/Lab/foo.cdxml"
     )
 
 
@@ -229,6 +229,6 @@ def test_nonexistent_path_resolves_a_symlinked_parent(tmp_path):
     alias = tmp_path / "alias"
     alias.symlink_to(physical, target_is_directory=True)
 
-    assert normalized_path_key(str(alias / "new.chemvas")) == normalized_path_key(
-        str(physical / "new.chemvas")
+    assert normalized_path_key(str(alias / "new.cdxml")) == normalized_path_key(
+        str(physical / "new.cdxml")
     )

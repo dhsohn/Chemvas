@@ -7,8 +7,10 @@ Chemvas는 파일 > 그림 내보내기(`.cdxml` 형식)와 CLI
 내보냅니다.
 
 ChemDraw 검증 범위는 아래에 명시한 사례로 한정되며 전체 문서의 시각적
-동등성을 뜻하지 않습니다. CDXML 가져오기는 지원하지 않으며,
-`.chemvas` 형식이 문서 원본입니다.
+동등성을 뜻하지 않습니다. 데스크톱은 지원되는 단일 페이지 CDXML을 열어
+수정한 뒤 일반 저장 또는 다른 이름으로 저장할 수 있습니다.
+[지원 범위와 제한](adr/0058-desktop-cdxml-documents.md)을 참고하세요.
+`.cdxml`는 기본 문서 형식입니다.
 
 ## 지원
 
@@ -58,7 +60,7 @@ ChemDraw 검증 범위는 아래에 명시한 사례로 한정되며 전체 문�
 
 각 의미는 자기 필드 하나만 정확한 `str`로 받습니다(`element_identity`는 `element`, `aryl_fragment`는 `fragment`, `generic_aryl`은 없음). 불필요하거나 충돌하는 필드, 빠지거나 `str`이 아닌 값, 알 수 없는 의미를 가진 바인딩은 거부하며, 버리거나 변환하지 않습니다.
 
-바인딩은 `.chemvas` 파일에 저장되지 않습니다. CLI는 명시적 sidecar에서만 바인딩을 받고 GUI는 받지 않으므로, GUI의 모호한 `Ar`는 거부합니다. typed export plan에서 표시문자와 화학적 의미를 구분합니다. `ARY`는 불특정 aryl query이며 구체적인 고리·분자식을 뜻하지 않습니다.
+바인딩은 `.cdxml` 파일에 저장되지 않습니다. CLI는 명시적 sidecar에서만 바인딩을 받고 GUI는 받지 않으므로, GUI의 모호한 `Ar`는 거부합니다. typed export plan에서 표시문자와 화학적 의미를 구분합니다. `ARY`는 불특정 aryl query이며 구체적인 고리·분자식을 뜻하지 않습니다.
 
 generic aryl이 order-1 쐐기/해시의 넓은 끝에 있으면 B/E 및 native
 WedgeBegin/WedgedHashBegin 방향을 유지합니다. 좌우 반전한 O/P→Ar 대조군 8개에서
@@ -74,14 +76,14 @@ WedgeBegin/WedgedHashBegin 방향을 유지합니다. 좌우 반전한 O/P→Ar 
 스스로 만들지 않으며 의미를 추측하지 않습니다.
 
 ```bash
-chemvas render-document doc.chemvas --output out.cdxml --cdxml-label-bindings labels.json
+chemvas render-document doc.cdxml --output out.cdxml --cdxml-label-bindings labels.json
 ```
 
 ```json
 {
   "format": "chemvas-cdxml-label-bindings",
   "version": 1,
-  "source_sha256": "<SHA-256 of the exact .chemvas bytes>",
+  "source_sha256": "<SHA-256 of the exact .cdxml bytes>",
   "bindings": [
     {"atom_id": 1, "expected_label": "Ar", "meaning": "generic_aryl"},
     {"atom_id": 4, "expected_label": "Ar", "meaning": "aryl_fragment", "fragment": "Ph"},
@@ -90,7 +92,7 @@ chemvas render-document doc.chemvas --output out.cdxml --cdxml-label-bindings la
 }
 ```
 
-- `source_sha256`은 입력 `.chemvas`의 정확한 바이트의 SHA-256입니다. 문서를
+- `source_sha256`은 입력 `.cdxml`의 정확한 바이트의 SHA-256입니다. 문서를
   편집하거나 바꾸면 값이 달라지고, 다른 바이트용으로 작성된 sidecar는
   거부됩니다. CLI는 문서를 한 번만 읽으며, 해시·라벨 검사·내보낸 그림이 모두
   같은 바이트에서 나옵니다.
@@ -121,7 +123,7 @@ order-1 점선 결합은 화학 `<b Order="1" Display="Dash">`로 유지됩니�
 표시·메타데이터 유지·화학 라운드트립은 검증되지 않았으며 통과를 주장하지
 않습니다.
 
-sidecar는 `.chemvas` 스키마나 GUI를 바꾸지 않습니다. 실제 그림의 바인딩은 그
+sidecar는 `.cdxml` 스키마나 GUI를 바꾸지 않습니다. 실제 그림의 바인딩은 그
 그림의 작성자가 정해야 하며, 테스트 fixture의 바인딩은 실제 `Ar`나 `Hᵃ`의
 의미에 대해 아무것도 말하지 않습니다.
 
@@ -156,16 +158,16 @@ QTextDocument paint glyph run의 글꼴과 픽셀 크기를 사용합니다. 단
 
 - **GUI**: 파일 > 그림 내보내기 > CDXML 형식. 대화상자 라벨:
   "CDXML - ChemDraw XML (not verified in ChemDraw)".
-- **CLI**: `chemvas render-document doc.chemvas --output out.cdxml`
+- **CLI**: `chemvas render-document doc.cdxml --output out.cdxml`
   (`--width-mm`, `--background`, 위 sidecar용 `--cdxml-label-bindings`도
   사용 가능). `--min-font-pt`는 CDXML 출력에서 지원하지 않습니다.
 
 ## 원본 형식
 
-`.chemvas` 원본 문서는 내보내기로 수정되지 않습니다. 파일 작성 전 사전 검사를
-수행하므로 오류 발생 시 기존 대상 파일이 보존됩니다. CDXML 가져오기는 지원하지
-않으며, `.chemvas` 형식이 편집 원본으로 유지되고 CLI 내보내기는 완전한 왕복 변환이
-아닙니다.
+`.cdxml` 원본 문서는 내보내기로 수정되지 않습니다. 파일 작성 전 사전 검사를
+수행하므로 오류 발생 시 기존 대상 파일이 보존됩니다. 데스크톱의 CDXML 열기·저장은
+[ADR 0058](adr/0058-desktop-cdxml-documents.md)의 범위를 지원합니다.
+`.cdxml`는 기본 문서 형식이며 CLI 그림 내보내기는 문서 왕복 저장 기능이 아닙니다.
 
 ## 제한 사항
 
@@ -274,7 +276,7 @@ CDXML, 라벨 바인딩 파일의 SHA-256과 전체 내보내기 옵션을 결�
 ```json
 {
   "version": 2,
-  "source_sha256": "<exact .chemvas SHA-256>",
+  "source_sha256": "<exact .cdxml SHA-256>",
   "producer_sha256": "<uncorrected CDXML SHA-256>",
   "consumer_sha256": "<saved consumer CDXML SHA-256>",
   "consumer_file": "consumer-saved.cdxml",
@@ -348,7 +350,7 @@ CaptionJustification/LabelJustification은 상속을 적용하고 옛 Justificat
 소비자 XML은 64MiB까지다. 동일한 옵션과 새 출력 경로를 사용한다.
 
 ```sh
-chemvas render-document input.chemvas --output corrected.cdxml \
+chemvas render-document input.cdxml --output corrected.cdxml \
   --width-mm 170 --cdxml-layout-reference layout.json
 ```
 

@@ -11,11 +11,11 @@ from PyQt6.QtTest import QTest
 from PyQt6.QtWidgets import QApplication
 
 from chemvas.bootstrap.main_window import build_main_window
-from chemvas.core.document_io import read_document, write_document
 from chemvas.domain.document import CANVAS_FILE_VERSION
 from chemvas.ui.annotations.state import scene_item_state_for
 from chemvas.ui.window.main_window_ports import active_canvas_for_window
 from tests.canvas_factory import build_canvas_view
+from tests.document_file_helpers import read_document, write_document
 
 
 @pytest.fixture(scope="module")
@@ -176,7 +176,7 @@ def test_nudge_undo_and_saved_reopen_preserve_current_label_paint(
     canvas.services.history_service.redo()
     assert canvas.services.canvas_document_session_service.snapshot_state() == moved
     canvas.services.history_service.undo()
-    path = tmp_path / "labels.chemvas"
+    path = tmp_path / "labels.cdxml"
     write_document(path, before, CANVAS_FILE_VERSION)
     saved_bytes = path.read_bytes()
     reopened = canvases()
@@ -230,7 +230,7 @@ def test_shown_window_text_preset_nudge_undo_and_reopen_agree(app, tmp_path):
         assert redo is not None and redo.isEnabled()
         QTest.keySequence(canvas.viewport(), redo.shortcut())
         assert _appearance(item) == appearance
-        path = tmp_path / "shown-labels.chemvas"
+        path = tmp_path / "shown-labels.cdxml"
         session = canvas.services.canvas_document_session_service
         assert session.save_to_file(str(path)) == []
         session.apply_state(read_document(path).state)

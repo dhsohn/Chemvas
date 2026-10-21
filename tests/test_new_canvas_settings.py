@@ -80,7 +80,7 @@ def test_new_canvas_inherits_all_document_settings_without_content(source, tmp_p
     canvas.services.canvas_atom_mutation_service.add_atom("O", 0, 0)
     services = window.services
     services.document_action_service.save_canvas_to_path(
-        window, str(tmp_path / "source.chemvas")
+        window, str(tmp_path / "source.cdxml")
     )
     before = canvas.services.canvas_document_session_service.snapshot_state()
     history = tuple(canvas.services.history_service.state.history)
@@ -97,11 +97,11 @@ def test_new_canvas_inherits_all_document_settings_without_content(source, tmp_p
     assert tuple(canvas.services.history_service.state.history) == history
     assert created_window is not window
 
-    path = tmp_path / "inherited.chemvas"
+    path = tmp_path / "inherited.cdxml"
     created_window.services.document_action_service.save_canvas_to_path(
         created_window, str(path)
     )
-    from chemvas.core.document_io import read_document
+    from tests.document_file_helpers import read_document
 
     assert read_document(path).state["settings"] == before["settings"]
 
