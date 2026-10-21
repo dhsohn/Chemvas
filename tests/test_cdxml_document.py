@@ -279,3 +279,13 @@ def test_bad_native_xml_cannot_be_hidden_by_valid_snapshot():
     raw = embed_document(b"<not-cdxml/>", state)
     with pytest.raises(ValueError, match="one page"):
         parse_cdxml_document(raw)
+
+
+@pytest.mark.parametrize("ending", [b"", b"\n", b"\n\n", b"\r\n\t "])
+def test_snapshot_survives_trailing_xml_whitespace(ending):
+    state = parse_cdxml_document(NATIVE).state
+    state["notes"][0]["text"] = "Snapshot-only editing state"
+    raw = embed_document(NATIVE, state).rstrip() + ending
+    reopened = parse_cdxml_document(raw)
+    assert reopened.state == json.loads(json.dumps(state))
+    assert reopened.source_sha256 == hashlib.sha256(raw).hexdigest()

@@ -274,3 +274,37 @@ def test_native_background_fill_stays_below_bonds():
     index = state["cdxml_source"]["items"]["images"].index("32")
     assert state["images"][index]["z"] < 0
     assert native(state).find('.//graphic[@id="32"]').get("Z") == "10"
+
+
+@pytest.mark.parametrize(
+    "index, expected", [(0, (0, 0, 0)), (1, (255, 255, 255)), (2, (255, 0, 0))]
+)
+def test_molecular_area_uses_cdxml_color_mapping(index, expected):
+    import base64
+    import io
+
+    from PIL import Image
+
+    raw = f'''<CDXML><colortable><color r="1" g="0" b="0"/></colortable>
+    <page id="1" Width="100" Height="100"><fragment id="2">
+    <n id="3" p="10 10"/><n id="4" p="80 10"/><n id="5" p="40 80"/>
+    </fragment><ColoredMolecularArea id="6" BasisObjects="3 4 5" bgcolor="{index}"/>
+    </page></CDXML>'''.encode()
+    state = parse_cdxml_document(raw, preserve_source=True).state
+    with Image.open(
+        io.BytesIO(base64.b64decode(state["images"][0]["data_base64"]))
+    ) as image:
+        assert (
+            image.convert("RGB").getpixel((image.width // 2, image.height // 3))
+            == expected
+        )
+
+
+@pytest.mark.parametrize("index", ["2", "99", "-1"])
+def test_missing_molecular_area_color_is_refused(index):
+    raw = f'''<CDXML><page id="1" Width="100" Height="100"><fragment id="2">
+    <n id="3" p="10 10"/><n id="4" p="80 10"/><n id="5" p="40 80"/>
+    </fragment><ColoredMolecularArea id="6" BasisObjects="3 4 5" bgcolor="{index}"/>
+    </page></CDXML>'''.encode()
+    with pytest.raises(ValueError, match="missing color"):
+        parse_cdxml_document(raw, preserve_source=True)

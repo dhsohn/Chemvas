@@ -256,7 +256,7 @@ class _GraphicProjection:
             ps.sort(key=lambda p: math.atan2(p[1] - cy, p[0] - cx))
         if len(ps) < 3:
             self.reader.unsupported(self.e, "colored molecular area")
-        self.color = self.reader.colors[int(self.e.get("bgcolor", "2"))]
+        self.color = self.reader.color(self.e, "bgcolor", "2")
         self.paths.append((ps, True, self.color))
 
     def graphic(self) -> None:

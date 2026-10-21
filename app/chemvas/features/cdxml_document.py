@@ -27,7 +27,9 @@ from chemvas.domain.document import (
 from chemvas.domain.json_io import strict_json_loads
 from chemvas.features.document_composition import compose_document_state
 
-_MARKER = re.compile(rb"\n<!-- ChemvasDocument:([0-9a-f]{64}):([A-Za-z0-9+/=]+) -->\n$")
+_MARKER = re.compile(
+    rb"\n<!-- ChemvasDocument:([0-9a-f]{64}):([A-Za-z0-9+/=]+) -->[ \t\r\n]*\Z"
+)
 _ELEMENTS = (
     "? H He Li Be B C N O F Ne Na Mg Al Si P S Cl Ar K Ca Sc Ti V Cr Mn Fe Co Ni "
     "Cu Zn Ga Ge As Se Br Kr Rb Sr Y Zr Nb Mo Tc Ru Rh Pd Ag Cd In Sn Sb Te I Xe "
@@ -205,8 +207,8 @@ class _Importer:
             current = self.parents.get(current)
         return default
 
-    def color(self, e: ET.Element) -> str:
-        index = int(self.inherited(e, "color", "0"))
+    def color(self, e: ET.Element, attribute: str = "color", default: str = "0") -> str:
+        index = int(self.inherited(e, attribute, default))
         if index == 0 and "fgcolor" in self.root.attrib:
             index = int(self.root.attrib["fgcolor"])
         if index == 0:
