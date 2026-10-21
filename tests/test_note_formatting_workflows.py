@@ -730,3 +730,48 @@ def test_direct_size_rejects_invalid_values_without_changing_text(drawing, size)
     with pytest.raises(ValueError, match="Font size must be between"):
         controller.set_text_size(size)
     assert note.toHtml() == before
+
+
+@pytest.mark.parametrize("dismissal", ["inactive", "removed", "deleted"])
+def test_size_popup_does_not_restore_an_inactive_or_disposed_editor(
+    drawing, monkeypatch, dismissal
+):
+    from unittest.mock import Mock
+
+    from PyQt6 import sip
+
+    window, canvas = drawing
+    controller, note = _note(drawing, "Popup lifetime")
+    service = window.services.context_bar_service
+    service.reflect_text_state(window)
+    button = service._text_size_button
+    scene = canvas.scene()
+    activate = Mock()
+    monkeypatch.setattr(QApplication, "setActiveWindow", activate)
+    errors = []
+
+    def dismiss():
+        try:
+            button.menu().close()
+            if dismissal == "inactive":
+                monkeypatch.setattr(
+                    QApplication,
+                    "applicationState",
+                    lambda: Qt.ApplicationState.ApplicationInactive,
+                )
+            else:
+                scene.removeItem(note)
+                if dismissal == "deleted":
+                    sip.delete(note)
+        except Exception as exc:
+            errors.append(exc)
+
+    QTimer.singleShot(0, dismiss)
+    QTest.mouseClick(button, Qt.MouseButton.LeftButton)
+    QApplication.processEvents()
+    assert not errors
+    activate.assert_not_called()
+    if dismissal != "deleted":
+        assert not note.format_popup_open
+    if dismissal == "removed":
+        scene.addItem(note)

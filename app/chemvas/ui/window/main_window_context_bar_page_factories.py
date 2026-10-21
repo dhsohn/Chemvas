@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
+from PyQt6 import sip
 from PyQt6.QtCore import Qt, QTimer
 from PyQt6.QtGui import QColor, QKeySequence
 from PyQt6.QtWidgets import (
@@ -471,12 +472,32 @@ def build_text_page(
     icons = window.ui_references.require_icon_factory()
     page, layout = new_context_page()
     layout.addWidget(hint_label(CONTEXT_PAGE_CAPTIONS["text"]))
-    size_button = TextSizeButton(set_size)
     saved_editor = None
+    popup_canvas = None
+
+    def editor_is_current() -> bool:
+        return (
+            popup_canvas is not None
+            and not sip.isdeleted(popup_canvas)
+            and QApplication.applicationState() == Qt.ApplicationState.ApplicationActive
+            and active_canvas_for_window(window) is popup_canvas
+            and (
+                saved_editor is None
+                or (
+                    not sip.isdeleted(saved_editor[1])
+                    and saved_editor[1].scene() is popup_canvas.scene()
+                )
+            )
+        )
+
+    size_button = TextSizeButton(
+        lambda size: set_size(size) if editor_is_current() else None
+    )
 
     def remember_editor() -> None:
-        nonlocal saved_editor
+        nonlocal saved_editor, popup_canvas
         canvas = active_canvas_for_window(window)
+        popup_canvas = canvas
         scene = canvas.scene()
         assert scene is not None
         item = scene.focusItem()
@@ -486,15 +507,18 @@ def build_text_page(
             saved_editor = (canvas, item, item.textCursor())
 
     def restore_editor() -> None:
-        nonlocal saved_editor
         if saved_editor is not None:
             canvas, item, cursor = saved_editor
-            saved_editor = None
-            QApplication.setActiveWindow(canvas.window())
-            canvas.setFocus(Qt.FocusReason.PopupFocusReason)
-            item.setFocus(Qt.FocusReason.PopupFocusReason)
-            item.setTextCursor(cursor)
-            item.format_popup_open = False
+            if sip.isdeleted(item):
+                return
+            try:
+                if editor_is_current():
+                    QApplication.setActiveWindow(canvas.window())
+                    canvas.setFocus(Qt.FocusReason.PopupFocusReason)
+                    item.setFocus(Qt.FocusReason.PopupFocusReason)
+                    item.setTextCursor(cursor)
+            finally:
+                item.format_popup_open = False
 
     size_menu = size_button.menu()
     assert size_menu is not None
