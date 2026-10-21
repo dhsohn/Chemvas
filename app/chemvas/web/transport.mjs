@@ -27,7 +27,7 @@ export class SessionClient {
 
   constructor(send) { this.#send = send; }
   get info() { return this.#info; }
-  get name() { return this.info?.name ?? 'Canvas 1.chemvas'; }
+  get name() { return this.info?.name ?? 'Canvas 1.cdxml'; }
   get document() { return this.info?.document ?? null; }
   get busy() { return this.#busy; }
   get readOnly() { return Boolean(this.info?.unsupported.length); }
@@ -61,7 +61,7 @@ export class SessionClient {
       }
     } finally { this.#busy = false; }
   }
-  async load(info, name = 'Canvas 1.chemvas') {
+  async load(info, name = 'Canvas 1.cdxml') {
     await this.#dispatch('load', {document: info.document, name});
   }
   async perform(edit) {

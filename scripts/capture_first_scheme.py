@@ -244,7 +244,7 @@ class FirstScheme(Walkthrough):
         self.capture("03 / Align the scheme", "Molecules move as whole structures.")
 
         warnings = self.canvas.services.canvas_document_session_service.save_to_file(
-            str(self.output / "first-scheme.chemvas")
+            str(self.output / "first-scheme.cdxml")
         )
         assert not warnings, warnings
         self.window.services.canvas_document_service.mark_clean(self.canvas)
@@ -256,7 +256,7 @@ class FirstScheme(Walkthrough):
         self.window.statusBar().showMessage("Exported first-scheme.svg · 174 mm")
         self.capture(
             "Saved as SVG / Keep the editable drawing",
-            "Open first-scheme.chemvas to keep editing. Use the SVG in your manuscript.",
+            "Open first-scheme.cdxml to keep editing. Use the SVG in your manuscript.",
             2500,
         )
         self.save_gif("demo.gif")

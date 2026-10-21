@@ -1,6 +1,7 @@
 import os
 
 from chemvas.ui.scene.note_item_access import new_note_item_for
+from tests.document_file_helpers import read_payload
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
@@ -312,7 +313,6 @@ def test_repeated_begin_edit_does_not_clear_active_session_undo(drawing, tmp_pat
 
 
 def test_save_while_editing_keeps_session_undo_and_updates_chrome(drawing, tmp_path):
-    import json
 
     window, canvas = drawing
     note = _saved_note(drawing, tmp_path)
@@ -320,7 +320,7 @@ def test_save_while_editing_keeps_session_undo_and_updates_chrome(drawing, tmp_p
     _key(canvas, Qt.Key.Key_S, Qt.KeyboardModifier.ControlModifier)
     assert note.hasFocus()
     assert not window.isWindowModified()
-    payload = json.loads((tmp_path / "note.chemvas").read_text(encoding="utf-8"))
+    payload = read_payload((tmp_path / "note.cdxml").read_text(encoding="utf-8"))
     assert payload["state"]["notes"][0]["text"] == "alpha beta gamma changed"
     _key(canvas, Qt.Key.Key_Z, Qt.KeyboardModifier.ControlModifier)
     assert note.toPlainText() == "alpha beta gamma"
@@ -409,7 +409,6 @@ def test_dirty_observer_failure_does_not_lose_editor_text_or_history(drawing, tm
 def test_note_reentry_without_edit_preserves_document_redo(
     drawing, tmp_path, origin, finish, rich, padded
 ):
-    import json
 
     window, canvas = drawing
     note = _saved_note(drawing, tmp_path)
@@ -421,10 +420,10 @@ def test_note_reentry_without_edit_preserves_document_redo(
         canvas.services.note_controller.toggle_text_bold()
     _key(canvas, Qt.Key.Key_Escape)
     services = window.services
-    path = tmp_path / "reentry.chemvas"
+    path = tmp_path / "reentry.cdxml"
     assert services.document_action_service.save_canvas_to_path(window, str(path))
     if origin == "reopened":
-        state = json.loads(path.read_text(encoding="utf-8"))["state"]
+        state = read_payload(path.read_text(encoding="utf-8"))["state"]
         services.canvas_document_service.replace_canvas_with_state(
             window, canvas, state=state, file_path=str(path)
         )

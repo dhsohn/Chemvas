@@ -1,6 +1,6 @@
 # ADR 0030: CDXML export
 
-- Status: Accepted
+- Status: Partly superseded by ADR 0058 and [ADR 0059](0059-cdxml-only-working-documents.md)
 - Date: 2026-10-03
 - Depends on: ADR 0005 (responsibility-based editor boundaries)
 

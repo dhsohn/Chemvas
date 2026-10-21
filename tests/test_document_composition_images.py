@@ -12,8 +12,8 @@ import pytest
 from PIL import Image
 
 from chemvas.bootstrap.document_composition import _read_image_source
-from chemvas.core.document_io import read_document
 from chemvas.features.document_composition import compose_document_state
+from tests.document_file_helpers import read_document, write_payload_text
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -75,8 +75,8 @@ def test_composition_cli_embeds_relative_png_and_absolute_jpeg_exactly(
         },
     ]
     request = tmp_path / "figures.json"
-    request.write_text(json.dumps(composition), encoding="utf-8")
-    output = tmp_path / "figures.chemvas"
+    write_payload_text(request, json.dumps(composition), encoding="utf-8")
+    output = tmp_path / "figures.cdxml"
     before = {path: path.read_bytes() for path in (png, jpeg, request)}
 
     result = _run(request, output)
@@ -107,8 +107,8 @@ def test_bad_source_produces_clean_error_and_no_output(
     composition = _composition()
     composition["images"] = [{"source": source, "x": 0, "y": 0}]
     request = tmp_path / "composition.json"
-    request.write_text(json.dumps(composition), encoding="utf-8")
-    output = tmp_path / "result.chemvas"
+    write_payload_text(request, json.dumps(composition), encoding="utf-8")
+    output = tmp_path / "result.cdxml"
     result = _run(request, output)
     assert result.returncode == 2
     assert "chemvas: error:" in result.stderr
@@ -137,9 +137,9 @@ def test_third_image_decode_error_keeps_index_and_leaves_sources_unchanged(
         for index, source in enumerate(sources)
     ]
     request = tmp_path / "composition.json"
-    request.write_text(json.dumps(composition), encoding="utf-8")
+    write_payload_text(request, json.dumps(composition), encoding="utf-8")
     before = {path: path.read_bytes() for path in [request, *sources]}
-    output = tmp_path / "result.chemvas"
+    output = tmp_path / "result.cdxml"
 
     result = _run(request, output)
 

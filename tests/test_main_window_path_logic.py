@@ -19,13 +19,13 @@ class MainWindowPathLogicTest(unittest.TestCase):
     ) -> None:
         self.assertEqual(
             resolve_save_as_path("/tmp/example"),
-            str(Path("/tmp/example.chemvas")),
+            str(Path("/tmp/example.cdxml")),
         )
 
     def test_resolve_save_as_path_replaces_noncanonical_extension(self) -> None:
         self.assertEqual(
             resolve_save_as_path("/tmp/example.custom"),
-            str(Path("/tmp/example.chemvas")),
+            str(Path("/tmp/example.cdxml")),
         )
 
     def test_resolve_save_as_path_returns_none_when_save_dialog_is_cancelled(
@@ -35,9 +35,7 @@ class MainWindowPathLogicTest(unittest.TestCase):
         self.assertIsNone(resolve_save_as_path(None))
 
     def test_resolve_load_path_returns_selected_path(self) -> None:
-        self.assertEqual(
-            resolve_load_path("/tmp/drawing.chemvas"), "/tmp/drawing.chemvas"
-        )
+        self.assertEqual(resolve_load_path("/tmp/drawing.cdxml"), "/tmp/drawing.cdxml")
 
     def test_resolve_load_path_returns_none_when_load_dialog_is_cancelled(self) -> None:
         self.assertIsNone(resolve_load_path(""))

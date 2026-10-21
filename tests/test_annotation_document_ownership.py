@@ -14,7 +14,6 @@ from PyQt6 import sip
 from PyQt6.QtCore import QEvent, QPointF, QRectF, Qt
 from PyQt6.QtTest import QTest
 
-from chemvas.core.document_io import read_document
 from chemvas.ui.annotations.state import scene_item_state_for
 from chemvas.ui.canvas.canvas_group_state import register_group_for
 from chemvas.ui.canvas.canvas_lifecycle import schedule_canvas_deletion_for
@@ -24,6 +23,7 @@ from chemvas.ui.history.history_commands import AddSceneItemsCommand
 from chemvas.ui.history.history_operations import CanvasHistoryOperations
 from chemvas.ui.scene.image_actions import insert_image_bytes, update_image_properties
 from tests.canvas_factory import build_canvas_view
+from tests.document_file_helpers import read_document
 from tests.gui_workflow_support import app as app
 from tests.gui_workflow_support import drawing as drawing
 
@@ -201,7 +201,7 @@ def test_projection_loss_preserves_saved_annotations_and_later_group_indices(
     assert record_id in document.order
     assert record_id in document.records
     assert check_canvas_layout(canvas)["ok"] is True
-    destination = tmp_path / "projection-loss.chemvas"
+    destination = tmp_path / "projection-loss.cdxml"
     session.save_to_file(str(destination))
     assert read_document(destination).state[f"{kind}s"] == json.loads(
         json.dumps(before[f"{kind}s"])
@@ -490,7 +490,7 @@ def test_shape_tool_resize_delete_undo_and_reopen_in_a_shown_window(drawing, tmp
     assert len(session.snapshot_state()["shapes"]) == 1
     history.undo()
     assert session.snapshot_state() == resized
-    destination = tmp_path / "native-shapes.chemvas"
+    destination = tmp_path / "native-shapes.cdxml"
     session.save_to_file(str(destination))
     session.apply_state(read_document(destination).state)
     assert session.snapshot_state() == resized
@@ -526,7 +526,7 @@ def test_annotation_tools_delete_undo_and_reopen_in_a_shown_window(
     history.redo()
     assert len(session.snapshot_state()[f"{kind}s"]) == 1
     history.undo()
-    destination = tmp_path / f"native-{kind}s.chemvas"
+    destination = tmp_path / f"native-{kind}s.cdxml"
     session.save_to_file(str(destination))
     session.apply_state(read_document(destination).state)
     assert session.snapshot_state() == before

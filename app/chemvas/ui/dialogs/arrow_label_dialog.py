@@ -32,7 +32,7 @@ def _label_input(
     field.setTabChangesFocus(True)
     field.setPlainText(text)
     initial_text = field.toPlainText()
-    field.setFixedHeight(field.fontMetrics().lineSpacing() * 3 + 12)
+    field.setFixedHeight(field.fontMetrics().lineSpacing() * 3 + 20)
     layout.addWidget(field)
     counter = QLabel()
     counter.setObjectName(f"{name}Limit")

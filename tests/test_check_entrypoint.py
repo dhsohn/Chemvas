@@ -11,6 +11,8 @@ from pathlib import Path
 
 import pytest
 
+from tests.document_file_helpers import read_payload
+
 ROOT = Path(__file__).resolve().parents[1]
 _PROBE_TESTS = [
     "tests/test_root.py",
@@ -114,7 +116,7 @@ def _run_probe_gate(tmp_path, platform, failing=None, *, arguments=()):
         text=True,
         timeout=30,
     )
-    observed = [json.loads(path.read_text()) for path in output.glob("*.json")]
+    observed = [read_payload(path.read_text()) for path in output.glob("*.json")]
     return result, observed
 
 
@@ -144,7 +146,7 @@ def test_gate_routes_every_file_and_propagates_failures(tmp_path, platform, fail
     data_files = {entry["coverage"][6] for entry in observed}
     assert len(data_files) == 1
     assert all(entry["coverage"][:3] == ["-m", "coverage", "run"] for entry in observed)
-    report = json.loads((tmp_path / "coverage-report.json").read_text())
+    report = read_payload((tmp_path / "coverage-report.json").read_text())
     assert Path(report[0]) == Path(data_files.pop()).parent
     assert report[1:] == [
         f"Full test suite ({platform})",

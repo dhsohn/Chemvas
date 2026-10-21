@@ -322,7 +322,7 @@ class CdxmlLabelBinding:
     """Caller-supplied typed meaning for one drawn atom label.
 
     Bindings are passed to ``preflight_cdxml``/``serialize_cdxml`` by atom id.
-    They are not stored in or read from the ``.chemvas`` document, and the
+    They are not stored in or read from the ``.cdxml`` document, and the
     exporter never creates one by itself. Only these meanings exist:
 
     - ``element_identity(symbol)``: the label is that element. Accepted when

@@ -6,13 +6,15 @@ from pathlib import Path
 import pytest
 
 from chemvas.bootstrap import document_patch as patch_cli
-from chemvas.core.document_io import parse_document, read_document, write_document
+from chemvas.core.document_io import parse_document, read_snapshot, write_snapshot
 from chemvas.core.svg_roundtrip import extract_chemvas_document_from_svg
 from chemvas.domain.document import CANVAS_FILE_VERSION, build_document_payload
 from chemvas.domain.document.schema import DOCUMENT_SCHEMA_READERS
+from chemvas.features.document_files import read_document as read_cdxml
+from tests.document_file_helpers import encode_payload
 from tests.test_document_compatibility import _svg_bytes
 
-FIXTURE = Path(__file__).parent / "fixtures/document-v8/extended.chemvas"
+FIXTURE = Path(__file__).parent / "fixtures/document-v8/extended.json"
 
 
 def payload():
@@ -26,23 +28,23 @@ def payload():
 
 def test_v8_frozen_roundtrip_and_writer_table(tmp_path):
     original = payload()
-    document = read_document(FIXTURE)
+    document = read_snapshot(FIXTURE)
     assert document.payload == original
-    assert CANVAS_FILE_VERSION == 9
-    written = write_document(
+    assert CANVAS_FILE_VERSION == 10
+    written = write_snapshot(
         tmp_path / "saved.chemvas", document.state, CANVAS_FILE_VERSION
     )
     assert written.payload == {
         **original,
         "version": CANVAS_FILE_VERSION,
-        "min_reader": "0.23.0",
+        "min_reader": "0.26.0",
         "state": {**original["state"], "last_smiles_input": None},
     }
     assert (
         written.payload["min_reader"]
         == DOCUMENT_SCHEMA_READERS[CANVAS_FILE_VERSION, written.payload["schema"]]
     )
-    assert read_document(tmp_path / "saved.chemvas").state == {
+    assert read_snapshot(tmp_path / "saved.chemvas").state == {
         **original["state"],
         "last_smiles_input": None,
     }
@@ -99,12 +101,14 @@ def test_future_schema_and_unknown_version_errors():
 
 
 def test_v8_graph_patch_preserves_features_and_format(tmp_path, capsys):
-    assert patch_cli.run(["inspect-document", str(FIXTURE)]) == 0
+    source = tmp_path / "source.cdxml"
+    source.write_bytes(encode_payload(payload()))
+    assert patch_cli.run(["inspect-document", str(source)]) == 0
     report = json.loads(capsys.readouterr().out)
     assert report["document_format"] == {
-        "version": 8,
+        "version": CANVAS_FILE_VERSION,
         "schema": 1,
-        "min_reader": "0.18.0",
+        "min_reader": "0.26.0",
     }
     request = tmp_path / "patch.json"
     request.write_text(
@@ -119,16 +123,17 @@ def test_v8_graph_patch_preserves_features_and_format(tmp_path, capsys):
             }
         )
     )
-    output = tmp_path / "patched.chemvas"
+    output = tmp_path / "patched.cdxml"
     assert (
         patch_cli.run(
-            ["apply-patch", str(FIXTURE), str(request), "--output", str(output)]
+            ["apply-patch", str(source), str(request), "--output", str(output)]
         )
         == 0
     )
     capsys.readouterr()
-    candidate = read_document(output)
+    candidate = read_cdxml(output)
     expected = payload()
+    expected.update(version=CANVAS_FILE_VERSION, min_reader="0.26.0")
     expected["state"]["last_smiles_input"] = None
     expected["state"]["model"]["atoms"]["0"]["color"] = "#ff0000"
     assert candidate.payload == expected

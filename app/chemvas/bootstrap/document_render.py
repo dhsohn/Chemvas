@@ -17,7 +17,8 @@ from chemvas.bootstrap.document_cli_shared import (
     read_json_request,
     sha256_hex,
 )
-from chemvas.core.document_io import atomic_create_bytes, read_exact_document
+from chemvas.core.document_io import atomic_create_bytes
+from chemvas.features.document_files import read_exact_document
 from chemvas.features.export import (
     MAX_CDXML_CONSUMER_BYTES,
     CdxmlLabelBindings,
@@ -87,9 +88,9 @@ def _argument_parser() -> argparse.ArgumentParser:
     subparsers = parser.add_subparsers(dest="command", required=True)
     render_parser = subparsers.add_parser(
         "render-document",
-        help="render a .chemvas document to a new SVG, PDF, PNG, or CDXML file",
+        help="render a .cdxml document to a new SVG, PDF, PNG, or CDXML file",
     )
-    render_parser.add_argument("document", help="input .chemvas document")
+    render_parser.add_argument("document", help="input .cdxml document")
     render_parser.add_argument(
         "--output",
         required=True,
@@ -292,8 +293,8 @@ def _read_label_bindings(path: Path, source_sha256: str | None) -> CdxmlLabelBin
 
 
 def _validate_paths(source: Path, output: Path) -> str:
-    if source.suffix.lower() != ".chemvas":
-        raise ValueError("input must use the .chemvas filename extension")
+    if source.suffix.lower() != ".cdxml":
+        raise ValueError("input must use the .cdxml filename extension")
     if not source.is_file():
         raise ValueError(f"input document does not exist: {source}")
     output_format = output.suffix.lower().removeprefix(".")

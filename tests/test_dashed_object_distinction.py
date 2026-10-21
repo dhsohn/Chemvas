@@ -7,9 +7,7 @@ import xml.etree.ElementTree as ET
 import pytest
 
 from chemvas.bootstrap.document_cli_shared import offscreen_document_scene
-from chemvas.core.document_io import read_document, write_document
 from chemvas.domain.document import (
-    CANVAS_FILE_VERSION,
     Atom,
     Bond,
     MoleculeModel,
@@ -22,6 +20,7 @@ from chemvas.ui.export.export_cdxml import (
     serialize_cdxml,
 )
 from chemvas.ui.export.figure_export_service import FigureExportService
+from tests.document_file_helpers import read_document, write_document
 from tests.test_cdxml_export import _top_bonds, _top_nodes
 
 pytestmark = pytest.mark.usefixtures("qt_application")
@@ -85,9 +84,8 @@ def test_existing_dotted_direct_boundary(order, operation):
 
 
 def test_existing_dotted_native_v9_and_two_xml_objects(tmp_path):
-    assert CANVAS_FILE_VERSION == 9
-    native = tmp_path / "unchanged-generation.chemvas"
-    write_document(native, state(), CANVAS_FILE_VERSION)
+    native = tmp_path / "unchanged-generation.cdxml"
+    write_document(native, state(), 9)
     assert read_document(native).state["model"]["bonds"][0]["style"] == "dotted"
     with offscreen_document_scene(
         state(), command="existing-dotted-service"

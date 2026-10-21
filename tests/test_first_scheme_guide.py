@@ -8,7 +8,6 @@ keys, pointer drags, and the atom and bond hotkeys. It does not inject atoms.
 
 from __future__ import annotations
 
-import json
 import math
 import re
 from collections import Counter
@@ -19,6 +18,7 @@ from PyQt6.QtGui import QKeySequence
 from PyQt6.QtTest import QTest
 from PyQt6.QtWidgets import QInputDialog
 
+from tests.document_file_helpers import read_payload
 from tests.native_canvas_support import app as app
 from tests.native_canvas_support import canvas as canvas
 
@@ -29,7 +29,7 @@ _GUIDES = (
     ROOT / "README.md",
     ROOT / "README.ko.md",
 )
-_EXAMPLE = ROOT / "examples" / "first-scheme.chemvas"
+_EXAMPLE = ROOT / "examples" / "first-scheme.cdxml"
 
 
 def _collapse(text: str) -> str:
@@ -131,7 +131,7 @@ def _signature(
 
 
 def _example_signatures() -> frozenset[tuple[int, int, str, str, int, int]]:
-    document = json.loads(_EXAMPLE.read_text(encoding="utf-8"))
+    document = read_payload(_EXAMPLE.read_text(encoding="utf-8"))
     model = document["state"]["model"]
     elements = {
         int(atom_id): atom["element"] for atom_id, atom in model["atoms"].items()

@@ -1,0 +1,20 @@
+<?xml version='1.0' encoding='utf-8'?>
+<CDXML BondLength="18" BoldWidth="2.97" LineWidth="1.35" HashSpacing="2.7" BondSpacing="22" InterpretChemically="yes" FractionalWidths="yes" CreationProgram="Chemvas" bgcolor="2">
+  <colortable>
+    <color r="1" g="1" b="1" />
+    <color r="0" g="0" b="0" />
+  </colortable>
+  <fonttable>
+    <font id="0" charset="utf-8" name="Arial" />
+  </fonttable>
+  <page id="6" Width="595" Height="842" BoundingBox="0 0 595 842" bgcolor="2">
+    <fragment id="1">
+      <n id="2" p="369.5 493" Z="2" />
+      <n id="3" p="387.5 493" Element="8" Z="3">
+        <t id="4" p="381.671875 498.9140625" Justification="Left" LabelJustification="Left" InterpretChemically="yes" CaptionLineHeight="1" Z="4"><s font="0" size="15" color="3">O</s></t>
+      </n>
+      <b id="5" B="2" E="3" Z="1" />
+    </fragment>
+  </page>
+</CDXML>
+<!-- ChemvasDocument:c8d29e0ec340cb6e483b4fd53279f597f08d674ca7cdb4dd8e0680c4558925d8:eyJ0eXBlIjogImNoZW12YXMiLCAidmVyc2lvbiI6IDEwLCAic3RhdGUiOiB7Im1vZGVsIjogeyJhdG9tcyI6IHsiMCI6IHsiZWxlbWVudCI6ICJDIiwgIngiOiA3Mi4wLCAieSI6IDcyLjAsICJjb2xvciI6ICIjMDAwMDAwIiwgImV4cGxpY2l0X2xhYmVsIjogZmFsc2V9LCAiMSI6IHsiZWxlbWVudCI6ICJPIiwgIngiOiA5MC4wLCAieSI6IDcyLjAsICJjb2xvciI6ICIjMDAwMDAwIiwgImV4cGxpY2l0X2xhYmVsIjogZmFsc2V9fSwgImJvbmRzIjogW3siYSI6IDAsICJiIjogMSwgIm9yZGVyIjogMSwgInN0eWxlIjogInNpbmdsZSIsICJjb2xvciI6ICIjMDAwMDAwIn1dLCAibmV4dF9hdG9tX2lkIjogMn0sICJyaW5nX2ZpbGxzIjogW10sICJub3RlcyI6IFtdLCAibWFya3MiOiBbXSwgImFycm93cyI6IFtdLCAidHNfYnJhY2tldHMiOiBbXSwgInNoYXBlcyI6IFtdLCAib3JiaXRhbHMiOiBbXSwgInNldHRpbmdzIjogeyJib25kX2xlbmd0aF9weCI6IDE4LjAsICJhcnJvd19saW5lX3dpZHRoIjogMS41LCAiYXJyb3dfaGVhZF9zY2FsZSI6IDAuNCwgIm9yYml0YWxfcGhhc2VfZW5hYmxlZCI6IHRydWUsICJ0ZXh0X2ZvbnRfZmFtaWx5IjogIkFyaWFsIiwgInRleHRfZm9udF9zaXplIjogMTMsICJ0ZXh0X2ZvbnRfd2VpZ2h0IjogNjAwLCAidGV4dF9pdGFsaWMiOiBmYWxzZSwgInRleHRfY29sb3IiOiAiIzIyMjIyMiIsICJ0ZXh0X2FsaWdubWVudCI6ICJsZWZ0IiwgInRleHRfbGluZV9zcGFjaW5nIjogMS4wLCAibm90ZV9ib3hfZW5hYmxlZCI6IGZhbHNlLCAibm90ZV9ib3hfY29sb3IiOiAiI2ZmZmZmZiIsICJub3RlX2JveF9hbHBoYSI6IDEuMCwgIm5vdGVfYm9yZGVyX2VuYWJsZWQiOiBmYWxzZSwgIm5vdGVfYm9yZGVyX2NvbG9yIjogIiMzMzMzMzMiLCAibm90ZV9ib3JkZXJfd2lkdGgiOiAxLjAsICJub3RlX3BhZGRpbmciOiA2LjAsICJzaGVldF9zaXplIjogIkE0IiwgInNoZWV0X29yaWVudGF0aW9uIjogInBvcnRyYWl0In0sICJsYXN0X3NtaWxlc19pbnB1dCI6IG51bGx9LCAic2NoZW1hIjogMSwgIm1pbl9yZWFkZXIiOiAiMC4yNi4wIn0= -->

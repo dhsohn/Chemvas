@@ -6,10 +6,10 @@ from PyQt6.QtGui import QAction, QTextOption
 from PyQt6.QtTest import QTest
 from PyQt6.QtWidgets import QDialog, QDialogButtonBox, QMessageBox
 
-from chemvas.core.document_io import read_document
 from chemvas.ui.canvas.canvas_text_style_state import set_text_style_for
 from chemvas.ui.dialogs.note_appearance_dialog import NoteAppearanceDialog
 from tests.canvas_factory import build_canvas_view
+from tests.document_file_helpers import read_document
 from tests.gui_workflow_support import app as app
 from tests.gui_workflow_support import fresh_window as fresh_window
 from tests.gui_workflow_support import populate, start_drag
@@ -250,7 +250,7 @@ def test_existing_preset_updates_all_notes_with_one_exact_undo(
     assert canvas.services.canvas_document_session_service.snapshot_state() == before
     history.redo()
     assert canvas.services.canvas_document_session_service.snapshot_state() == after
-    path = tmp_path / "notes.chemvas"
+    path = tmp_path / "notes.cdxml"
     session = canvas.services.canvas_document_session_service
     assert session.save_to_file(str(path)) == []
     session.apply_state(read_document(path).state)

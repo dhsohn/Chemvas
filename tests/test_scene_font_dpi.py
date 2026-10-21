@@ -8,6 +8,8 @@ from pathlib import Path
 
 import pytest
 
+from tests.document_file_helpers import write_payload_text
+
 
 def test_scene_fonts_and_glyph_paths_do_not_depend_on_screen_logical_dpi():
     code = """
@@ -87,8 +89,10 @@ def test_public_render_bytes_and_readability_are_dpi_independent(
             ],
         }
     )
-    source = tmp_path / "source.chemvas"
-    source.write_text(json.dumps(build_document_payload(state, 7)), encoding="utf-8")
+    source = tmp_path / "source.cdxml"
+    write_payload_text(
+        source, json.dumps(build_document_payload(state, 7)), encoding="utf-8"
+    )
     results = []
     for dpi in (72, 96, 144):
         output = tmp_path / f"dpi-{dpi}.{output_format}"

@@ -4,9 +4,9 @@ from PyQt6.QtCore import QPointF, Qt
 from PyQt6.QtGui import QKeySequence, QTextCharFormat, QTextCursor
 from PyQt6.QtTest import QTest
 
-from chemvas.core.document_io import read_document, write_document
 from chemvas.domain.document import CANVAS_FILE_VERSION
 from chemvas.features.document_composition import compose_document_state
+from tests.document_file_helpers import read_document, write_document
 from tests.document_patch_workflow_support import run_patch
 from tests.gui_workflow_support import _click, _key, _redo, _tool
 from tests.gui_workflow_support import app as app
@@ -48,7 +48,7 @@ def test_patch_notes_support_native_edit_undo_redo_save_reopen(
         }
     )
     state["groups"] = [{"atoms": [0], "items": [["notes", 0]]}]
-    source = tmp_path / "source.chemvas"
+    source = tmp_path / "source.cdxml"
     write_document(source, state, CANVAS_FILE_VERSION)
     source_bytes = source.read_bytes()
     result, output = run_patch(
@@ -114,7 +114,7 @@ def test_patch_notes_support_native_edit_undo_redo_save_reopen(
     _redo(canvas)
     assert documents.snapshot_state() == committed
     assert _formats(canvas.runtime_state.note_items()[0]) == formats
-    saved = tmp_path / "gui-saved.chemvas"
+    saved = tmp_path / "gui-saved.cdxml"
     assert actions.save_canvas_to_path(window, str(saved))
     assert not window.isWindowModified()
     assert read_document(saved).state["notes"] == committed["notes"]

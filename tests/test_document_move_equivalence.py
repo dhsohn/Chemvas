@@ -10,7 +10,6 @@ import pytest
 from PyQt6.QtCore import QPoint, QPointF, Qt
 from PyQt6.QtTest import QTest
 
-from chemvas.core.document_io import read_document, write_document
 from chemvas.domain.document import CANVAS_FILE_VERSION
 from chemvas.domain.document.inspection import inspect_components
 from chemvas.domain.document.perspective import project_point_3d, unproject_point_3d
@@ -18,6 +17,7 @@ from chemvas.features.document_composition import compose_document_state
 from chemvas.ui.canvas.canvas_atom_graphics_state import visible_atom_item_for
 from chemvas.ui.selection.selection_queries import selected_atom_ids_for_transform_for
 from tests.canvas_factory import build_canvas_view
+from tests.document_file_helpers import read_document, write_document
 from tests.document_patch_workflow_support import run_patch
 from tests.gui_workflow_support import app as app
 from tests.gui_workflow_support import drawing as drawing
@@ -284,7 +284,7 @@ def test_pointer_move_matches_public_cli_and_exact_history(
     canvas, documents, moving, start = _prepare(drawing, app, tool_name, scope, depth)
     before = documents.snapshot_state()
     normalized_before = _normalized(before)
-    source = tmp_path / "source.chemvas"
+    source = tmp_path / "source.cdxml"
     write_document(source, before, CANVAS_FILE_VERSION)
     source_bytes = source.read_bytes()
     assert read_document(source).state == normalized_before
@@ -398,7 +398,7 @@ def test_pointer_move_matches_public_cli_and_exact_history(
             canvas.runtime_state.group_state.groups[key] is group
             for key, group in groups.items()
         )
-    saved = tmp_path / "gui-saved.chemvas"
+    saved = tmp_path / "gui-saved.cdxml"
     assert documents.save_to_file(str(saved)) == []
     _assert_complete_state(read_document(saved).state, _normalized(after))
     for path in (output, saved):
@@ -478,7 +478,7 @@ def test_move_after_document_replacement_is_confined_to_its_canvas(
         assert not other.services.history_service.can_undo()
         assert not canvas.runtime_state.atom_coords_3d_state.atom_coords_3d
 
-        saved = tmp_path / "replacement-moved.chemvas"
+        saved = tmp_path / "replacement-moved.cdxml"
         assert documents.save_to_file(str(saved)) == []
         assert read_document(saved).state == _normalized(after)
         assert not qt_errors
@@ -500,7 +500,7 @@ def test_uncommitted_gui_move_keeps_history_while_cli_noop_is_rejected(
     graphics = _live_graphics(canvas)
     history = canvas.services.history_service
     stacks = history.capture_stack_snapshot()
-    source = tmp_path / "source.chemvas"
+    source = tmp_path / "source.cdxml"
     write_document(source, before, CANVAS_FILE_VERSION)
     end = start + QPoint(36, -24) if finish == "cancel" else start
     QTest.mousePress(canvas.viewport(), Qt.MouseButton.LeftButton, pos=start)

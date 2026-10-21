@@ -103,7 +103,7 @@ def test_repair_repaints_old_warning_and_tracks_history_and_reopen(
         0, "N", allow_merge=False
     )
     actions = window.services.document_action_service
-    invalid_path = tmp_path / "invalid.chemvas"
+    invalid_path = tmp_path / "invalid.cdxml"
     assert actions.save_canvas_to_path(window, str(invalid_path))
     invalid_bytes = invalid_path.read_bytes()
     canvas.centerOn(0, 0)
@@ -138,7 +138,7 @@ def test_repair_repaints_old_warning_and_tracks_history_and_reopen(
     history.redo()
     _drain()
     assert snapshot_canvas_document_state(canvas) == repaired
-    repaired_path = tmp_path / "repaired.chemvas"
+    repaired_path = tmp_path / "repaired.cdxml"
     assert actions.save_canvas_to_path(window, str(repaired_path))
     repaired_bytes = repaired_path.read_bytes()
     for path, expected in ((invalid_path, {0}), (repaired_path, set())):

@@ -1088,14 +1088,16 @@ class CanvasDocumentSessionServiceTest(unittest.TestCase):
                 return_value=({"state": 1}, ["adjusted"]),
             ) as snapshot_state,
             mock.patch(
-                "chemvas.ui.canvas.canvas_document_session_service.write_document",
-                return_value=SimpleNamespace(source_sha256="a" * 64),
+                "chemvas.ui.export.cdxml_document_writer.save_cdxml_document",
+                return_value="a" * 64,
             ) as write_document,
         ):
-            warnings = service.save_to_file("/tmp/example.chemvas")
+            warnings = service.save_to_file("/tmp/example.cdxml")
 
         snapshot_state.assert_called_once_with()
-        write_document.assert_called_once_with("/tmp/example.chemvas", {"state": 1}, 7)
+        write_document.assert_called_once_with(
+            canvas, "/tmp/example.cdxml", {"state": 1}
+        )
         self.assertEqual(warnings, ["adjusted"])
         self.assertEqual(
             canvas.runtime_state.document_metadata_state.source_sha256, "a" * 64
@@ -1112,9 +1114,9 @@ class CanvasDocumentSessionServiceTest(unittest.TestCase):
         with (
             mock.patch.object(service, "snapshot_state_with_warnings") as snapshot,
             mock.patch(
-                "chemvas.ui.canvas.canvas_document_session_service.write_document"
+                "chemvas.ui.export.cdxml_document_writer.save_cdxml_document"
             ) as write_document,
-            self.assertRaisesRegex(ValueError, r"\.chemvas filename extension"),
+            self.assertRaisesRegex(ValueError, r"\.cdxml filename extension"),
         ):
             service.save_to_file("/tmp/example.json")
 

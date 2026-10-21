@@ -85,7 +85,7 @@ def _saved_note(drawing, tmp_path):
     _tool(window, "select")
     _click(canvas, QPointF(160, 100))
     actions = window.services.document_action_service
-    assert actions.save_canvas_to_path(window, str(tmp_path / "note.chemvas"))
+    assert actions.save_canvas_to_path(window, str(tmp_path / "note.cdxml"))
     assert not window.isWindowModified()
     _tool(window, "note")
     _click(canvas, note.sceneBoundingRect().center())

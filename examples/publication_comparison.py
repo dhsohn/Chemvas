@@ -135,7 +135,7 @@ def build(directory: Path) -> dict:
             "arrow_color": "#000000",
         },
     )
-    final = directory / "comparison.chemvas"
+    final = directory / "comparison.cdxml"
     layout = command("layout-document", source, "--layout", request, "--output", final)
     write_json(directory / "comparison-layout-report.json", layout)
     write_json(directory / "comparison-graph.json", command("inspect-document", final))

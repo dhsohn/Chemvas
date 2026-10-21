@@ -75,10 +75,10 @@ def _argument_parser() -> argparse.ArgumentParser:
     subparsers = parser.add_subparsers(dest="command", required=True)
     compose = subparsers.add_parser(
         "compose-document",
-        help="create a new canonical .chemvas document",
+        help="create a new canonical .cdxml document",
     )
     compose.add_argument("composition", help="input composition v1 or v2 JSON file")
-    compose.add_argument("--output", required=True, help="new .chemvas output path")
+    compose.add_argument("--output", required=True, help="new .cdxml output path")
     return parser
 
 
@@ -118,8 +118,8 @@ def _validate_request(path: Path) -> None:
 
 
 def _validate_output(path: Path) -> None:
-    if path.suffix.lower() != ".chemvas":
-        raise ValueError("output must use the .chemvas filename extension")
+    if path.suffix.lower() != ".cdxml":
+        raise ValueError("output must use the .cdxml filename extension")
     if path.exists() or path.is_symlink():
         raise ValueError(f"output path already exists: {path}")
     if not path.parent.is_dir():

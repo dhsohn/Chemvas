@@ -62,7 +62,7 @@ only if document replacement edited through an editor, and it does not.
   rule (structure, atom label, delete, note formatting, shape, bond length,
   sheet setup, image) refuses, restores the document, publishes nothing and
   succeeds once history is enabled; that replacing a document with every
-  annotation family (`tests/fixtures/document-v8/extended.chemvas`) pushes
+  annotation family (`tests/fixtures/document-v8/extended.json`) pushes
   nothing; and that an edit made during replacement restores the previous
   document.
 - Tests that simulated a declined push by returning False from `push` now

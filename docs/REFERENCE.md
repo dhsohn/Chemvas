@@ -91,17 +91,16 @@ chemvas --version     # package version without starting Qt
   - **Eraser**: Click or drag over elements to delete. Deleting all bonds connected to an unlabeled carbon cleanly removes the residual atom.
   - **Alignment**: Align structures (left, center, right, top, middle, bottom) and distribute them evenly via the **Edit** menu.
 
-## The `.chemvas` file format
+## The `.cdxml` file format
 
-Chemvas saves documents as human-readable JSON files storing molecular models, annotations, arrows, and view settings:
+Chemvas saves working documents as CDXML. Supported structures and graphics use
+native CDXML objects; a verified snapshot preserves full Chemvas editing state.
+Drawing styles without a native mapping also carry a PNG visual projection.
 
-```json
-{ "type": "chemvas", "version": 9, "schema": 1, "min_reader": "0.23.0", "state": { /* ... */ } }
-```
-
-- **Current Version**: Version 9, schema 1 (Chemvas 0.23.0+).
-- **Backward Compatibility**: Fully opens valid version 7 files. See [document compatibility policy](DOCUMENT_COMPATIBILITY.md).
-- **Safety**: Unsaved changes are never overwritten without confirmation.
+Existing `.chemvas` files are unsupported. Internal JSON schema versions belong
+to undo, clipboard, recovery and embedded editing state, not a separate working
+file format. See [document compatibility](DOCUMENT_COMPATIBILITY.md) for the
+limits of editing the same file in another application.
 
 ## Autosave & recovery
 
@@ -118,7 +117,7 @@ Export publication-grade figures in plain SVG, PDF, PNG, or TIFF formats:
 
 - **Vector Outlines**: Atom and arrow labels are rendered as vector glyph outlines in SVG and PDF, ensuring perfect typography across all platforms without requiring local font installations.
 - **Physical Column Presets**: Match standard publication column widths (e.g., 84 mm for 1-column, 174 mm for 2-column) at explicit target DPIs (up to 600 DPI).
-- **Editable Chemvas SVG**: Check **Editable Chemvas SVG** to embed full `.chemvas` document data inside the SVG file, allowing the figure to be reopened and edited in Chemvas anytime.
+- **Editable Chemvas SVG**: Check **Editable Chemvas SVG** to embed full Chemvas editing state inside the SVG file, allowing the figure to be reopened and edited in Chemvas anytime.
 - **Lossless TIFF**: Exports with lossless LZW compression and full transparency support.
 
 ## Chemistry I/O
@@ -182,6 +181,6 @@ Keybindings align with ChemDraw conventions where applicable.
 
 Use **File → Canvas Size…** to select A0–A5, Letter, Legal or Tabloid and
 landscape/portrait orientation. Select **Custom** to enter the actual width and
-height in millimetres (10–2000 mm per side). Orientation is disabled for Custom;
+height in millimetres (10–3000 mm per side). Orientation is disabled for Custom;
 exchange width and height to rotate the paper. Resizing keeps all drawing objects
 in place and supports Undo/Redo. Each document saves its own paper size.

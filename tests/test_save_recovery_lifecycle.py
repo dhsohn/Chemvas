@@ -24,13 +24,13 @@ from PyQt6.QtCore import QEvent, QPointF
 from PyQt6.QtWidgets import QApplication, QMessageBox
 
 from chemvas.bootstrap.main_window import build_main_window
-from chemvas.core.document_io import read_document
 from chemvas.ui.molecule.structure_mutation_access import add_bond_between_points_for
 from chemvas.ui.session.open_document_lookup import (
     paths_refer_to_same_document,
     resolved_document_path,
 )
 from chemvas.ui.window.main_window_ports import active_canvas_for_window
+from tests.document_file_helpers import read_document
 
 
 class SaveRecoveryLifecycleTest(unittest.TestCase):
@@ -61,7 +61,7 @@ class SaveRecoveryLifecycleTest(unittest.TestCase):
         canvas = active_canvas_for_window(self.window)
 
         with tempfile.TemporaryDirectory() as temp_dir:
-            path = Path(temp_dir) / "drawing.chemvas"
+            path = Path(temp_dir) / "drawing.cdxml"
 
             # --- Step 1: initial save establishes the baseline ---
             add_bond_between_points_for(canvas, QPointF(-20, 0), QPointF(20, 0))
@@ -118,7 +118,7 @@ class SaveRecoveryLifecycleTest(unittest.TestCase):
             # display name is unchanged
             self.assertEqual(
                 canvas.runtime_state.document_metadata_state.display_name,
-                "drawing.chemvas",
+                "drawing.cdxml",
             )
 
             # --- Step 4: successful retry saves the edited state ---
@@ -165,7 +165,7 @@ class SaveRecoveryLifecycleTest(unittest.TestCase):
         self.assertTrue(self.documents.is_dirty(canvas))
 
         with tempfile.TemporaryDirectory() as temp_dir:
-            path = Path(temp_dir) / "recovered.chemvas"
+            path = Path(temp_dir) / "recovered.cdxml"
 
             # Save-As to a new path.
             self.assertTrue(self.service.save_canvas_to_path(self.window, str(path)))
@@ -186,12 +186,12 @@ class SaveRecoveryLifecycleTest(unittest.TestCase):
             # display name updated (no "recovered copy")
             self.assertEqual(
                 canvas.runtime_state.document_metadata_state.display_name,
-                "recovered.chemvas",
+                "recovered.cdxml",
             )
             # tab title updated
             self.assertEqual(
                 self.window.tab_references.canvas_tabs.tabText(0),
-                "recovered.chemvas",
+                "recovered.cdxml",
             )
 
             # A subsequent Save uses the new path, not Save-As.
@@ -222,7 +222,7 @@ class SaveRecoveryLifecycleTest(unittest.TestCase):
         the external-change guard on case-insensitive volumes.
 
         On macOS APFS (case-insensitive), ``resolved_document_path`` preserves
-        the caller-supplied case, so ``drawing.chemvas`` and ``DRAWING.chemvas``
+        the caller-supplied case, so ``drawing.cdxml`` and ``DRAWING.cdxml``
         resolve to different strings even though ``os.path.samefile`` confirms
         they share an inode.  ``save_canvas_to_path`` delegates to
         ``paths_refer_to_same_document`` to detect this identity and run the
@@ -231,8 +231,8 @@ class SaveRecoveryLifecycleTest(unittest.TestCase):
         canvas = active_canvas_for_window(self.window)
 
         with tempfile.TemporaryDirectory() as temp_dir:
-            original = Path(temp_dir) / "drawing.chemvas"
-            alias = Path(temp_dir) / "DRAWING.chemvas"
+            original = Path(temp_dir) / "drawing.cdxml"
+            alias = Path(temp_dir) / "DRAWING.cdxml"
 
             # Probe: does this volume treat the two names as the same file?
             original.write_bytes(b"probe")
@@ -319,8 +319,8 @@ class SaveRecoveryLifecycleTest(unittest.TestCase):
         delegates to this helper for the external-change guard.
         """
         with tempfile.TemporaryDirectory() as temp_dir:
-            target = Path(temp_dir) / "sample.chemvas"
-            alias = Path(temp_dir) / "SAMPLE.chemvas"
+            target = Path(temp_dir) / "sample.cdxml"
+            alias = Path(temp_dir) / "SAMPLE.cdxml"
 
             target.write_bytes(b"probe")
             try:

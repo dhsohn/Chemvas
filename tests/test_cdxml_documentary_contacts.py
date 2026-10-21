@@ -20,7 +20,6 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from chemvas.core.document_io import write_document
 from chemvas.domain.document import (
     CANVAS_FILE_VERSION,
     Atom,
@@ -39,6 +38,7 @@ from chemvas.features.export.cdxml_label_bindings import (
     authorize_documentary_contact_for_export,
     parse_cdxml_label_bindings,
 )
+from tests.document_file_helpers import write_document
 
 if TYPE_CHECKING:
     from chemvas.features.export.plan import ExportPlan
@@ -126,7 +126,7 @@ def _state_from_model(model: MoleculeModel) -> dict[str, object]:
 
 def _document_digest(state: dict[str, object]) -> tuple[bytes, str]:
     with tempfile.TemporaryDirectory() as tmp:
-        path = Path(tmp) / "fixture.chemvas"
+        path = Path(tmp) / "fixture.cdxml"
         write_document(path, state, CANVAS_FILE_VERSION)
         data = path.read_bytes()
     return data, hashlib.sha256(data).hexdigest()

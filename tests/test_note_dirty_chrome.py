@@ -46,7 +46,7 @@ def test_saving_during_edit_resets_the_baseline_for_native_undo(drawing, tmp_pat
     note = _saved_note(drawing, tmp_path)
     QTest.keyClicks(canvas, " saved")
     actions = window.services.document_action_service
-    assert actions.save_canvas_to_path(window, str(tmp_path / "active.chemvas"))
+    assert actions.save_canvas_to_path(window, str(tmp_path / "active.cdxml"))
     assert not window.isWindowModified()
     assert note.hasFocus()
     _key(canvas, Qt.Key.Key_Z, Qt.KeyboardModifier.ControlModifier)
@@ -109,7 +109,7 @@ def test_failed_save_keeps_the_previous_note_baseline(drawing, tmp_path, monkeyp
     message_box = Mock()
     actions = window.services.document_action_service
     assert not actions.save_canvas_to_path(
-        window, str(tmp_path / "failed.chemvas"), message_box=message_box
+        window, str(tmp_path / "failed.cdxml"), message_box=message_box
     )
     message_box.warning.assert_called_once()
     assert window.isWindowModified()

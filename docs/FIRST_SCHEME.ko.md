@@ -2,13 +2,13 @@
 
 [English](FIRST_SCHEME.md) · [소개로 돌아가기](../README.ko.md)
 
-작은 반응식을 그리고, 편집 가능한 `.chemvas` 문서를 저장한 뒤 논문용 벡터 그림으로 내보내는 튜토리얼입니다. 벤질 알코올의 산화 반응식을 예제로 진행합니다.
+작은 반응식을 그리고, 편집 가능한 `.cdxml` 문서를 저장한 뒤 논문용 벡터 그림으로 내보내는 튜토리얼입니다. 벤질 알코올의 산화 반응식을 예제로 진행합니다.
 
 ![Chemvas에서 출력한 완성 반응식](../examples/first-scheme.png)
 
 ## 완성된 예제 바로 열어보기
 
-완성된 예제 파일인 [first-scheme.chemvas](https://raw.githubusercontent.com/dhsohn/Chemvas/main/examples/first-scheme.chemvas)를 내려받아 **File ▸ Open**으로 바로 열어볼 수 있습니다.
+완성된 예제 파일인 [first-scheme.cdxml](https://raw.githubusercontent.com/dhsohn/Chemvas/main/examples/first-scheme.cdxml)를 내려받아 **File ▸ Open**으로 바로 열어볼 수 있습니다.
 
 완성된 그림의 열람, 편집, 그림 출력은 기본 설치만으로 가능합니다:
 
@@ -43,7 +43,7 @@ chemvas
 
 1. **Edit ▸ Select All** (`Ctrl+A`)로 모든 구조와 화살표를 선택합니다.
 2. **Edit ▸ Align ▸ Middle**을 눌러 세로 중앙을 정렬합니다.
-3. **File ▸ Save As…**를 선택하고 `first-scheme.chemvas`로 저장합니다.
+3. **File ▸ Save As…**를 선택하고 `first-scheme.cdxml`로 저장합니다.
 
 ## 4. 그림 출력하기
 
@@ -57,18 +57,18 @@ chemvas
 | Background | White | 흰색 불투명 배경 |
 | Editable Chemvas SVG | 체크 해제 | 표준 벡터 그래픽 출력 |
 
-`first-scheme.svg`로 저장합니다. 라벨 텍스트는 글꼴 깨짐이 없도록 벡터 아웃라인으로 변환됩니다. 나중에 다시 편집할 수 있도록 `.chemvas` 원본 파일을 보관하세요.
+`first-scheme.svg`로 저장합니다. 라벨 텍스트는 글꼴 깨짐이 없도록 벡터 아웃라인으로 변환됩니다. 나중에 다시 편집할 수 있도록 `.cdxml` 원본 파일을 보관하세요.
 
 동일한 설정으로 미리 출력된 [SVG](https://raw.githubusercontent.com/dhsohn/Chemvas/main/examples/first-scheme.svg) 및 [300 DPI PNG](https://raw.githubusercontent.com/dhsohn/Chemvas/main/examples/first-scheme.png) 파일도 확인할 수 있습니다.
 
 ## 명령줄(CLI)로 다루기
 
-터미널에서 직접 `.chemvas` 파일을 검사하고 렌더링할 수도 있습니다:
+터미널에서 직접 `.cdxml` 파일을 검사하고 렌더링할 수도 있습니다:
 
 ```bash
-chemvas inspect-document first-scheme.chemvas
-chemvas check-layout first-scheme.chemvas
-chemvas render-document first-scheme.chemvas --output first-scheme-rendered.svg
+chemvas inspect-document first-scheme.cdxml
+chemvas check-layout first-scheme.cdxml
+chemvas render-document first-scheme.cdxml --output first-scheme-rendered.svg
 ```
 
 - `inspect-document`: 원자, 결합, 라벨 및 메타데이터를 JSON으로 요약합니다.

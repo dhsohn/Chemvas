@@ -10,13 +10,17 @@ from unittest.mock import Mock
 import pytest
 
 from chemvas.bootstrap.main_window import build_main_window
-from chemvas.core.document_io import read_document, write_document
 from chemvas.domain.document import (
     CANVAS_FILE_VERSION,
 )
 from chemvas.ui.window import main_window_document_action_service as actions
 from chemvas.ui.window.main_window_document_dialogs import FigureExportOptions
 from chemvas.ui.window.main_window_ports import active_canvas_for_window
+from tests.document_file_helpers import (
+    read_document,
+    write_document,
+    write_payload_text,
+)
 from tests.test_cdxml_documentary_contacts import (
     _contact_entry,
     _fph_bindings,
@@ -48,7 +52,7 @@ def saved_contacts(tmp_path):
         dict(text="included", x=0, y=80),
         dict(text="outside", x=400, y=80),
     ]
-    source = tmp_path / "source.chemvas"
+    source = tmp_path / "source.cdxml"
     write_document(source, state, CANVAS_FILE_VERSION)
     service = actions.MainWindowDocumentActionService()
     window = build_main_window()
@@ -66,7 +70,7 @@ def saved_contacts(tmp_path):
         bindings=_fph_bindings(ar, h),
         documentary_contacts=[_contact_entry(0, p, ar), _contact_entry(1, h, ar)],
     )
-    sidecar.write_text(json.dumps(payload))
+    write_payload_text(sidecar, json.dumps(payload))
     windows = [window]
     yield dict(
         window=window,
@@ -188,7 +192,7 @@ def test_reviewed_contacts_keep_exact_endpoint_order_style_guards(
             f["window"], str(f["source"]), message_box=Mock()
         )
         payload["source_sha256"] = hashlib.sha256(f["source"].read_bytes()).hexdigest()
-    f["sidecar"].write_text(json.dumps(payload))
+    write_payload_text(f["sidecar"], json.dumps(payload))
     output = tmp_path / "refused.cdxml"
     output.write_bytes(b"existing destination")
     messages = _export(f, monkeypatch, output)
@@ -269,7 +273,7 @@ def test_saved_groups_keep_scope_aware_refusal(
     )
     source_bytes = f["source"].read_bytes()
     f["payload"]["source_sha256"] = hashlib.sha256(source_bytes).hexdigest()
-    f["sidecar"].write_text(json.dumps(f["payload"]))
+    write_payload_text(f["sidecar"], json.dumps(f["payload"]))
     results = []
     for stage in ("immediate", "reopened"):
         _select_contacts(f)

@@ -6,7 +6,7 @@ import json
 from PyQt6.QtCore import QPoint, QPointF, Qt
 from PyQt6.QtTest import QTest
 
-from chemvas.core.document_io import read_document
+from tests.document_file_helpers import read_document, write_payload_text
 from tests.native_canvas_support import app as app
 from tests.native_canvas_support import canvas as canvas
 from tests.test_document_patch_alias_repair import _cli, _operation, _patch, _state
@@ -30,17 +30,18 @@ def test_gui_save_agent_repair_reopen_and_user_edit(canvas, app, tmp_path):
     app.processEvents()
     assert canvas.model.atoms[1].element == alias
 
-    source = tmp_path / "drawing.chemvas"
+    source = tmp_path / "drawing.cdxml"
     documents.save_to_file(str(source))
     original = source.read_bytes()
     refused = _cli("inspect-document", source)
     assert refused.returncode == 2
     assert "exactly one single attachment" in refused.stderr
     patch = tmp_path / "repair.json"
-    patch.write_text(
-        json.dumps(_patch(hashlib.sha256(original).hexdigest(), _operation(alias)))
+    write_payload_text(
+        patch,
+        json.dumps(_patch(hashlib.sha256(original).hexdigest(), _operation(alias))),
     )
-    output = tmp_path / "repaired.chemvas"
+    output = tmp_path / "repaired.cdxml"
     dry = _cli("apply-patch", source, patch, "--dry-run")
     assert dry.returncode == 0, dry.stderr
     repaired = _cli("apply-patch", source, patch, "--output", output)
@@ -67,7 +68,7 @@ def test_gui_save_agent_repair_reopen_and_user_edit(canvas, app, tmp_path):
     assert canvas.services.canvas_document_session_service.snapshot_state() == before
     canvas.services.history_service.redo()
     assert canvas.services.canvas_document_session_service.snapshot_state() == after
-    documents.save_to_file(str(tmp_path / "user-corrected.chemvas"))
+    documents.save_to_file(str(tmp_path / "user-corrected.cdxml"))
     assert source.read_bytes() == original
 
 
@@ -103,7 +104,7 @@ def test_pointer_rotations_keep_both_components_in_saved_document(
     assert canvas.services.canvas_document_session_service.snapshot_state() == before
     canvas.services.history_service.redo()
     assert canvas.services.canvas_document_session_service.snapshot_state() == after
-    output = tmp_path / "rotated-pair.chemvas"
+    output = tmp_path / "rotated-pair.cdxml"
     documents = canvas.services.canvas_document_session_service
     documents.save_to_file(str(output))
     documents.apply_state(read_document(output).state)

@@ -107,7 +107,7 @@ test('atom hit circles use the native radius supplied with the scene', () => {
 
 test('a lost edit response refreshes the committed state without repeating the edit', async () => {
   const calls = [];
-  let server = {...info(), session: 'live', revision: 1, can_undo: false, name: 'Work.chemvas'};
+  let server = {...info(), session: 'live', revision: 1, can_undo: false, name: 'Work.cdxml'};
   const editor = new SessionClient(async request => {
     calls.push(request);
     if (request.action === 'edit') {
@@ -117,7 +117,7 @@ test('a lost edit response refreshes the committed state without repeating the e
     if (request.action === 'undo') server = {...server, ...info(), revision: 3, can_undo: false, dirty: false};
     return server;
   });
-  await editor.load(info(), 'Work.chemvas');
+  await editor.load(info(), 'Work.cdxml');
   await assert.rejects(editor.perform({kind: 'bond'}), /refreshed/);
   assert.equal(editor.info.revision, 2);
   assert.equal(Object.keys(editor.document.state.model.atoms).length, 2);
@@ -132,7 +132,7 @@ test('a lost edit response refreshes the committed state without repeating the e
 test('failed resynchronization makes the next action reconnect without mutating', async () => {
   let offline = false;
   const calls = [];
-  const server = {...info(), session: 'live', revision: 1, name: 'Work.chemvas'};
+  const server = {...info(), session: 'live', revision: 1, name: 'Work.cdxml'};
   const editor = new SessionClient(async request => {
     calls.push(request);
     if (offline) throw new Error('Offline');
@@ -151,7 +151,7 @@ test('failed resynchronization makes the next action reconnect without mutating'
 });
 
 test('a lost replacement response restores both the document and its name', async () => {
-  let server = {...info(), session: 'live', revision: 1, name: 'Old.chemvas'};
+  let server = {...info(), session: 'live', revision: 1, name: 'Old.cdxml'};
   let replacing = false;
   const editor = new SessionClient(async request => {
     if (request.action === 'load' && replacing) {
@@ -160,10 +160,10 @@ test('a lost replacement response restores both the document and its name', asyn
     }
     return server;
   });
-  await editor.load(info(), 'Old.chemvas');
+  await editor.load(info(), 'Old.cdxml');
   replacing = true;
-  await assert.rejects(editor.load(info(3), 'New.chemvas'), /refreshed/);
-  assert.equal(editor.name, 'New.chemvas');
+  await assert.rejects(editor.load(info(3), 'New.cdxml'), /refreshed/);
+  assert.equal(editor.name, 'New.cdxml');
   assert.equal(Object.keys(editor.document.state.model.atoms).length, 3);
 });
 
@@ -1692,7 +1692,7 @@ test('File > Export Figure downloads the accepted whole-canvas SVG without chang
   const elements = {'export-figure': {}}, requests = [], downloads = [], notices = [];
   const context = {
     $: id => elements[id], loading: false,
-    editor: {document: {}, busy: false, readOnly: false, info: {session: 's', revision: 4}, name: 'Work.chemvas', canUndo: true, canRedo: false},
+    editor: {document: {}, busy: false, readOnly: false, info: {session: 's', revision: 4}, name: 'Work.cdxml', canUndo: true, canRedo: false},
     selectedItems: () => [{target: 'bond', id: 0}],
     finishNoteEdit: async () => true,
     api: async (path, body) => { requests.push(JSON.parse(JSON.stringify([path, body]))); return {svg, revision: 4}; },
@@ -1721,7 +1721,7 @@ async function exportMolHandler() {
   const elements = {'export-mol': {}}, requests = [], downloads = [], notices = [], replies = [], commits = [];
   const context = {
     $: id => elements[id], loading: false,
-    editor: {document: {}, busy: false, info: {session: 's', revision: 4}, name: 'Work.chemvas'},
+    editor: {document: {}, busy: false, info: {session: 's', revision: 4}, name: 'Work.cdxml'},
     selectedItems: () => [{target: 'bond', id: 0}],
     finishNoteEdit: () => new Promise(resolve => commits.push(resolve)),
     api: (path, body) => new Promise((resolve, reject) => { requests.push(JSON.parse(JSON.stringify([path, body]))); replies.push({resolve, reject}); }),
@@ -1767,7 +1767,7 @@ test('Export MOL shows a refusal for the current document and downloads nothing'
 test('Export MOL drops a late reply or error once the document changes or turns busy', async () => {
   const changes = [
     context => { context.editor.info = {session: 't', revision: 0}; },
-    context => { context.editor.name = 'Other.chemvas'; },
+    context => { context.editor.name = 'Other.cdxml'; },
     context => { context.editor.info = {session: 's', revision: 5}; },
     context => { context.editor.busy = true; },
     context => { context.loading = true; },
@@ -1836,7 +1836,7 @@ async function noteExportHarness(save) {
     edit: async request => { h.edits.push(request); return save(h, request); },
     api: (path, body) => body.action === 'export_mol' ? (exports.push(body.revision), Promise.resolve({molfile: 'MOL\n'})) : new Promise((resolve, reject) => h.replies.push({body, resolve, reject})),
   });
-  h.context.editor.name = 'Work.chemvas';
+  h.context.editor.name = 'Work.cdxml';
   runInNewContext(source.slice(start, end), h.context);
   return Object.assign(h, {notices, exports, exportMol: async () => { await elements['export-mol'].onclick(); await h.settle(); }});
 }
@@ -2461,7 +2461,7 @@ async function bondHoverHarness() {
   const atom = {dataset: {item: 'atom:1'}};
   const editor = {
     document: accepted.document, info: {session: 's', revision: 4, sheet: accepted.sheet, drawing: accepted.drawing},
-    name: 'Work.chemvas', dirty: true, busy: false, readOnly: false, canUndo: true, canRedo: false,
+    name: 'Work.cdxml', dirty: true, busy: false, readOnly: false, canUndo: true, canRedo: false,
     perform() { throw new Error('a hover must not edit the drawing'); },
   };
   const context = {
@@ -2589,20 +2589,20 @@ async function noteSaveCopyHarness({save = acceptNoteSave, hold = false} = {}) {
     notice: (...args) => notices.push(args),
     edit: async request => { h.edits.push(request); return save(h, request); },
     api: (_path, body) => {
-      if (body?.action !== 'export') return new Promise((resolve, reject) => h.replies.push({body, resolve, reject}));
+      if (body?.action !== 'save_cdxml') return new Promise((resolve, reject) => h.replies.push({body, resolve, reject}));
       exports.push({...body});
-      const reply = {document: {notes: [h.stored]}};
+      const reply = {cdxml: `<CDXML><t>${h.stored}</t></CDXML>`};
       return hold ? new Promise((resolve, reject) => pending.push({resolve: () => resolve(reply), reject})) : Promise.resolve(reply);
     },
   });
-  h.context.editor.name = 'Work.chemvas';
+  h.context.editor.name = 'Work.cdxml';
   runInNewContext(source.slice(start, end), h.context);
   return Object.assign(h, {notices, exports, downloads, pending,
     click: () => elements.save.onclick(),
     saveCopy: async () => { await elements.save.onclick(); await h.settle(); },
     revisions: () => exports.map(body => body.revision),
     // Each downloaded copy's note text, without its markup.
-    texts: () => downloads.map(([text]) => JSON.parse(text).notes[0].replace(/<[^>]*>/g, ''))});
+    texts: () => downloads.map(([text]) => text.replace(/<[^>]*>/g, ''))});
 }
 
 test('Save copy commits an open note first and saves that draft at the committed revision', async () => {
@@ -2610,9 +2610,9 @@ test('Save copy commits an open note first and saves that draft at the committed
   await h.open(7); await h.caret(2); await h.type('X');
   await h.saveCopy();
   assert.deepEqual(h.edits.map(({kind, id}) => [kind, id]), [['note_text', 7]]);
-  assert.deepEqual(h.exports, [{session: 's', revision: 4, action: 'export'}]);
+  assert.deepEqual(h.exports, [{session: 's', revision: 4, action: 'save_cdxml'}]);
   assert.deepEqual([h.texts(), h.downloads.map(([, name, type]) => [name, type]), h.notices, h.context.noteEditor],
-    [['ABX'], [['Work-web-copy.chemvas', 'application/json']], [[SAVE_COPY_NOTICE]], null]);
+    [['ABX'], [['Work-web-copy.cdxml', 'chemical/x-cdxml']], [[SAVE_COPY_NOTICE]], null]);
 });
 
 test('a note that was not saved stops Save copy, reopening where safe, without blocking a later copy', async () => {
@@ -2690,7 +2690,7 @@ test('Save copy drops a late reply or refusal once the document changes, is rena
     ['nothing', () => {}],
     ['another session', c => { c.editor.info.session = 't'; }],
     ['a new revision', c => { c.editor.info.revision += 1; }],
-    ['a rename', c => { c.editor.name = 'Other.chemvas'; }],
+    ['a rename', c => { c.editor.name = 'Other.cdxml'; }],
     ['a load', c => { c.loading = true; }],
     ['busy', c => { c.editor.busy = true; }],
   ];
@@ -2886,7 +2886,7 @@ async function exportFigureHandler({mol = false} = {}) {
   const elements = {'export-figure': {}, 'export-mol': {}}, requests = [], downloads = [], notices = [], replies = [], commits = [], edits = [];
   const context = {
     $: id => elements[id], loading: false,
-    editor: {document: {}, busy: false, info: {session: 's', revision: 4}, name: 'Work.chemvas'},
+    editor: {document: {}, busy: false, info: {session: 's', revision: 4}, name: 'Work.cdxml'},
     selectedItems: () => [{target: 'bond', id: 0}],
     finishNoteEdit: () => new Promise(resolve => commits.push(resolve)),
     api: (path, body) => new Promise((resolve, reject) => { requests.push(JSON.parse(JSON.stringify([path, body]))); replies.push({resolve, reject}); }),
@@ -2918,7 +2918,7 @@ async function exportFigureOnce(h) {
 }
 async function dropFigureRefusal(h) {
   const pending = h.click(); h.commits.at(-1)(true); await h.flush();
-  h.context.editor.name = 'Other.chemvas';
+  h.context.editor.name = 'Other.cdxml';
   h.replies.at(-1).reject(new Error('There is nothing to export.')); await pending;
 }
 
@@ -2930,11 +2930,11 @@ test('Export Figure commits an open note first, then downloads the whole-canvas 
   assert.deepEqual(h.requests, [figureRequest(5)]);
   h.replies[0].resolve({svg: FIGURE_SVG, revision: 5}); await pending;
   assert.deepEqual([h.downloads, h.notices, h.edits], [[[FIGURE_SVG, 'Work.svg', 'image/svg+xml']], [], []]);
-  assert.deepEqual(h.context.editor, {document: {}, busy: false, info: {session: 's', revision: 5}, name: 'Work.chemvas'});
+  assert.deepEqual(h.context.editor, {document: {}, busy: false, info: {session: 's', revision: 5}, name: 'Work.cdxml'});
 });
 
 test('Export Figure names the download after the document', async () => {
-  const rows = [['Work.chemvas', 'Work.svg'], ['Plate 2.CHEMVAS', 'Plate 2.svg'], ['Canvas 1', 'Canvas 1.svg'], ['a.chemvas.chemvas', 'a.chemvas.svg']];
+  const rows = [['Work.cdxml', 'Work.svg'], ['Plate 2.CDXML', 'Plate 2.svg'], ['Canvas 1', 'Canvas 1.svg'], ['a.cdxml.cdxml', 'a.cdxml.svg']];
   for (const [name, file] of rows) {
     const h = await exportFigureHandler();
     h.context.editor.name = name;
@@ -2996,7 +2996,7 @@ test('Export Figure drops a late reply or refusal once the document changes, is 
   const changes = [
     ['another session', c => { c.editor.info = {session: 't', revision: 0}; }],
     ['a new revision', c => { c.editor.info = {session: 's', revision: 5}; }],
-    ['a rename', c => { c.editor.name = 'Other.chemvas'; }],
+    ['a rename', c => { c.editor.name = 'Other.cdxml'; }],
     ['busy', c => { c.editor.busy = true; }],
     ['loading', c => { c.loading = true; }],
   ];
@@ -3494,7 +3494,7 @@ test('the startup notice counts only drafts no open window holds and reports unr
     await context.offerRecovery();
     return notices;
   };
-  const entry = (open, problem = null) => ({id: 'd', name: 'Work.chemvas', open, problem});
+  const entry = (open, problem = null) => ({id: 'd', name: 'Work.cdxml', open, problem});
   // Another tab's live draft is not earlier work.
   assert.deepEqual(await run(() => ({available: true, drafts: [entry(true)]})), []);
   const notices = await run(() => ({available: true, drafts: [entry(true), entry(false), entry(false, 'damaged')]}));
@@ -3519,11 +3519,11 @@ test('pasted items stay selected when the paste needs a font measurement first',
 
 test('recovery takes over a draft through the session; a lost reply only resynchronizes', async () => {
   const calls = [];
-  let server = {...info(), session: 'live', revision: 1, name: 'Canvas 1.chemvas', dirty: false}, lose = true;
+  let server = {...info(), session: 'live', revision: 1, name: 'Canvas 1.cdxml', dirty: false}, lose = true;
   const editor = new SessionClient(async request => {
     calls.push(request);
     if (request.action === 'recover_draft') {
-      server = {...server, ...info(3), revision: 2, name: 'Work.chemvas', dirty: true};
+      server = {...server, ...info(3), revision: 2, name: 'Work.cdxml', dirty: true};
       if (lose) throw new Error('Connection lost');
     }
     return server;
@@ -3533,7 +3533,7 @@ test('recovery takes over a draft through the session; a lost reply only resynch
   await assert.rejects(editor.recover(draft, true), /refreshed/);
   assert.deepEqual(calls.slice(1).map(call => [call.action, call.revision, call.draft, call.takeover]),
     [['recover_draft', 1, draft, true], ['read', undefined, undefined, undefined]]);
-  assert.deepEqual([editor.name, editor.dirty, editor.info.revision], ['Work.chemvas', true, 2]);
+  assert.deepEqual([editor.name, editor.dirty, editor.info.revision], ['Work.cdxml', true, 2]);
   lose = false;
   await editor.recover('e'.repeat(24));
   assert.equal('takeover' in calls.at(-1), false);

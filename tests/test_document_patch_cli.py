@@ -11,7 +11,6 @@ from unittest.mock import Mock
 import pytest
 
 from chemvas.bootstrap import document_patch as cli
-from chemvas.core.document_io import read_document, write_document
 from chemvas.domain.document import (
     CANVAS_FILE_VERSION,
     Atom,
@@ -21,6 +20,12 @@ from chemvas.domain.document import (
     serialize_settings,
 )
 from chemvas.features.document_composition import compose_document_state
+from tests.document_file_helpers import (
+    read_document,
+    read_payload,
+    write_document,
+    write_payload_text,
+)
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -94,7 +99,7 @@ def test_terminal_angle_cli_decimal_and_failure_leave_original_intact(
         {"a": 1, "b": 2, "order": 1, "style": "single", "color": "#000000"}
     )
     source, patch_path, output = (
-        tmp_path / name for name in ("angle.chemvas", "angle.json", "adjusted.chemvas")
+        tmp_path / name for name in ("angle.cdxml", "angle.json", "adjusted.cdxml")
     )
     write_document(source, state, CANVAS_FILE_VERSION)
     before = source.read_bytes()
@@ -108,7 +113,7 @@ def test_terminal_angle_cli_decimal_and_failure_leave_original_intact(
             "angle_degrees": -120.5,
         }
     ]
-    patch_path.write_text(json.dumps(patch))
+    write_payload_text(patch_path, json.dumps(patch))
     assert (
         cli.run(["apply-patch", str(source), str(patch_path), "--output", str(output)])
         == 0
@@ -121,8 +126,8 @@ def test_terminal_angle_cli_decimal_and_failure_leave_original_intact(
     assert candidate["model"]["bonds"] == state["model"]["bonds"]
     assert candidate["notes"] == state["notes"]
     patch["operations"][0]["angle_degrees"] = 0
-    patch_path.write_text(json.dumps(patch))
-    bad_output = tmp_path / "rejected.chemvas"
+    write_payload_text(patch_path, json.dumps(patch))
+    bad_output = tmp_path / "rejected.cdxml"
     with pytest.raises(SystemExit) as error:
         cli.run(
             ["apply-patch", str(source), str(patch_path), "--output", str(bad_output)]
@@ -135,7 +140,7 @@ def test_terminal_angle_cli_decimal_and_failure_leave_original_intact(
 def test_inspect_document_hashes_exact_bytes_and_lists_full_graph(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    source = tmp_path / "source.chemvas"
+    source = tmp_path / "source.cdxml"
     source_bytes = _write_source(source)
 
     assert cli.run(["inspect-document", str(source)]) == 0
@@ -175,20 +180,20 @@ def test_document_commands_reject_colliding_annotation_ids_before_output(
             "bonds": [],
         }
     )
-    source = tmp_path / "source.chemvas"
+    source = tmp_path / "source.cdxml"
     write_document(source, state, CANVAS_FILE_VERSION)
-    payload = json.loads(source.read_text())
+    payload = read_payload(source.read_text())
     payload["state"]["model"]["atom_annotations"] = {
         key: {field: value} for key, value in entries
     }
-    source.write_text(json.dumps(payload))
+    write_payload_text(source, json.dumps(payload))
     source_bytes = source.read_bytes()
     patch = _patch(source_bytes)
     patch["operations"] = [{"op": "move_atom", "atom_id": 0, "x": 1.0, "y": 0.0}]
     patch_path = tmp_path / "patch.json"
-    patch_path.write_text(json.dumps(patch))
+    write_payload_text(patch_path, json.dumps(patch))
     patch_bytes = patch_path.read_bytes()
-    output = tmp_path / "revised.chemvas"
+    output = tmp_path / "revised.cdxml"
     if command == "inspect-document":
         argv = [command, str(source)]
     else:
@@ -211,17 +216,17 @@ def test_document_commands_reject_colliding_annotation_ids_before_output(
 def test_dry_run_and_apply_share_candidate_hash_without_overwriting_source(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    source = tmp_path / "source.chemvas"
+    source = tmp_path / "source.cdxml"
     source_bytes = _write_source(source)
     patch_path = tmp_path / "patch.json"
-    patch_path.write_text(json.dumps(_patch(source_bytes)))
+    write_payload_text(patch_path, json.dumps(_patch(source_bytes)))
 
     assert cli.run(["apply-patch", str(source), str(patch_path), "--dry-run"]) == 0
     dry_report = json.loads(capsys.readouterr().out)
     assert dry_report["written"] is False
     assert set(tmp_path.iterdir()) == {source, patch_path}
 
-    output = tmp_path / "revised.chemvas"
+    output = tmp_path / "revised.cdxml"
     assert (
         cli.run(
             [
@@ -258,7 +263,7 @@ def test_dry_run_and_apply_share_candidate_hash_without_overwriting_source(
 def test_patch_parser_rejects_duplicate_keys_and_nonstandard_numbers(
     tmp_path: Path, patch_text: str
 ) -> None:
-    source = tmp_path / "source.chemvas"
+    source = tmp_path / "source.cdxml"
     _write_source(source)
     patch_path = tmp_path / "patch.json"
     patch_path.write_text(patch_text)
@@ -296,7 +301,7 @@ def test_patch_reader_bounds_actual_bytes_even_when_stat_size_is_stale(
 def test_failure_after_an_earlier_operation_leaves_no_output(
     tmp_path: Path,
 ) -> None:
-    source = tmp_path / "source.chemvas"
+    source = tmp_path / "source.cdxml"
     source_bytes = _write_source(source)
     patch = _patch(source_bytes)
     patch["operations"] = [
@@ -312,8 +317,8 @@ def test_failure_after_an_earlier_operation_leaves_no_output(
         {"op": "remove_bond", "a": 0, "b": 999},
     ]
     patch_path = tmp_path / "patch.json"
-    patch_path.write_text(json.dumps(patch))
-    output = tmp_path / "must-not-exist.chemvas"
+    write_payload_text(patch_path, json.dumps(patch))
+    output = tmp_path / "must-not-exist.cdxml"
 
     with pytest.raises(SystemExit) as error:
         cli.run(["apply-patch", str(source), str(patch_path), "--output", str(output)])
@@ -324,11 +329,11 @@ def test_failure_after_an_earlier_operation_leaves_no_output(
 
 
 def test_existing_file_and_directory_outputs_are_preserved(tmp_path: Path) -> None:
-    source = tmp_path / "source.chemvas"
+    source = tmp_path / "source.cdxml"
     source_bytes = _write_source(source)
     patch_path = tmp_path / "patch.json"
-    patch_path.write_text(json.dumps(_patch(source_bytes)))
-    targets = [tmp_path / "file.chemvas", tmp_path / "directory.chemvas"]
+    write_payload_text(patch_path, json.dumps(_patch(source_bytes)))
+    targets = [tmp_path / "file.cdxml", tmp_path / "directory.cdxml"]
     targets[0].write_text("keep")
     targets[1].mkdir()
 
@@ -343,11 +348,11 @@ def test_existing_file_and_directory_outputs_are_preserved(tmp_path: Path) -> No
 
 
 def test_existing_symlink_output_is_preserved(tmp_path: Path) -> None:
-    source = tmp_path / "source.chemvas"
+    source = tmp_path / "source.cdxml"
     source_bytes = _write_source(source)
     patch_path = tmp_path / "patch.json"
-    patch_path.write_text(json.dumps(_patch(source_bytes)))
-    output = tmp_path / "link.chemvas"
+    write_payload_text(patch_path, json.dumps(_patch(source_bytes)))
+    output = tmp_path / "link.cdxml"
     try:
         output.symlink_to(tmp_path / "missing")
     except OSError as exc:
@@ -365,11 +370,11 @@ def test_existing_symlink_output_is_preserved(tmp_path: Path) -> None:
 def test_atomic_publish_rejects_a_target_created_after_preflight(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    source = tmp_path / "source.chemvas"
+    source = tmp_path / "source.cdxml"
     source_bytes = _write_source(source)
     patch_path = tmp_path / "patch.json"
-    patch_path.write_text(json.dumps(_patch(source_bytes)))
-    output = tmp_path / "raced.chemvas"
+    write_payload_text(patch_path, json.dumps(_patch(source_bytes)))
+    output = tmp_path / "raced.cdxml"
     original_atomic_create = cli.atomic_create_bytes
 
     def race_create(path: Path, content: bytes) -> None:
@@ -406,7 +411,7 @@ def test_headless_module_imports_neither_qt_nor_rdkit() -> None:
 
 
 def test_apply_patch_refuses_a_patch_number_it_cannot_parse(tmp_path: Path) -> None:
-    source = tmp_path / "source.chemvas"
+    source = tmp_path / "source.cdxml"
     _write_source(source)
     patch_path = tmp_path / "patch.json"
     patch_path.write_text(
@@ -424,16 +429,16 @@ def test_apply_patch_refuses_a_patch_number_it_cannot_parse(tmp_path: Path) -> N
 def test_patch_rejects_oversized_candidate_before_reporting_or_writing(
     tmp_path, monkeypatch, capsys, dry_run
 ):
-    source = tmp_path / "source.chemvas"
+    source = tmp_path / "source.cdxml"
     original = _write_source(source)
     patch_path = tmp_path / "patch.json"
-    patch_path.write_text(json.dumps(_patch(original)), encoding="utf-8")
-    reference = tmp_path / "reference.chemvas"
+    write_payload_text(patch_path, json.dumps(_patch(original)), encoding="utf-8")
+    reference = tmp_path / "reference.cdxml"
     args = ["apply-patch", str(source), str(patch_path)]
     assert cli.run([*args, "--output", str(reference)]) == 0
     expected = reference.read_bytes()
     capsys.readouterr()
-    output = tmp_path / "candidate.chemvas"
+    output = tmp_path / "candidate.cdxml"
     destination = ["--dry-run"] if dry_run else ["--output", str(output)]
     monkeypatch.setattr(cli, "MAX_DOCUMENT_BYTES", len(expected) - 1)
     with pytest.raises(SystemExit) as exc:
@@ -456,7 +461,7 @@ def test_note_patch_cli_dry_run_write_and_failed_batch_preserve_source(
     tmp_path, capsys
 ):
     source, request, output = (
-        tmp_path / name for name in ("source.chemvas", "patch.json", "notes.chemvas")
+        tmp_path / name for name in ("source.cdxml", "patch.json", "notes.cdxml")
     )
     source_bytes = _write_source(source)
     patch = _patch(source_bytes)
@@ -472,7 +477,7 @@ def test_note_patch_cli_dry_run_write_and_failed_batch_preserve_source(
             },
         },
     ]
-    request.write_text(json.dumps(patch))
+    write_payload_text(request, json.dumps(patch))
     assert cli.run(["apply-patch", str(source), str(request), "--dry-run"]) == 0
     preview = json.loads(capsys.readouterr().out)
     assert not preview["written"] and preview["before"]["notes"] == 1
@@ -493,8 +498,8 @@ def test_note_patch_cli_dry_run_write_and_failed_batch_preserve_source(
     assert inventory["next_note_index"] == 2
     assert inventory["notes"][0]["html"] == candidate.state["notes"][0]["html"]
     patch["operations"].append({"op": "move_note", "note_index": 9, "x": 0, "y": 0})
-    request.write_text(json.dumps(patch))
-    rejected = tmp_path / "rejected.chemvas"
+    write_payload_text(request, json.dumps(patch))
+    rejected = tmp_path / "rejected.cdxml"
     with pytest.raises(SystemExit) as error:
         cli.run(["apply-patch", str(source), str(request), "--output", str(rejected)])
     assert error.value.code == 2

@@ -11,13 +11,13 @@ import pytest
 from PyQt6.QtWidgets import QComboBox, QDialog, QLineEdit, QPushButton
 
 from chemvas.bootstrap.main_window import build_main_window
-from chemvas.core.document_io import write_document
 from chemvas.domain.document import CANVAS_FILE_VERSION
 from chemvas.features.export import read_cdxml_label_bindings
 from chemvas.ui.window import main_window_document_action_service as actions
 from chemvas.ui.window import main_window_document_dialogs as dialogs
 from chemvas.ui.window.main_window_document_dialogs import FigureExportOptions
 from chemvas.ui.window.main_window_ports import active_canvas_for_window
+from tests.document_file_helpers import write_document, write_payload_text
 from tests.test_cdxml_export import _simple_state
 
 pytestmark = pytest.mark.usefixtures("qt_application")
@@ -30,7 +30,7 @@ def saved_window(tmp_path):
     state = _simple_state(
         atoms={0: Atom("C", 0, 0), 1: Atom("Ar", 20, 0)}, bonds=[Bond(0, 1)]
     )
-    source = tmp_path / "source.chemvas"
+    source = tmp_path / "source.cdxml"
     write_document(source, state, CANVAS_FILE_VERSION)
     window = build_main_window()
     service = actions.MainWindowDocumentActionService()
@@ -42,7 +42,7 @@ def saved_window(tmp_path):
         source_sha256=hashlib.sha256(source.read_bytes()).hexdigest(),
         bindings=[dict(atom_id=1, expected_label="Ar", meaning="generic_aryl")],
     )
-    sidecar.write_text(json.dumps(payload))
+    write_payload_text(sidecar, json.dumps(payload))
     yield window, service, source, sidecar, payload
     window.services.canvas_document_service.mark_clean(active_canvas_for_window(window))
     window.close()
@@ -112,10 +112,10 @@ def test_stale_or_invalid_binding_creates_no_file(
         source.write_bytes(source.read_bytes() + b"\n")
     elif failure == "wrong_hash":
         payload["source_sha256"] = "f" * 64
-        sidecar.write_text(json.dumps(payload))
+        write_payload_text(sidecar, json.dumps(payload))
     elif failure == "wrong_label":
         payload["bindings"][0]["expected_label"] = "Ph"
-        sidecar.write_text(json.dumps(payload))
+        write_payload_text(sidecar, json.dumps(payload))
     elif failure == "invalid_json":
         sidecar.write_text('{"version":1,"version":1}')
     elif failure == "untrusted_clean":

@@ -2,7 +2,7 @@
 
 [한국어](IMAGE_OBJECTS.ko.md)
 
-Chemvas allows embedding PNG and JPEG images directly into `.chemvas` documents alongside native chemical structures, text notes, and arrows. Embedded images are fully stored inside the document, so the original image files are not required to reopen or share the drawing.
+Chemvas allows embedding PNG and JPEG images directly into `.cdxml` documents alongside native chemical structures, text notes, and arrows. Embedded images are fully stored inside the document, so the original image files are not required to reopen or share the drawing.
 
 ## GUI Operations
 
@@ -42,11 +42,11 @@ Embed images programmatically by including an `images` array in a Composition JS
 Compile and render headless figures:
 
 ```bash
-chemvas compose-document figure.json --output figure.chemvas
-chemvas check-layout figure.chemvas --sheet-only
-chemvas render-document figure.chemvas --output figure.svg
-chemvas render-document figure.chemvas --output figure.pdf
-chemvas render-document figure.chemvas --output figure.png
+chemvas compose-document figure.json --output figure.cdxml
+chemvas check-layout figure.cdxml --sheet-only
+chemvas render-document figure.cdxml --output figure.svg
+chemvas render-document figure.cdxml --output figure.pdf
+chemvas render-document figure.cdxml --output figure.png
 ```
 
 - `source`: Relative path (from the JSON file's directory) or absolute path.
@@ -56,7 +56,7 @@ chemvas render-document figure.chemvas --output figure.png
 
 ## Document Schema & Constraints
 
-In `.chemvas` documents, each image is stored as an object within the `state.images` array:
+In `.cdxml` documents, each image is stored as an object within the `state.images` array:
 
 ```json
 {
@@ -85,5 +85,5 @@ In `.chemvas` documents, each image is stored as an object within the `state.ima
 ## Figure Export
 
 - **Vector Exports (SVG & PDF)**: Embedded images are included as high-fidelity rasters within the exported vector streams.
-- **Editable Chemvas SVG**: Preserves the complete `.chemvas` metadata payload, allowing full round-trip reopening in Chemvas.
+- **Editable Chemvas SVG**: Preserves the complete `.cdxml` metadata payload, allowing full round-trip reopening in Chemvas.
 - **Raster Exports (PNG & TIFF)**: Images are rasterized at the chosen target DPI with full alpha transparency support.

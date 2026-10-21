@@ -9,11 +9,11 @@ from PyQt6.QtCore import QPointF
 from PyQt6.QtGui import QImage
 
 from chemvas.bootstrap import document_render
-from chemvas.core.document_io import read_document
 from chemvas.ui.canvas.canvas_document_state import snapshot_canvas_document_state
 from chemvas.ui.scene.scene_clipboard_copy_service import (
     copy_selection_to_clipboard_for_canvas,
 )
+from tests.document_file_helpers import read_document
 from tests.native_canvas_support import app as app
 from tests.native_canvas_support import canvas as canvas
 
@@ -95,7 +95,7 @@ def test_saved_arrow_has_same_gui_and_cli_fit(canvas, app, tmp_path, capsys):
     _labelled_arrow(canvas)
     documents = canvas.services.canvas_document_session_service
     before = snapshot_canvas_document_state(canvas)
-    source = tmp_path / "arrow.chemvas"
+    source = tmp_path / "arrow.cdxml"
     documents.save_to_file(str(source))
     source_bytes = source.read_bytes()
     gui_png, cli_png = tmp_path / "gui.png", tmp_path / "cli.png"

@@ -5,6 +5,8 @@ import os
 from copy import deepcopy
 from unittest.mock import Mock
 
+from tests.document_file_helpers import read_payload
+
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 import pytest
@@ -14,7 +16,6 @@ from PyQt6.QtTest import QTest
 from PyQt6.QtWidgets import QApplication
 
 from chemvas.bootstrap.main_window import build_main_window
-from chemvas.core.document_io import read_document, write_document
 from chemvas.core.svg_roundtrip import extract_chemvas_document_from_svg
 from chemvas.domain.document import (
     CANVAS_FILE_VERSION,
@@ -30,6 +31,7 @@ from chemvas.ui.canvas.canvas_document_metadata_state import (
 from chemvas.ui.scene.scene_flip_geometry import flip_center_for_selection
 from chemvas.ui.window.main_window_ports import active_canvas_for_window
 from tests.canvas_factory import build_canvas_view
+from tests.document_file_helpers import read_document, write_document
 
 KINDS = ("equilibrium", "equilibrium_forward", "equilibrium_reverse")
 
@@ -150,9 +152,9 @@ def test_mirror_survives_native_and_clipboard_roundtrip_with_same_ink(
     item = _arrow(canvas, kind)
     canvas.services.scene_transform_controller.flip_selected_items(False)
     state = canvas.services.canvas_document_session_service.snapshot_state()
-    document = tmp_path / "equilibrium.chemvas"
+    document = tmp_path / "equilibrium.cdxml"
     write_document(document, state, version=CANVAS_FILE_VERSION)
-    serialized = json.loads(document.read_text())
+    serialized = read_payload(document.read_text())
     assert serialized["version"] == CANVAS_FILE_VERSION
     assert serialized["state"]["arrows"][0]["mirrored"] is True
     before_bytes = document.read_bytes()
@@ -370,7 +372,7 @@ def test_shown_window_flip_menu_undo_save_reopen(app, kind, horizontal, tmp_path
         canvas.services.history_service.redo()
         assert canvas.services.canvas_document_session_service.snapshot_state() == after
         session = canvas.services.canvas_document_session_service
-        path = tmp_path / "menu-mirrored.chemvas"
+        path = tmp_path / "menu-mirrored.cdxml"
         session.save_to_file(str(path))
         session.apply_state(read_document(path).state)
         assert canvas.services.canvas_document_session_service.snapshot_state() == after

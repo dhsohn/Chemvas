@@ -66,13 +66,13 @@ class MainWindowPanelActionsTest(unittest.TestCase):
 
         self.window.services.canvas_document_service.set_file_path(
             active_canvas_for_window(self.window),
-            "/tmp/existing.chemvas",
+            "/tmp/existing.cdxml",
         )
         document_service.save_canvas_to_path = save_path
         document_service.save_canvas_as = save_as_called
         save_action.trigger()
         save_path.assert_called_once_with(
-            self.window, "/tmp/existing.chemvas", canvas=None
+            self.window, "/tmp/existing.cdxml", canvas=None
         )
         save_as_called.assert_not_called()
 
@@ -91,7 +91,7 @@ class MainWindowPanelActionsTest(unittest.TestCase):
         save_as_action = self._find_action("Save As...")
         self.window.services.canvas_document_service.set_file_path(
             active_canvas_for_window(self.window),
-            "/tmp/current.chemvas",
+            "/tmp/current.cdxml",
         )
         save_path = mock.Mock()
         document_service = self.window.services.document_action_service
@@ -104,16 +104,16 @@ class MainWindowPanelActionsTest(unittest.TestCase):
             save_as_action.trigger()
 
         dialog.assert_called_once()
-        self.assertEqual(dialog.call_args.args[2], "/tmp/current.chemvas")
+        self.assertEqual(dialog.call_args.args[2], "/tmp/current.cdxml")
         save_path.assert_called_once_with(
-            self.window, str(Path("/tmp/new-drawing.chemvas")), canvas=None
+            self.window, str(Path("/tmp/new-drawing.cdxml")), canvas=None
         )
 
     def test_load_menu_action_uses_dialog_path_and_handles_failure(self) -> None:
         from chemvas.shell.window_registry import open_windows
 
         load_action = self._find_action("Open...")
-        input_path = os.path.abspath("/tmp/input.chemvas")
+        input_path = os.path.abspath("/tmp/input.cdxml")
         original_canvas = active_canvas_for_window(self.window)
         state = (
             original_canvas.services.canvas_document_session_service.snapshot_state()
@@ -124,7 +124,7 @@ class MainWindowPanelActionsTest(unittest.TestCase):
         with (
             mock.patch(
                 "chemvas.ui.window.main_window_document_action_service.QFileDialog.getOpenFileName",
-                return_value=("/tmp/input.chemvas", ""),
+                return_value=("/tmp/input.cdxml", ""),
             ) as dialog,
             mock.patch(
                 "chemvas.ui.window.main_window_document_action_service.default_read_document",
@@ -164,7 +164,7 @@ class MainWindowPanelActionsTest(unittest.TestCase):
         with (
             mock.patch(
                 "chemvas.ui.window.main_window_document_action_service.QFileDialog.getOpenFileName",
-                return_value=("/tmp/broken.chemvas", ""),
+                return_value=("/tmp/broken.cdxml", ""),
             ),
             mock.patch(
                 "chemvas.ui.window.main_window_document_action_service.default_read_document",
@@ -176,7 +176,7 @@ class MainWindowPanelActionsTest(unittest.TestCase):
         ):
             self.window.services.canvas_document_service.set_file_path(
                 active_canvas_for_window(self.window),
-                "/tmp/previous.chemvas",
+                "/tmp/previous.cdxml",
             )
             load_action.trigger()
 
@@ -187,13 +187,13 @@ class MainWindowPanelActionsTest(unittest.TestCase):
             active_canvas_for_window(
                 self.window
             ).runtime_state.document_metadata_state.file_path,
-            "/tmp/previous.chemvas",
+            "/tmp/previous.cdxml",
         )
 
         with (
             mock.patch(
                 "chemvas.ui.window.main_window_document_action_service.QFileDialog.getOpenFileName",
-                return_value=("/tmp/restore-broken.chemvas", ""),
+                return_value=("/tmp/restore-broken.cdxml", ""),
             ),
             mock.patch(
                 "chemvas.ui.window.main_window_document_action_service.default_read_document",
@@ -207,7 +207,7 @@ class MainWindowPanelActionsTest(unittest.TestCase):
         ):
             self.window.services.canvas_document_service.set_file_path(
                 active_canvas_for_window(self.window),
-                "/tmp/previous.chemvas",
+                "/tmp/previous.cdxml",
             )
             load_action.trigger()
 
@@ -216,7 +216,7 @@ class MainWindowPanelActionsTest(unittest.TestCase):
             active_canvas_for_window(
                 self.window
             ).runtime_state.document_metadata_state.file_path,
-            "/tmp/previous.chemvas",
+            "/tmp/previous.cdxml",
         )
 
     def test_undo_redo_and_flip_controls_call_canvas_and_controllers(

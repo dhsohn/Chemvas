@@ -27,7 +27,7 @@
 
 ## 시작하기
 
-[first-scheme.chemvas](first-scheme.chemvas)를 **File ▸ Open**으로 열어 바로 편집해 볼 수 있습니다.
+[first-scheme.cdxml](first-scheme.cdxml)를 **File ▸ Open**으로 열어 바로 편집해 볼 수 있습니다.
 [따라 그리기](../docs/FIRST_SCHEME.ko.md) · [English](../docs/FIRST_SCHEME.md) · [SVG](first-scheme.svg) · [PNG](first-scheme.png).
 
 - 열기, 편집, 그림 출력은 `pip install chemvas`로 동작합니다.

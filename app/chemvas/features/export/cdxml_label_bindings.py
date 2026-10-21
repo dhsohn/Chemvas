@@ -1,6 +1,6 @@
 """Strict sidecar of explicit CDXML atom-label meanings (Qt-free).
 
-A ``.chemvas`` document stores a drawn label such as ``Ar`` or ``H\u1d43`` only
+A ``.cdxml`` document stores a drawn label such as ``Ar`` or ``H\u1d43`` only
 as text, so it cannot say whether ``Ar`` is argon or an aryl group. A caller
 who knows the meaning states it in a separate JSON sidecar that is bound to
 the exact bytes of one source document:
@@ -8,7 +8,7 @@ the exact bytes of one source document:
     {
       "format": "chemvas-cdxml-label-bindings",
       "version": 1,
-      "source_sha256": "<SHA-256 of the exact .chemvas bytes>",
+      "source_sha256": "<SHA-256 of the exact .cdxml bytes>",
       "bindings": [
         {"atom_id": 1, "expected_label": "Ar", "meaning": "generic_aryl"}
       ]

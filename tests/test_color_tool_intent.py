@@ -58,7 +58,7 @@ def test_no_swatch_never_repaints_a_loaded_colored_selection(drawing, tmp_path, 
     item = visible_atom_item_for(canvas, atom_id)
     _colors(canvas).apply_color_to_items([item], QColor("#008800"))
     actions = window.services.document_action_service
-    path = tmp_path / "colored.chemvas"
+    path = tmp_path / "colored.cdxml"
     assert actions.save_canvas_to_path(window, str(path))
     assert actions.load_canvas_from_path(window, str(path))
     canvas = active_canvas_for_window(window)
@@ -162,7 +162,7 @@ def test_palette_colors_selected_marks_independently_with_one_undo(
     first, second = tmp_path / "colored.png", tmp_path / "reopened.png"
     session.export_figure(str(first), fmt="png")
     actions = window.services.document_action_service
-    path = tmp_path / "colored-mark.chemvas"
+    path = tmp_path / "colored-mark.cdxml"
     assert actions.save_canvas_to_path(window, str(path))
     assert actions.load_canvas_from_path(window, str(path))
     reopened = active_canvas_for_window(window)
@@ -366,7 +366,7 @@ def test_custom_palette_color_cancel_apply_undo_and_save(
     history.redo()
     assert canvas.services.canvas_document_session_service.snapshot_state() == after
     actions = window.services.document_action_service
-    path = tmp_path / "custom-color.chemvas"
+    path = tmp_path / "custom-color.cdxml"
     assert actions.save_canvas_to_path(window, str(path))
     assert actions.load_canvas_from_path(window, str(path))
     assert (

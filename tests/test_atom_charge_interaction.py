@@ -9,12 +9,12 @@ from PyQt6.QtGui import QKeyEvent
 from PyQt6.QtTest import QTest
 from PyQt6.QtWidgets import QApplication
 
-from chemvas.core.document_io import read_document
 from chemvas.domain.document import deserialize_model_state
 from chemvas.features.document_composition import compose_document_state
 from chemvas.ui.canvas.input_view_access import set_zoom_for
 from chemvas.ui.scene.scene_decoration_access import add_mark_for, add_mark_for_atom_for
 from tests.canvas_factory import build_canvas_view
+from tests.document_file_helpers import read_document
 
 
 @pytest.fixture(scope="module")
@@ -322,7 +322,7 @@ def test_charge_layout_survives_save_reopen_without_reflowing_manual_marks(
         shortcut(canvas, "+")
     assert manual.data(1) == manual_state
     before = snapshot(canvas)
-    path = tmp_path / "charges.chemvas"
+    path = tmp_path / "charges.cdxml"
     session = canvas.services.canvas_document_session_service
     assert session.save_to_file(str(path)) == []
     session.apply_state(read_document(path).state)

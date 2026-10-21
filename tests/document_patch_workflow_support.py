@@ -24,7 +24,7 @@ def run_patch(tmp_path, source, operations):
         ),
         encoding="utf-8",
     )
-    output = tmp_path / "patched.chemvas"
+    output = tmp_path / "patched.cdxml"
     result = subprocess.run(
         [
             sys.executable,

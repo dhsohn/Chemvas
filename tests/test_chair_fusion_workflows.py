@@ -7,8 +7,8 @@ from PyQt6.QtCore import QPointF, Qt
 from PyQt6.QtTest import QTest
 from PyQt6.QtWidgets import QApplication, QToolButton
 
-from chemvas.core.document_io import read_document, write_document
 from chemvas.features.graph import find_rings
+from tests.document_file_helpers import read_document, write_document
 from tests.gui_workflow_support import _click, _tool
 from tests.gui_workflow_support import app as app
 from tests.gui_workflow_support import drawing as drawing
@@ -119,7 +119,7 @@ def test_chair_fusion_button_and_hotkey_roundtrip(
     assert canvas.services.canvas_document_session_service.snapshot_state() == after
     history.verify_stack_snapshot(stacks)
 
-    path = tmp_path / "fused-chair.chemvas"
+    path = tmp_path / "fused-chair.cdxml"
     write_document(path, after, canvas.FILE_FORMAT_VERSION)
     canvas.services.canvas_document_session_service.restore_state(
         read_document(path).state

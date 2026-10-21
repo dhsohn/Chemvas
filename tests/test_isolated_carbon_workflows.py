@@ -141,11 +141,11 @@ def _save_reopen_edit(drawing, owner, tmp_path):
     rgba = image.convertToFormat(QImage.Format.Format_RGBA8888)
     assert any(rgba.constBits().asstring(rgba.sizeInBytes())[3::4])
     actions = window.services.document_action_service
-    path = tmp_path / "visible-carbon.chemvas"
+    path = tmp_path / "visible-carbon.cdxml"
     assert actions.save_canvas_to_path(window, str(path))
     # A different synthetic filename prevents Open from merely activating the
     # already-open saved path. Read its identical bytes into a fresh canvas.
-    reopen_path = tmp_path / "reopened-carbon.chemvas"
+    reopen_path = tmp_path / "reopened-carbon.cdxml"
     copyfile(path, reopen_path)
     assert actions.load_canvas_from_path(window, str(reopen_path))
     original_canvas = canvas

@@ -9,10 +9,10 @@
 CLI를 사용해 배치 작업을 자동화할 수 있습니다:
 
 ```bash
-chemvas inspect-document scheme.chemvas
-chemvas layout-document scheme.chemvas --layout layout.json --output arranged.chemvas
-chemvas check-layout arranged.chemvas
-chemvas render-document arranged.chemvas --output arranged.svg --width-mm 174 --max-height-mm 120
+chemvas inspect-document scheme.cdxml
+chemvas layout-document scheme.cdxml --layout layout.json --output arranged.cdxml
+chemvas check-layout arranged.cdxml
+chemvas render-document arranged.cdxml --output arranged.svg --width-mm 174 --max-height-mm 120
 ```
 
 ### 배치 요청 스펙 (Arrange 모드)
@@ -125,7 +125,7 @@ arrange 모드에서 사용하며, `align-y`는 연결 요소를 이동하지 �
 최종 그림을 내보내기 전, 최소 글꼴 크기와 최대 높이 조건을 지정하여 가독성을 보장할 수 있습니다:
 
 ```bash
-chemvas render-document arranged.chemvas --output arranged.svg --width-mm 174 --min-font-pt 6
+chemvas render-document arranged.cdxml --output arranged.svg --width-mm 174 --min-font-pt 6
 ```
 
 - `--min-font-pt`: 그림 축소로 인해 텍스트(첨자 포함)가 지정한 pt 미만으로 작아지면 출력을 중단합니다.

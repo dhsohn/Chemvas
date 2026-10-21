@@ -182,7 +182,7 @@ def test_escape_cancels_a_rotation_drag(drawing, tmp_path):
     a, b = _bonded_pair(canvas)
     _select_all(window, canvas)
     document_action = window.services.document_action_service
-    assert document_action.save_canvas_to_path(window, str(tmp_path / "turn.chemvas"))
+    assert document_action.save_canvas_to_path(window, str(tmp_path / "turn.cdxml"))
     baseline = canvas.services.canvas_document_session_service.snapshot_state()
     history = history_service_for_window(window)
     count = len(history.state.history)
@@ -205,7 +205,7 @@ def test_a_click_on_the_knob_without_moving_changes_nothing(drawing, tmp_path):
     a, b = _bonded_pair(canvas)
     _select_all(window, canvas)
     document_action = window.services.document_action_service
-    assert document_action.save_canvas_to_path(window, str(tmp_path / "still.chemvas"))
+    assert document_action.save_canvas_to_path(window, str(tmp_path / "still.cdxml"))
     before = _positions(canvas, a, b)
     history = history_service_for_window(window)
     count = len(history.state.history)

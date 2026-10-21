@@ -13,7 +13,6 @@ from PyQt6.QtWidgets import QApplication, QStyleOptionGraphicsItem
 
 from chemvas.bootstrap import document_layout_check
 from chemvas.bootstrap.document_cli_shared import offscreen_canvas
-from chemvas.core.document_io import write_document
 from chemvas.domain.document import (
     CANVAS_FILE_VERSION,
     Atom,
@@ -24,6 +23,7 @@ from chemvas.domain.document import (
 )
 from chemvas.ui.annotations.arrows import ARROW_LABEL_ROLE
 from chemvas.ui.export.layout_qa_service import check_canvas_layout
+from tests.document_file_helpers import write_document
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -166,7 +166,7 @@ def test_overlapping_atom_labels_have_stable_sorted_ids() -> None:
 def test_sparse_atom_pairs_are_checked_with_whole_sheet_containment(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    source = tmp_path / "many-labels.chemvas"
+    source = tmp_path / "many-labels.cdxml"
     state = _state({index: Atom("N", index * 25.0, 0.0) for index in range(142)})
     write_document(source, state, CANVAS_FILE_VERSION)
     assert document_layout_check.run(["check-layout", str(source)]) == 1
@@ -499,7 +499,7 @@ def test_attached_label_outside_sheet_ignores_invisible_ink(hidden_by) -> None:
 
 @pytest.mark.parametrize("arrow_count", [50, 150])
 def test_attached_label_budget_counts_spatial_candidates(tmp_path, capsys, arrow_count):
-    source = tmp_path / "many-arrow-labels.chemvas"
+    source = tmp_path / "many-arrow-labels.cdxml"
     state = _state({}, arrows=[_labelled_arrow() for _ in range(arrow_count)])
     write_document(source, state, CANVAS_FILE_VERSION)
     if arrow_count == 50:

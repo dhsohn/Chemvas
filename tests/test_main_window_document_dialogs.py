@@ -333,7 +333,7 @@ class MainWindowDocumentDialogsTest(unittest.TestCase):
         services = self.window.services
         canvas = active_canvas_for_window(self.window)
         with tempfile.TemporaryDirectory() as temp_dir:
-            path = str(Path(temp_dir) / "portrait.chemvas")
+            path = str(Path(temp_dir) / "portrait.cdxml")
             self._choose_sheet_orientation("portrait")
             self.assertTrue(
                 services.document_action_service.save_canvas_to_path(self.window, path)
@@ -349,7 +349,7 @@ class MainWindowDocumentDialogsTest(unittest.TestCase):
             self.assertFalse(services.canvas_document_service.is_dirty(canvas))
             self.assertEqual(
                 services.status_service.status_context_texts()["sheet"],
-                "Canvas: portrait.chemvas",
+                "Canvas: portrait.cdxml",
             )
 
     def test_same_sheet_settings_and_cancel_preserve_document_and_chrome(self) -> None:

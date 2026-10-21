@@ -15,7 +15,6 @@ from PyQt6.QtTest import QTest
 from PyQt6.QtWidgets import QApplication, QMessageBox
 
 from chemvas.bootstrap.main_window import build_main_window
-from chemvas.core.document_io import write_document
 from chemvas.core.molfile import parse_molfile, write_molfile
 from chemvas.domain.document import CANVAS_FILE_VERSION, MoleculeModel
 from chemvas.features.export.errors import MinimumFontSizeError
@@ -41,6 +40,7 @@ from chemvas.ui.window.main_window_ports import (
     active_canvas_for_window,
     history_service_for_window,
 )
+from tests.document_file_helpers import write_document
 
 
 class MainWindowDocumentActionServiceTest(unittest.TestCase):
@@ -101,7 +101,7 @@ class MainWindowDocumentActionServiceTest(unittest.TestCase):
         )
 
         with tempfile.TemporaryDirectory() as temp_dir:
-            path = Path(temp_dir) / "new.chemvas"
+            path = Path(temp_dir) / "new.cdxml"
             result = self.service.save_canvas_to_path(self.window, str(path))
 
             self.assertTrue(result)
@@ -111,7 +111,7 @@ class MainWindowDocumentActionServiceTest(unittest.TestCase):
                 canvas.runtime_state.document_metadata_state.file_path, str(path)
             )
             self.assertEqual(
-                self.window.tab_references.canvas_tabs.tabText(0), "new.chemvas"
+                self.window.tab_references.canvas_tabs.tabText(0), "new.cdxml"
             )
             self.assertFalse(
                 self.window.services.canvas_document_service.is_dirty(canvas)
@@ -128,7 +128,7 @@ class MainWindowDocumentActionServiceTest(unittest.TestCase):
         }
 
         with tempfile.TemporaryDirectory() as temp_dir:
-            for name in ("first.chemvas", "renamed.chemvas"):
+            for name in ("first.cdxml", "renamed.cdxml"):
                 with self.subTest(name=name):
                     path = str(Path(temp_dir) / name)
                     file_dialog = mock.Mock()
@@ -170,18 +170,18 @@ class MainWindowDocumentActionServiceTest(unittest.TestCase):
         self.assertEqual(self.window.statusBar().currentMessage(), "Keep this feedback")
 
         with tempfile.TemporaryDirectory() as temp_dir:
-            path = str(Path(temp_dir) / "saved.chemvas")
+            path = str(Path(temp_dir) / "saved.cdxml")
             self.assertTrue(self.service.save_canvas_to_path(self.window, path))
             self.assertEqual(
-                status.status_context_texts()["sheet"], "Canvas: saved.chemvas"
+                status.status_context_texts()["sheet"], "Canvas: saved.cdxml"
             )
 
     def test_failed_save_preserves_sheet_status_and_document_state(self) -> None:
         canvas = active_canvas_for_window(self.window)
         status = self.window.services.status_service
         with tempfile.TemporaryDirectory() as temp_dir:
-            original_path = Path(temp_dir) / "original.chemvas"
-            failed_path = Path(temp_dir) / "failed.chemvas"
+            original_path = Path(temp_dir) / "original.cdxml"
+            failed_path = Path(temp_dir) / "failed.cdxml"
             self.assertTrue(
                 self.service.save_canvas_to_path(self.window, str(original_path))
             )
@@ -222,7 +222,7 @@ class MainWindowDocumentActionServiceTest(unittest.TestCase):
     def test_save_confirms_external_replacement_and_cancel_keeps_both_versions(self):
         canvas = active_canvas_for_window(self.window)
         with tempfile.TemporaryDirectory() as temp_dir:
-            path = Path(temp_dir) / "shared.chemvas"
+            path = Path(temp_dir) / "shared.cdxml"
             self.assertTrue(self.service.save_canvas_to_path(self.window, str(path)))
             add_bond_between_points_for(canvas, QPointF(-20, 0), QPointF(20, 0))
             external_bytes = path.read_bytes() + b"\n"
@@ -258,7 +258,7 @@ class MainWindowDocumentActionServiceTest(unittest.TestCase):
     def test_save_does_not_adopt_another_writers_post_save_bytes(self) -> None:
 
         with tempfile.TemporaryDirectory() as temp_dir:
-            path = Path(temp_dir) / "shared.chemvas"
+            path = Path(temp_dir) / "shared.cdxml"
 
             session_service = active_canvas_for_window(
                 self.window
@@ -294,7 +294,7 @@ class MainWindowDocumentActionServiceTest(unittest.TestCase):
     def test_open_records_source_bytes_and_recovery_requires_confirmation(self):
         canvas = active_canvas_for_window(self.window)
         with tempfile.TemporaryDirectory() as temp_dir:
-            path = Path(temp_dir) / "shared.chemvas"
+            path = Path(temp_dir) / "shared.cdxml"
             write_document(
                 path,
                 canvas.services.canvas_document_session_service.snapshot_state(),
@@ -354,7 +354,7 @@ class MainWindowDocumentActionServiceTest(unittest.TestCase):
                 set_calculation_plan_for(canvas, plan)
                 documents.mark_dirty(canvas)
                 message_box = mock.Mock()
-                path = Path(temp_dir) / "draft.chemvas"
+                path = Path(temp_dir) / "draft.cdxml"
                 path.write_bytes(b"existing document")
                 self.assertFalse(
                     self.service.save_canvas_to_path(
@@ -373,11 +373,11 @@ class MainWindowDocumentActionServiceTest(unittest.TestCase):
                 )
 
     def test_save_preserves_legacy_charge_metadata_without_prompt(self) -> None:
-        from chemvas.core.document_io import read_document
         from chemvas.ui.canvas.canvas_calculation_plan_state import (
             set_calculation_plan_for,
         )
         from tests.calculation_plan_support import _document_state, _plan
+        from tests.document_file_helpers import read_document
 
         canvas = active_canvas_for_window(self.window)
         self.window.services.canvas_document_service.replace_canvas_with_state(
@@ -388,7 +388,7 @@ class MainWindowDocumentActionServiceTest(unittest.TestCase):
         set_calculation_plan_for(canvas, plan)
         message_box = mock.Mock()
         with tempfile.TemporaryDirectory() as temp_dir:
-            path = Path(temp_dir) / "legacy.chemvas"
+            path = Path(temp_dir) / "legacy.cdxml"
             self.assertTrue(
                 self.service.save_canvas_to_path(
                     self.window, str(path), message_box=message_box
@@ -405,7 +405,7 @@ class MainWindowDocumentActionServiceTest(unittest.TestCase):
         other_canvas = object()
         other_window = object()
         message_box = mock.Mock()
-        owned_path = os.path.abspath("/tmp/owned.chemvas")
+        owned_path = os.path.abspath("/tmp/owned.cdxml")
 
         with (
             mock.patch(
@@ -437,8 +437,8 @@ class MainWindowDocumentActionServiceTest(unittest.TestCase):
         self,
     ) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
-            target = Path(temp_dir) / "target.chemvas"
-            alias = Path(temp_dir) / "alias.chemvas"
+            target = Path(temp_dir) / "target.cdxml"
+            alias = Path(temp_dir) / "alias.cdxml"
             target.write_text("old", encoding="utf-8")
             alias.symlink_to(target)
 
@@ -456,8 +456,8 @@ class MainWindowDocumentActionServiceTest(unittest.TestCase):
 
     def test_save_canvas_to_path_refuses_to_split_a_hard_link(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
-            target = Path(temp_dir) / "target.chemvas"
-            alias = Path(temp_dir) / "alias.chemvas"
+            target = Path(temp_dir) / "target.cdxml"
+            alias = Path(temp_dir) / "alias.cdxml"
             target.write_text("old", encoding="utf-8")
             os.link(target, alias)
             message_box = mock.Mock()
@@ -485,7 +485,7 @@ class MainWindowDocumentActionServiceTest(unittest.TestCase):
             QPointF(20.0, 0.0),
         )
         with tempfile.TemporaryDirectory() as temp_dir:
-            path = str(Path(temp_dir) / "dup.chemvas")
+            path = str(Path(temp_dir) / "dup.cdxml")
             self.assertTrue(self.service.save_canvas_to_path(self.window, path))
             windows_before = set(open_windows())
             spawned: list = []
@@ -511,7 +511,7 @@ class MainWindowDocumentActionServiceTest(unittest.TestCase):
 
     def test_load_canvas_from_path_stores_an_absolute_file_path(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
-            abs_path = str(Path(temp_dir) / "rel.chemvas")
+            abs_path = str(Path(temp_dir) / "rel.cdxml")
             write_document(
                 abs_path,
                 active_canvas_for_window(
@@ -523,7 +523,7 @@ class MainWindowDocumentActionServiceTest(unittest.TestCase):
             os.chdir(temp_dir)
             try:
                 ok = self.service.load_canvas_from_path(
-                    self.window, "rel.chemvas", target_provider=lambda: self.window
+                    self.window, "rel.cdxml", target_provider=lambda: self.window
                 )
             finally:
                 os.chdir(cwd)
@@ -537,11 +537,11 @@ class MainWindowDocumentActionServiceTest(unittest.TestCase):
         self.assertIsNotNone(stored)
         assert stored is not None
         self.assertTrue(os.path.isabs(stored))
-        self.assertTrue(stored.endswith("rel.chemvas"))
+        self.assertTrue(stored.endswith("rel.cdxml"))
 
     def test_load_canvas_from_path_refreshes_the_autosave_snapshot(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
-            path = str(Path(temp_dir) / "open.chemvas")
+            path = str(Path(temp_dir) / "open.cdxml")
             write_document(
                 path,
                 active_canvas_for_window(
@@ -582,7 +582,7 @@ class MainWindowDocumentActionServiceTest(unittest.TestCase):
             lambda: calls.append(1),
         ):
             with tempfile.TemporaryDirectory() as temp_dir:
-                path = str(Path(temp_dir) / "snap.chemvas")
+                path = str(Path(temp_dir) / "snap.cdxml")
                 self.assertTrue(self.service.save_canvas_to_path(self.window, path))
         # A save must nudge the session manifest so a path change is captured
         # before any clean-exit flag is written.
@@ -608,7 +608,7 @@ class MainWindowDocumentActionServiceTest(unittest.TestCase):
         message_box.warning.assert_called_once_with(
             self.window,
             "Save Error",
-            "Chemvas documents must use the .chemvas filename extension.",
+            "Chemvas documents must use the .cdxml filename extension.",
         )
 
     def test_save_canvas_to_path_reports_document_adjustments(self) -> None:
@@ -623,7 +623,7 @@ class MainWindowDocumentActionServiceTest(unittest.TestCase):
         ):
             result = self.service.save_canvas_to_path(
                 self.window,
-                "/tmp/adjusted.chemvas",
+                "/tmp/adjusted.cdxml",
                 message_box=message_box,
             )
 
@@ -636,7 +636,7 @@ class MainWindowDocumentActionServiceTest(unittest.TestCase):
     def test_save_canvas_prefers_current_path_and_falls_back_to_save_as(self) -> None:
         canvas = active_canvas_for_window(self.window)
         self.window.services.canvas_document_service.set_file_path(
-            canvas, "/tmp/existing.chemvas"
+            canvas, "/tmp/existing.cdxml"
         )
 
         with (
@@ -654,7 +654,7 @@ class MainWindowDocumentActionServiceTest(unittest.TestCase):
             )
 
         save_canvas_to_path.assert_called_once_with(
-            self.window, "/tmp/existing.chemvas", canvas=None
+            self.window, "/tmp/existing.cdxml", canvas=None
         )
         save_canvas_as.assert_not_called()
 
@@ -681,7 +681,7 @@ class MainWindowDocumentActionServiceTest(unittest.TestCase):
     ) -> None:
         canvas = active_canvas_for_window(self.window)
         self.window.services.canvas_document_service.set_file_path(
-            canvas, "/tmp/current.chemvas"
+            canvas, "/tmp/current.cdxml"
         )
         file_dialog = mock.Mock()
         file_dialog.getSaveFileName.return_value = ("/tmp/new-drawing", "")
@@ -699,25 +699,25 @@ class MainWindowDocumentActionServiceTest(unittest.TestCase):
 
         file_dialog.getSaveFileName.assert_called_once()
         self.assertEqual(
-            file_dialog.getSaveFileName.call_args.args[2], "/tmp/current.chemvas"
+            file_dialog.getSaveFileName.call_args.args[2], "/tmp/current.cdxml"
         )
         self.assertEqual(
             file_dialog.getSaveFileName.call_args.args[3],
-            "Chemvas (*.chemvas);;All Files (*)",
+            "ChemDraw XML (*.cdxml);;All Files (*)",
         )
         save_canvas_to_path.assert_called_once_with(
-            self.window, str(Path("/tmp/new-drawing.chemvas")), canvas=None
+            self.window, str(Path("/tmp/new-drawing.cdxml")), canvas=None
         )
 
     def test_save_canvas_as_confirms_overwrite_when_normalization_retargets(
         self,
     ) -> None:
         # The dialog's own overwrite prompt covers the typed name only; when
-        # suffix normalization redirects the write to an existing .chemvas
+        # suffix normalization redirects the write to an existing .cdxml
         # file, that file was never confirmed and must not be replaced
         # silently.
         with tempfile.TemporaryDirectory() as temp_dir:
-            existing = Path(temp_dir) / "aspirin.chemvas"
+            existing = Path(temp_dir) / "aspirin.cdxml"
             existing.write_text("sentinel")
             for typed in ("aspirin", "aspirin.v2"):
                 with self.subTest(typed=typed):
@@ -761,7 +761,7 @@ class MainWindowDocumentActionServiceTest(unittest.TestCase):
 
     def test_save_canvas_as_does_not_reprompt_a_dialog_confirmed_path(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
-            existing = Path(temp_dir) / "confirmed.chemvas"
+            existing = Path(temp_dir) / "confirmed.cdxml"
             existing.write_text("sentinel")
             file_dialog = mock.Mock()
             file_dialog.getSaveFileName.return_value = (str(existing), "")
@@ -1172,15 +1172,15 @@ class MainWindowDocumentActionServiceTest(unittest.TestCase):
         self.assertEqual(
             file_dialog.getOpenFileName.call_args.args[3],
             (
-                "Chemvas / Editable SVG / MDL Molfile (*.chemvas *.svg *.mol);;"
-                "Chemvas (*.chemvas);;Editable SVG (*.svg);;"
+                "CDXML / Editable SVG / MDL Molfile (*.cdxml *.svg *.mol);;ChemDraw XML (*.cdxml);;"
+                "Editable SVG (*.svg);;"
                 "MDL Molfile (*.mol);;All Files (*)"
             ),
         )
 
     def test_load_canvas_from_path_reuses_clean_untitled_canvas(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
-            path = Path(temp_dir) / "input.chemvas"
+            path = Path(temp_dir) / "input.cdxml"
             state = active_canvas_for_window(
                 self.window
             ).services.canvas_document_session_service.snapshot_state()
@@ -1191,7 +1191,7 @@ class MainWindowDocumentActionServiceTest(unittest.TestCase):
         self.assertTrue(result)
         self.assertEqual(self.window.tab_references.canvas_count(), 1)
         self.assertEqual(
-            self.window.tab_references.canvas_tabs.tabText(0), "input.chemvas"
+            self.window.tab_references.canvas_tabs.tabText(0), "input.cdxml"
         )
         self.assertEqual(
             active_canvas_for_window(
@@ -1221,7 +1221,7 @@ class MainWindowDocumentActionServiceTest(unittest.TestCase):
         message_box.warning.assert_called_once_with(
             self.window,
             "Load Error",
-            "Unsupported file type. Open a .chemvas, .svg, or .mol file.",
+            "Unsupported file type. Open a .cdxml, .svg, or .mol file.",
         )
         self.assertIsNone(
             active_canvas_for_window(
@@ -1262,7 +1262,7 @@ class MainWindowDocumentActionServiceTest(unittest.TestCase):
 
         self.assertTrue(result)
         message_box.warning.assert_not_called()
-        # The import has no backing .chemvas document: it must stay untitled
+        # The import has no backing .cdxml document: it must stay untitled
         # (Save prompts for a new path instead of overwriting the .mol) and
         # must not enter the recent-files list.
         record_recent.assert_not_called()
@@ -1490,7 +1490,7 @@ class MainWindowDocumentActionServiceTest(unittest.TestCase):
         ):
             result = self.service.load_canvas_from_path(
                 self.window,
-                "/tmp/failed-open.chemvas",
+                "/tmp/failed-open.cdxml",
                 message_box=mock.Mock(),
                 read_document=mock.Mock(return_value=SimpleNamespace(state=before)),
                 target_provider=target_provider,
@@ -1523,7 +1523,7 @@ class MainWindowDocumentActionServiceTest(unittest.TestCase):
 
         result = self.service.load_canvas_from_path(
             self.window,
-            "/tmp/workbook.chemvas",
+            "/tmp/workbook.cdxml",
             message_box=message_box,
             read_document=read_document,
         )

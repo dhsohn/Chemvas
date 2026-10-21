@@ -100,6 +100,9 @@ def snapshot_canvas_document_state_with_warnings(canvas) -> tuple[dict, list[str
     groups = _snapshot_groups(canvas)
     if groups:
         state["groups"] = groups
+    from chemvas.ui.canvas.canvas_cdxml_source import snapshot_cdxml_source
+
+    snapshot_cdxml_source(canvas, state)
     return state, warnings
 
 

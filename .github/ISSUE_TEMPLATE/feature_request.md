@@ -23,4 +23,4 @@ figures, and working with documents from scripts. Which workflow would this
 improve?
 
 **Additional context**
-Mockups, references to other tools, or a small `.chemvas` example.
+Mockups, references to other tools, or a small `.cdxml` example.

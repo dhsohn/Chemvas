@@ -8,13 +8,13 @@ Chemvas는 GUI 창을 띄우지 않고 문서 작업을 자동화하는 헤드�
 
 ```mermaid
 flowchart LR
-    compose["compose-document<br/>Composition v1/v2 JSON"] --> doc[("scheme.chemvas")]
+    compose["compose-document<br/>Composition v1/v2 JSON"] --> doc[("scheme.cdxml")]
     template["insert-template"] --> doc
     desktop["데스크톱 앱<br/>File ▸ Save"] --> doc
     doc --> inspect["inspect-document<br/>정확한 SHA-256 + 원자 ID"]
     inspect --> patch["apply-patch<br/>Graph Patch v1"]
     inspect --> layout["layout-document<br/>반응식 배치"]
-    patch --> revised[("새 .chemvas")]
+    patch --> revised[("새 .cdxml")]
     layout --> revised
     revised --> check["check-layout<br/>경고, exit 0/1/2"]
     revised --> render["render-document<br/>SVG · PDF · PNG"]
@@ -26,10 +26,10 @@ CLI 작업의 기본 동작 원칙:
 
 ## 헤드리스 문서 구성 (Composition)
 
-JSON 매니페스트로부터 다시 편집 가능한 유효한 `.chemvas` 문서를 생성합니다:
+JSON 매니페스트로부터 다시 편집 가능한 유효한 `.cdxml` 문서를 생성합니다:
 
 ```bash
-chemvas compose-document scheme.json --output scheme.chemvas
+chemvas compose-document scheme.json --output scheme.cdxml
 ```
 
 `images` 배열을 추가하면 PNG/JPEG 래스터 이미지를 캔버스 객체와 함께 내장할 수 있습니다 (경로는 매니페스트 파일 기준 상대 경로; [이미지 객체](IMAGE_OBJECTS.ko.md) 참고).
@@ -85,7 +85,7 @@ chemvas compose-document scheme.json --output scheme.chemvas
 캔버스 요소 간의 겹침 및 용지 경계 초과 여부를 사전 검사합니다:
 
 ```bash
-chemvas check-layout scheme.chemvas > layout-report.json
+chemvas check-layout scheme.cdxml > layout-report.json
 ```
 
 주요 진단 경고 코드:
@@ -98,7 +98,7 @@ chemvas check-layout scheme.chemvas > layout-report.json
 대규모 도식에서 용지 경계 초과 여부만 빠르게 검사하려면:
 
 ```bash
-chemvas check-layout scheme.chemvas --sheet-only > sheet-report.json
+chemvas check-layout scheme.cdxml --sheet-only > sheet-report.json
 ```
 
 종료 코드: `0` (정상 통과), `1` (경고 발견), `2` (입력 오류 또는 비정상 실패).
@@ -118,8 +118,8 @@ chemvas check-layout scheme.chemvas --sheet-only > sheet-report.json
 RDKit 없이 CLI를 통해 표준 고리 템플릿을 삽입합니다:
 
 ```bash
-chemvas insert-template scheme.chemvas --request ring.json --dry-run
-chemvas insert-template scheme.chemvas --request ring.json --output ring-added.chemvas
+chemvas insert-template scheme.cdxml --request ring.json --dry-run
+chemvas insert-template scheme.cdxml --request ring.json --output ring-added.cdxml
 ```
 
 ```json
@@ -143,14 +143,14 @@ chemvas insert-template scheme.chemvas --request ring.json --output ring-added.c
 GUI 창을 실행하지 않고 터미널에서 고해상도 SVG, PDF, PNG 또는 실험적 CDXML을 바로 생성합니다:
 
 ```bash
-chemvas render-document scheme.chemvas --output scheme.svg
-chemvas render-document scheme.chemvas --output scheme.pdf --width-mm 174
-chemvas render-document scheme.chemvas --output scheme.png --dpi 600
-chemvas render-document scheme.chemvas --output journal.svg --width-mm 70 --max-height-mm 120
-chemvas render-document scheme.chemvas --output readable.svg --width-mm 174 --min-font-pt 6
-chemvas render-document scheme.chemvas --output scheme-transparent.png \
+chemvas render-document scheme.cdxml --output scheme.svg
+chemvas render-document scheme.cdxml --output scheme.pdf --width-mm 174
+chemvas render-document scheme.cdxml --output scheme.png --dpi 600
+chemvas render-document scheme.cdxml --output journal.svg --width-mm 70 --max-height-mm 120
+chemvas render-document scheme.cdxml --output readable.svg --width-mm 174 --min-font-pt 6
+chemvas render-document scheme.cdxml --output scheme-transparent.png \
   --background transparent
-chemvas render-document scheme.chemvas --output scheme.cdxml --cdxml-label-bindings labels.json
+chemvas render-document scheme.cdxml --output scheme.cdxml --cdxml-label-bindings labels.json
 ```
 
 - `--width-mm`: 논문 단 너비(1단 84 mm, 2단 174 mm 등)에 맞춰 전체 그림을 비율에 맞게 확대/축소 렌더링합니다.
@@ -163,9 +163,9 @@ chemvas render-document scheme.chemvas --output scheme.cdxml --cdxml-label-bindi
 문서 전체를 다시 작성하지 않고, 안정적인 원자 ID를 바탕으로 필요한 부분만 수정합니다:
 
 ```bash
-chemvas inspect-document ring-added.chemvas > inspection.json
-chemvas apply-patch ring-added.chemvas patch.json --dry-run
-chemvas apply-patch ring-added.chemvas patch.json --output revised.chemvas
+chemvas inspect-document ring-added.cdxml > inspection.json
+chemvas apply-patch ring-added.cdxml patch.json --dry-run
+chemvas apply-patch ring-added.cdxml patch.json --output revised.cdxml
 ```
 
 이중결합을 단일결합으로 줄이고 카보닐기(=O)를 추가하는 패치 예시:
@@ -247,7 +247,7 @@ chemvas apply-patch ring-added.chemvas patch.json --output revised.chemvas
 python - <<'PY'
 import hashlib, json
 from pathlib import Path
-data = Path("drawing.chemvas").read_bytes()
+data = Path("drawing.cdxml").read_bytes()
 model = json.loads(data)["state"]["model"]
 print(json.dumps({"source_sha256": hashlib.sha256(data).hexdigest(),
                   "atoms": model["atoms"], "bonds": model["bonds"]}, indent=2))
@@ -272,7 +272,7 @@ PY
 ## 저장된 계산 계획
 
 Chemvas는 화학 백엔드를 설치하지 않으며 `machine.json`을 쓰지 않습니다.
-`.chemvas`에 이미 저장된 계산 계획은 현재 그림과 맞을 때 유지됩니다.
+`.cdxml`에 이미 저장된 계산 계획은 현재 그림과 맞을 때 유지됩니다.
 현재 그림을 저장하면 그 계획이 빠지는 경우 저장은 거부됩니다.
 반응 매핑 패널과, 계획을 만들거나 내보내는 명령은 없습니다.
 그래프 검사는 `inspect-document`입니다.
@@ -289,7 +289,7 @@ Chemvas는 화학 백엔드를 설치하지 않으며 `machine.json`을 쓰지 �
 }
 ```
 
-사용자 지정은 각 변 10–2000 mm의 실제 가로·세로를 지정합니다.
+사용자 지정은 각 변 10–3000 mm의 실제 가로·세로를 지정합니다.
 `sheet_orientation`은 표준 용지에만 적용됩니다.
 
 ```json

@@ -10,6 +10,8 @@ from pathlib import Path
 
 import pytest
 
+from tests.document_file_helpers import write_payload_text
+
 ROOT = Path(__file__).resolve().parents[1]
 
 
@@ -43,12 +45,12 @@ def _run(*arguments: str) -> dict:
 
 
 def _write(path: Path, value: dict) -> str:
-    path.write_text(json.dumps(value), encoding="utf-8")
+    write_payload_text(path, json.dumps(value), encoding="utf-8")
     return str(path)
 
 
 def test_documented_composition_template_patch_chain(tmp_path: Path) -> None:
-    source = tmp_path / "scheme.chemvas"
+    source = tmp_path / "scheme.cdxml"
     _run(
         "compose-document",
         _write(tmp_path / "scheme.json", _example("chemvas-document-composition")),
@@ -58,7 +60,7 @@ def test_documented_composition_template_patch_chain(tmp_path: Path) -> None:
     original = source.read_bytes()
     template = _example("chemvas-template-insertion")
     template["source_sha256"] = hashlib.sha256(original).hexdigest()
-    ring = tmp_path / "ring-added.chemvas"
+    ring = tmp_path / "ring-added.cdxml"
     _run(
         "insert-template",
         str(source),
@@ -74,7 +76,7 @@ def test_documented_composition_template_patch_chain(tmp_path: Path) -> None:
     patch["source_sha256"] = inspection["source_sha256"]
     patch_path = _write(tmp_path / "patch.json", patch)
     _run("apply-patch", str(ring), patch_path, "--dry-run")
-    revised = tmp_path / "revised.chemvas"
+    revised = tmp_path / "revised.cdxml"
     _run("apply-patch", str(ring), patch_path, "--output", str(revised))
     result = _run("inspect-document", str(revised))
     assert result["atom_count"] == 9

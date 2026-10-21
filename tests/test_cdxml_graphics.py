@@ -24,7 +24,6 @@ import pytest
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from chemvas.bootstrap.document_cli_shared import offscreen_document_scene
-from chemvas.core.document_io import write_document
 from chemvas.domain.document import (
     CANVAS_FILE_VERSION,
     Atom,
@@ -45,6 +44,7 @@ from chemvas.ui.export.export_cdxml import (
     serialize_cdxml,
 )
 from chemvas.ui.export.figure_export_service import FigureExportService
+from tests.document_file_helpers import write_document
 
 pytestmark = pytest.mark.usefixtures("qt_application")
 
@@ -496,7 +496,7 @@ def test_mock_diagram_source_unchanged(tmp_path):
 
     state = _mock_diagram()
     before_state = json.dumps(state, sort_keys=True)
-    source = tmp_path / "mock.chemvas"
+    source = tmp_path / "mock-source.cdxml"
     write_document(source, state, CANVAS_FILE_VERSION)
     before_bytes = source.read_bytes()
     output = tmp_path / "mock.cdxml"

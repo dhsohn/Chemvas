@@ -22,6 +22,7 @@ from chemvas.domain.document import (
     extract_document_state,
     serialize_model_state_with_warnings,
 )
+from tests.document_file_helpers import read_payload
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -183,7 +184,9 @@ def test_browser_valence_warnings_follow_charge_edits_history_and_reopening(
     assert undone["drawing"]["valence_warnings"] == [centre]
     redone = session.dispatch({"action": "redo", "revision": 3})
     assert redone["drawing"]["valence_warnings"] == []
-    exported = session.dispatch({"action": "export", "revision": 4})["document"]
+    exported = read_payload(
+        session.dispatch({"action": "save_cdxml", "revision": 4})["cdxml"]
+    )
     assert "valence" not in json.dumps(exported)
     reopened = BrowserSession()
     reopened.font = font

@@ -18,6 +18,7 @@ from chemvas.ui.export.figure_export_service import FigureExportService
 from chemvas.ui.window import main_window_document_action_service as actions
 from chemvas.ui.window.main_window_document_dialogs import FigureExportOptions
 from chemvas.ui.window.main_window_ports import active_canvas_for_window
+from tests.document_file_helpers import read_payload, write_payload_text
 from tests.test_cdxml_export import _simple_state
 
 pytestmark = pytest.mark.usefixtures("qt_application")
@@ -54,12 +55,13 @@ def crossing(tmp_path):
         )
     )
     service = actions.MainWindowDocumentActionService()
-    source = tmp_path / "crossing.chemvas"
+    source = tmp_path / "crossing.cdxml"
     assert service.save_canvas_to_path(window, str(source), message_box=Mock())
     source_bytes = source.read_bytes()
     digest = hashlib.sha256(source_bytes).hexdigest()
     sidecar = tmp_path / "meanings.json"
-    sidecar.write_text(
+    write_payload_text(
+        sidecar,
         json.dumps(
             dict(
                 format="chemvas-cdxml-label-bindings",
@@ -67,10 +69,10 @@ def crossing(tmp_path):
                 source_sha256=digest,
                 bindings=[dict(atom_id=4, expected_label="Ar", meaning="generic_aryl")],
             )
-        )
+        ),
     )
     binding = parse_cdxml_label_bindings(
-        json.loads(sidecar.read_text()),
+        read_payload(sidecar.read_text()),
         source_sha256=digest,
         sidecar_sha256=hashlib.sha256(sidecar.read_bytes()).hexdigest(),
     )
@@ -192,11 +194,11 @@ def test_reviewed_snapshot_retains_fragment_overlap_refusal(
     window, canvas, service, source, sidecar, _ = crossing
     canvas.services.note_controller.create_text_note(QPointF(0, -8), "overlap")
     # Save this changed drawing and review its own exact bytes.
-    revised = tmp_path / "overlap.chemvas"
+    revised = tmp_path / "overlap.cdxml"
     assert service.save_canvas_to_path(window, str(revised), message_box=Mock())
-    payload = json.loads(sidecar.read_text())
+    payload = read_payload(sidecar.read_text())
     payload["source_sha256"] = hashlib.sha256(revised.read_bytes()).hexdigest()
-    sidecar.write_text(json.dumps(payload))
+    write_payload_text(sidecar, json.dumps(payload))
     output = tmp_path / "refused.cdxml"
     messages = _gui_export(crossing, monkeypatch, output, "sheet")
     messages.warning.assert_called_once()

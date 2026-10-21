@@ -10,7 +10,6 @@ from PyQt6.QtCore import QPointF, Qt
 from PyQt6.QtTest import QTest
 from PyQt6.QtWidgets import QApplication
 
-from chemvas.core.document_io import read_document, write_document
 from chemvas.core.history import CompositeCommand
 from chemvas.domain.document import CANVAS_FILE_VERSION
 from chemvas.ui.annotations.state import scene_item_state_for
@@ -22,6 +21,7 @@ from chemvas.ui.canvas.canvas_group_state import register_group_for
 from chemvas.ui.molecule.structure_mutation_access import add_bond_for
 from chemvas.ui.scene.scene_decoration_access import add_mark_for_atom_for
 from tests.canvas_factory import build_canvas_view
+from tests.document_file_helpers import read_document, write_document
 
 
 @pytest.fixture(scope="module")
@@ -93,7 +93,7 @@ def test_delete_ring_atom_shrinks_group_not_caption(canvas, tmp_path, route):
     assert original.atom_ids == set(ids)
     after = canvas.services.canvas_document_session_service.snapshot_state()
     _assert_undo_redo(canvas, before, after, group_id, original)
-    path = tmp_path / "surviving-group.chemvas"
+    path = tmp_path / "surviving-group.cdxml"
     write_document(path, after, CANVAS_FILE_VERSION)
     canvas.services.canvas_document_session_service.restore_state(
         read_document(path).state

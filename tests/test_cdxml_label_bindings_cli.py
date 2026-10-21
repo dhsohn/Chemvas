@@ -20,7 +20,6 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from chemvas.bootstrap import document_render as cli
 from chemvas.bootstrap.document_cli_shared import offscreen_document_scene
-from chemvas.core.document_io import write_document
 from chemvas.domain.document import (
     CANVAS_FILE_VERSION,
     Atom,
@@ -40,6 +39,7 @@ from chemvas.ui.export.export_cdxml import (
     serialize_cdxml,
 )
 from chemvas.ui.export.figure_export_service import FigureExportService
+from tests.document_file_helpers import write_document
 
 if TYPE_CHECKING:
     from PyQt6.QtWidgets import QGraphicsItem
@@ -165,7 +165,7 @@ def _assert_refused(
 def test_generic_aryl_sidecar_exports_typed_nickname_and_reports_binding(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    source = tmp_path / "source.chemvas"
+    source = tmp_path / "source-source.cdxml"
     source_bytes = _write_source(source, _label_state())
     sidecar = tmp_path / "labels.json"
     sidecar_bytes = _write_sidecar(sidecar, _sidecar(source_bytes))
@@ -194,7 +194,7 @@ def test_cli_output_equals_direct_exporter_call_with_the_same_typed_bindings(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     state = _mixed_state()
-    source = tmp_path / "mixed.chemvas"
+    source = tmp_path / "mixed-source.cdxml"
     source_bytes = _write_source(source, state)
     sidecar = tmp_path / "labels.json"
     entries = [
@@ -273,7 +273,7 @@ def _bad_sidecar(case: str, source_bytes: bytes) -> str:
 def test_non_strict_sidecar_json_is_refused(
     tmp_path: Path, capsys: pytest.CaptureFixture[str], case: str
 ) -> None:
-    source = tmp_path / "source.chemvas"
+    source = tmp_path / "source-source.cdxml"
     source_bytes = _write_source(source, _label_state())
     sidecar = tmp_path / "labels.json"
     sidecar.write_text(_bad_sidecar(case, source_bytes), encoding="utf-8")
@@ -338,7 +338,7 @@ def test_invalid_or_mismatched_sidecars_publish_nothing(
     entry: dict[str, object] | None,
     match: str,
 ) -> None:
-    source = tmp_path / "source.chemvas"
+    source = tmp_path / "source-source.cdxml"
     source_bytes = _write_source(source, _label_state(label))
     payload = _sidecar(source_bytes, *([] if entry is None else [entry]))
     payload.update(overrides)
@@ -360,7 +360,7 @@ def test_invalid_or_mismatched_sidecars_publish_nothing(
 def test_sidecar_bound_to_other_bytes_is_refused(
     tmp_path: Path, capsys: pytest.CaptureFixture[str], digest: str, match: str
 ) -> None:
-    source = tmp_path / "source.chemvas"
+    source = tmp_path / "source-source.cdxml"
     source_bytes = _write_source(source, _label_state())
     payload = _sidecar(source_bytes)
     payload["source_sha256"] = digest
@@ -376,7 +376,7 @@ def test_sidecar_bound_to_other_bytes_is_refused(
 def test_option_is_refused_for_non_cdxml_output(
     tmp_path: Path, capsys: pytest.CaptureFixture[str], output_format: str
 ) -> None:
-    source = tmp_path / "source.chemvas"
+    source = tmp_path / "source-source.cdxml"
     source_bytes = _write_source(source, _label_state())
     sidecar = tmp_path / "labels.json"
     _write_sidecar(sidecar, _sidecar(source_bytes))
@@ -394,7 +394,7 @@ def test_option_is_refused_for_non_cdxml_output(
 def test_missing_sidecar_is_refused(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    source = tmp_path / "source.chemvas"
+    source = tmp_path / "source-source.cdxml"
     source_bytes = _write_source(source, _label_state())
 
     _assert_refused(
@@ -410,7 +410,7 @@ def test_missing_sidecar_is_refused(
 def test_existing_destination_is_preserved_when_a_binding_fails(
     tmp_path: Path,
 ) -> None:
-    source = tmp_path / "source.chemvas"
+    source = tmp_path / "source-source.cdxml"
     source_bytes = _write_source(source, _label_state())
     sidecar = tmp_path / "labels.json"
     _write_sidecar(sidecar, _sidecar(source_bytes, _entry(expected_label="Ph")))
@@ -432,9 +432,9 @@ def test_validation_and_export_use_the_same_source_bytes(
     capsys: pytest.CaptureFixture[str],
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    source = tmp_path / "source.chemvas"
+    source = tmp_path / "source-source.cdxml"
     source_bytes = _write_source(source, _label_state("Ar"))
-    replacement = tmp_path / "replacement.chemvas"
+    replacement = tmp_path / "replacement.cdxml"
     replacement_bytes = _write_source(replacement, _label_state("N"))
     assert replacement_bytes != source_bytes
     original_read = cli.read_exact_document

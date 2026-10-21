@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
@@ -295,6 +296,63 @@ class BondGeometryPlanService:
             ),
         )
 
+    def _native_uncertain_primitives(
+        self, bond, a, b, *, topology_count: int | None = None
+    ) -> tuple[BondPrimitive, ...]:
+        t0, t1 = self.renderer.trim_line_for_labels(bond.a, bond.b, a.x, a.y, b.x, b.y)
+        dx, dy = b.x - a.x, b.y - a.y
+        length = math.hypot(dx, dy)
+        if length <= 1e-9 or t1 <= t0:
+            return ()
+        nx, ny = -dy / length, dx / length
+        amplitude = min(length * 0.08, 1.4)
+        if bond.style == "hash_plain":
+            count = (
+                topology_count - 1
+                if topology_count is not None and topology_count > 1
+                else max(2, math.ceil(length * (t1 - t0) / 2.5))
+            )
+            return tuple(
+                self._line(
+                    (
+                        a.x + dx * t - nx * amplitude,
+                        a.y + dy * t - ny * amplitude,
+                        a.x + dx * t + nx * amplitude,
+                        a.y + dy * t + ny * amplitude,
+                    )
+                )
+                for t in (t0 + (t1 - t0) * i / count for i in range(count + 1))
+            )
+        left, right = [], []
+        half_width = self.context.renderer.bond_line_width() / 2
+        cycles = max(1, round(length * (t1 - t0) / 5))
+        steps = cycles * 20
+        for i in range(steps + 1):
+            fraction = i / steps
+            t = t0 + (t1 - t0) * fraction
+            displacement = amplitude * math.sin(fraction * cycles * 2 * math.pi)
+            x, y = a.x + dx * t + nx * displacement, a.y + dy * t + ny * displacement
+            slope = (
+                amplitude
+                * cycles
+                * 2
+                * math.pi
+                * math.cos(fraction * cycles * 2 * math.pi)
+            )
+            tx, ty = dx * (t1 - t0) + nx * slope, dy * (t1 - t0) + ny * slope
+            tangent_length = math.hypot(tx, ty)
+            ox, oy = -ty / tangent_length * half_width, tx / tangent_length * half_width
+            left.append((x + ox, y + oy))
+            right.append((x - ox, y - oy))
+        drawer = self.renderer.graphics_drawer
+        return (
+            BondPolygonPrimitive(
+                drawer.polygon_factory(
+                    [drawer.point_factory(x, y) for x, y in left + right[::-1]]
+                )
+            ),
+        )
+
     def primitives_for_bond(
         self,
         bond,
@@ -303,6 +361,10 @@ class BondGeometryPlanService:
         *,
         topology_count: int | None = None,
     ) -> tuple[BondPrimitive, ...]:
+        if bond.style in {"wavy", "hash_plain"}:
+            return self._native_uncertain_primitives(
+                bond, a, b, topology_count=topology_count
+            )
         if bond.style == "wedge":
             return self._wedge_primitives(bond, a, b)
         if bond.style == "hash":

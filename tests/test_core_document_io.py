@@ -17,9 +17,9 @@ from chemvas.core.document_io import (
     atomic_write_via_temp,
     create_document,
     parse_document,
-    read_document,
-    read_exact_document,
-    write_document,
+    read_exact_snapshot,
+    read_snapshot,
+    write_snapshot,
 )
 from chemvas.domain.document import (
     CANVAS_FILE_VERSION,
@@ -72,27 +72,27 @@ def _canvas_state(model: dict | None = None) -> dict:
 class DocumentIOTest(unittest.TestCase):
     def test_read_exact_document_returns_the_bytes_it_parsed(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
-            path = Path(tmp) / "document.chemvas"
-            write_document(path, _canvas_state(), CANVAS_FILE_VERSION)
+            path = Path(tmp) / "document.json"
+            write_snapshot(path, _canvas_state(), CANVAS_FILE_VERSION)
 
-            read = read_exact_document(path)
+            read = read_exact_snapshot(path)
 
             self.assertEqual(read.source_bytes, path.read_bytes())
             self.assertEqual(read.document.payload["version"], CANVAS_FILE_VERSION)
 
     def test_read_exact_document_bounds_the_read_itself(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
-            path = Path(tmp) / "document.chemvas"
-            write_document(path, _canvas_state(), CANVAS_FILE_VERSION)
+            path = Path(tmp) / "document.json"
+            write_snapshot(path, _canvas_state(), CANVAS_FILE_VERSION)
             size = path.stat().st_size
 
-            read = read_exact_document(path, max_bytes=size)
+            read = read_exact_snapshot(path, max_bytes=size)
             self.assertEqual(len(read.source_bytes), size)
 
             with self.assertRaisesRegex(
                 ValueError, f"exceeds the {size - 1}-byte limit"
             ):
-                read_exact_document(path, max_bytes=size - 1)
+                read_exact_snapshot(path, max_bytes=size - 1)
 
     def test_read_document_rejects_duplicate_json_object_keys(self) -> None:
         payload = {
@@ -115,12 +115,12 @@ class DocumentIOTest(unittest.TestCase):
         )
 
         with tempfile.TemporaryDirectory() as tmp:
-            path = Path(tmp) / "duplicate.chemvas"
+            path = Path(tmp) / "duplicate.json"
             for raw_payload in duplicate_payloads:
                 with self.subTest(raw_payload=raw_payload):
                     path.write_text(raw_payload, encoding="utf-8")
                     with self.assertRaisesRegex(ValueError, "Invalid Chemvas file"):
-                        read_document(path)
+                        read_snapshot(path)
 
     def test_atomic_create_bytes_never_replaces_an_existing_path(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -155,11 +155,11 @@ class DocumentIOTest(unittest.TestCase):
         )
 
         with tempfile.TemporaryDirectory() as tmp:
-            path = Path(tmp) / "oversized.chemvas"
+            path = Path(tmp) / "oversized.json"
             path.write_text(oversized, encoding="utf-8")
 
             with self.assertRaisesRegex(ValueError, "Invalid Chemvas file"):
-                read_document(path)
+                read_snapshot(path)
 
     def test_failed_publish_closes_no_descriptor_it_no_longer_owns(self) -> None:
         # The staging file object closes the descriptor on its way out, so a
@@ -248,7 +248,7 @@ class DocumentIOTest(unittest.TestCase):
                 "type": CHEMVAS_FILE_TYPE,
                 "version": CANVAS_FILE_VERSION,
                 "schema": 1,
-                "min_reader": "0.23.0",
+                "min_reader": "0.26.0",
                 "state": {**state, "last_smiles_input": None},
             },
         )
@@ -324,14 +324,14 @@ class DocumentIOTest(unittest.TestCase):
             + b"\n"
         )
         with tempfile.TemporaryDirectory() as tmp:
-            path = Path(tmp) / "source.chemvas"
+            path = Path(tmp) / "source.json"
             path.write_bytes(raw)
             with mock.patch.object(
                 document_io,
                 "normalize_json_numbers",
                 wraps=document_io.normalize_json_numbers,
             ) as normalize:
-                read = read_exact_document(path)
+                read = read_exact_snapshot(path)
             self.assertEqual(normalize.call_count, 1)
             self.assertEqual(read.source_bytes, raw)
             self.assertEqual(
@@ -410,8 +410,8 @@ class DocumentIOTest(unittest.TestCase):
 
         self.assertEqual(document.state["model"]["atoms"]["0"]["x"], 1.25)
         with tempfile.TemporaryDirectory() as temp_dir:
-            path = Path(temp_dir) / "decimal.chemvas"
-            write_document(path, state, version=CANVAS_FILE_VERSION)
+            path = Path(temp_dir) / "decimal.json"
+            write_snapshot(path, state, version=CANVAS_FILE_VERSION)
             loaded = json.loads(path.read_text(encoding="utf-8"))
 
         self.assertEqual(loaded["state"]["model"]["atoms"]["0"]["x"], 1.25)
@@ -432,8 +432,8 @@ class DocumentIOTest(unittest.TestCase):
 
         self.assertEqual(document.state["arrows"][0]["start"], (1.25, 0.0))
         with tempfile.TemporaryDirectory() as temp_dir:
-            path = Path(temp_dir) / "tuple-decimal.chemvas"
-            write_document(path, state, version=CANVAS_FILE_VERSION)
+            path = Path(temp_dir) / "tuple-decimal.json"
+            write_snapshot(path, state, version=CANVAS_FILE_VERSION)
             loaded = json.loads(path.read_text(encoding="utf-8"))
 
         self.assertEqual(loaded["state"]["arrows"][0]["start"], [1.25, 0.0])
@@ -523,10 +523,10 @@ class DocumentIOTest(unittest.TestCase):
         )
 
         with tempfile.TemporaryDirectory() as temp_dir:
-            path = Path(temp_dir) / "sample.chemvas"
+            path = Path(temp_dir) / "sample.json"
 
-            written = write_document(path, state, version=CANVAS_FILE_VERSION)
-            loaded = read_document(path)
+            written = write_snapshot(path, state, version=CANVAS_FILE_VERSION)
+            loaded = read_snapshot(path)
 
         self.assertEqual(
             written.payload,
@@ -534,7 +534,7 @@ class DocumentIOTest(unittest.TestCase):
                 "type": CHEMVAS_FILE_TYPE,
                 "version": CANVAS_FILE_VERSION,
                 "schema": 1,
-                "min_reader": "0.23.0",
+                "min_reader": "0.26.0",
                 "state": state,
             },
         )
@@ -576,10 +576,10 @@ class DocumentIOTest(unittest.TestCase):
         }
 
         with tempfile.TemporaryDirectory() as temp_dir:
-            path = Path(temp_dir) / "legacy.chemvas"
+            path = Path(temp_dir) / "legacy.json"
             path.write_text(json.dumps(payload), encoding="utf-8")
             with self.assertRaises(ValueError):
-                read_document(path)
+                read_snapshot(path)
 
     def test_write_document_rejects_bond_tombstones_at_current_version(self) -> None:
         state = _canvas_state(
@@ -609,36 +609,36 @@ class DocumentIOTest(unittest.TestCase):
         )
 
         with tempfile.TemporaryDirectory() as temp_dir:
-            path = Path(temp_dir) / "sample.chemvas"
+            path = Path(temp_dir) / "sample.json"
             with self.assertRaises(ValueError):
-                write_document(path, state, version=CANVAS_FILE_VERSION)
+                write_snapshot(path, state, version=CANVAS_FILE_VERSION)
             self.assertFalse(path.exists())
 
     def test_read_document_rejects_deep_json_without_leaking_recursion_error(
         self,
     ) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
-            path = Path(temp_dir) / "sample.chemvas"
+            path = Path(temp_dir) / "sample.json"
             path.write_text("[" * 20_000 + "0" + "]" * 20_000, encoding="utf-8")
 
             with self.assertRaisesRegex(ValueError, "Invalid Chemvas file"):
-                read_document(path)
+                read_snapshot(path)
 
     def test_read_document_rejects_invalid_utf8_without_leaking_decode_error(
         self,
     ) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
-            path = Path(temp_dir) / "sample.chemvas"
+            path = Path(temp_dir) / "sample.json"
             path.write_bytes(b"\xff\xfe\x00")
 
             with self.assertRaisesRegex(ValueError, "Invalid Chemvas file"):
-                read_document(path)
+                read_snapshot(path)
 
     def test_read_document_rejects_overlong_json_integer_without_leaking_int_guard_error(
         self,
     ) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
-            path = Path(temp_dir) / "sample.chemvas"
+            path = Path(temp_dir) / "sample.json"
             payload = {
                 "type": CHEMVAS_FILE_TYPE,
                 "version": CANVAS_FILE_VERSION,
@@ -666,11 +666,11 @@ class DocumentIOTest(unittest.TestCase):
             )
 
             with self.assertRaisesRegex(ValueError, "Invalid Chemvas file"):
-                read_document(path)
+                read_snapshot(path)
 
     def test_read_document_rejects_unsafe_decimal_float_token(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
-            path = Path(temp_dir) / "sample.chemvas"
+            path = Path(temp_dir) / "sample.json"
             payload = {
                 "type": CHEMVAS_FILE_TYPE,
                 "version": CANVAS_FILE_VERSION,
@@ -698,7 +698,7 @@ class DocumentIOTest(unittest.TestCase):
             )
 
             with self.assertRaisesRegex(ValueError, "Invalid Chemvas file"):
-                read_document(path)
+                read_snapshot(path)
 
     def test_parse_document_rejects_huge_numeric_coordinate_without_leaking_overflow_error(
         self,
@@ -760,17 +760,17 @@ class DocumentIOTest(unittest.TestCase):
         state = _canvas_state()
 
         with tempfile.TemporaryDirectory() as temp_dir:
-            path = Path(temp_dir) / "sample.chemvas"
+            path = Path(temp_dir) / "sample.json"
             path.write_text("ORIGINAL", encoding="utf-8")
 
             with mock.patch(
                 "chemvas.core.document_io.os.fsync", side_effect=OSError("disk full")
             ):
                 with self.assertRaises(OSError):
-                    write_document(path, state, version=CANVAS_FILE_VERSION)
+                    write_snapshot(path, state, version=CANVAS_FILE_VERSION)
 
             self.assertEqual(path.read_text(encoding="utf-8"), "ORIGINAL")
-            self.assertEqual(os.listdir(temp_dir), ["sample.chemvas"])
+            self.assertEqual(os.listdir(temp_dir), ["sample.json"])
 
     def test_atomic_write_text_preserves_existing_file_on_failure(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -788,7 +788,7 @@ class DocumentIOTest(unittest.TestCase):
 
     def test_atomic_write_via_temp_uses_unique_sibling_temp_path_per_call(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
-            path = Path(temp_dir) / "sample.chemvas"
+            path = Path(temp_dir) / "sample.json"
             temp_paths: list[Path] = []
 
             def writer(tmp: Path) -> None:
@@ -808,11 +808,11 @@ class DocumentIOTest(unittest.TestCase):
                 self.assertTrue(tmp.name.endswith(".tmp"))
                 self.assertFalse(tmp.exists())
             self.assertEqual(path.read_text(encoding="utf-8"), "write 2")
-            self.assertEqual(os.listdir(temp_dir), ["sample.chemvas"])
+            self.assertEqual(os.listdir(temp_dir), ["sample.json"])
 
     def test_atomic_write_via_temp_fsyncs_write_capable_handle(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
-            path = Path(temp_dir) / "sample.chemvas"
+            path = Path(temp_dir) / "sample.json"
 
             def assert_write_capable(fd: int) -> None:
                 self.assertEqual(os.write(fd, b""), 0)
@@ -827,7 +827,7 @@ class DocumentIOTest(unittest.TestCase):
 
     def test_atomic_write_via_temp_preserves_existing_permission_mode(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
-            path = Path(temp_dir) / "shared.chemvas"
+            path = Path(temp_dir) / "shared.json"
             path.write_text("ORIGINAL", encoding="utf-8")
             os.chmod(path, 0o664)
             original_mode = stat.S_IMODE(path.stat().st_mode)
@@ -870,11 +870,11 @@ class DocumentNumberBoundsTest(unittest.TestCase):
         ):
             with self.subTest(exponent=exponent):
                 with tempfile.TemporaryDirectory() as tmp:
-                    path = Path(tmp) / "oversized.chemvas"
+                    path = Path(tmp) / "oversized.json"
                     path.write_text(
                         payload.replace(bond_length, f'"bond_length_px": {exponent}'),
                         encoding="utf-8",
                     )
 
                     with self.assertRaisesRegex(ValueError, "Invalid Chemvas file"):
-                        read_document(path)
+                        read_snapshot(path)

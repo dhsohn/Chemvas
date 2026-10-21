@@ -13,7 +13,6 @@ from PyQt6.QtTest import QTest
 from PyQt6.QtWidgets import QApplication, QMessageBox
 
 from chemvas.bootstrap.main_window import build_main_window
-from chemvas.core.document_io import read_document
 from chemvas.ui.canvas.canvas_mark_registry import mark_registry_for
 from chemvas.ui.canvas.canvas_text_style_state import set_text_style_for
 from chemvas.ui.canvas.canvas_tool_settings_state import set_tool_setting_for
@@ -28,6 +27,7 @@ from chemvas.ui.scene.scene_decoration_access import (
 )
 from chemvas.ui.window.main_window_config import TEMPLATE_ENTRY_SPECS
 from chemvas.ui.window.main_window_ports import active_canvas_for_window
+from tests.document_file_helpers import read_document, write_payload_text
 
 
 class GuiDocumentAndTemplateTest(unittest.TestCase):
@@ -136,7 +136,7 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as temp_dir:
             raw_path = Path(temp_dir) / "example"
-            saved_path = Path(f"{raw_path}.chemvas")
+            saved_path = Path(f"{raw_path}.cdxml")
             with patch(
                 "chemvas.ui.window.main_window_document_action_service.QFileDialog.getSaveFileName",
                 return_value=(str(raw_path), ""),
@@ -158,7 +158,7 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
 
     def test_load_canvas_restores_document_and_resets_history(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
-            path = Path(temp_dir) / "roundtrip.chemvas"
+            path = Path(temp_dir) / "roundtrip.cdxml"
             active_canvas_for_window(
                 self.window
             ).services.structure_build_service.add_benzene_ring(QPointF(0.0, 0.0))
@@ -413,7 +413,7 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as temp_dir:
             raw_path = Path(temp_dir) / "canvas"
-            saved_path = Path(f"{raw_path}.chemvas")
+            saved_path = Path(f"{raw_path}.cdxml")
             with patch(
                 "chemvas.ui.window.main_window_document_action_service.QFileDialog.getSaveFileName",
                 return_value=(str(raw_path), ""),
@@ -439,7 +439,7 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
         ).services.canvas_document_session_service.snapshot_state()
 
         with tempfile.TemporaryDirectory() as temp_dir:
-            path = Path(temp_dir) / "workbook.chemvas"
+            path = Path(temp_dir) / "workbook.cdxml"
             path.write_text(
                 dumps(
                     {
@@ -498,7 +498,7 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
         self.assertEqual(self.window.statusBar().currentMessage(), "Idle")
 
     def test_save_canvas_reuses_current_path_without_opening_dialog(self) -> None:
-        current_path = "/tmp/existing.chemvas"
+        current_path = "/tmp/existing.cdxml"
         expected_path = os.path.abspath(current_path)
         self._set_current_file_path(current_path)
         doc_service = active_canvas_for_window(
@@ -539,11 +539,11 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
             QPointF(-20.0, 0.0),
             QPointF(20.0, 0.0),
         )
-        self._set_current_file_path("/tmp/original.chemvas")
+        self._set_current_file_path("/tmp/original.cdxml")
 
         with tempfile.TemporaryDirectory() as temp_dir:
             raw_path = Path(temp_dir) / "renamed"
-            saved_path = Path(f"{raw_path}.chemvas")
+            saved_path = Path(f"{raw_path}.cdxml")
             with patch(
                 "chemvas.ui.window.main_window_document_action_service.QFileDialog.getSaveFileName",
                 return_value=(str(raw_path), ""),
@@ -558,7 +558,7 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
         )
 
     def test_save_canvas_as_cancel_keeps_current_path_and_status_message(self) -> None:
-        self._set_current_file_path("/tmp/original.chemvas")
+        self._set_current_file_path("/tmp/original.cdxml")
         self.window.statusBar().showMessage("Idle")
 
         with patch(
@@ -567,13 +567,13 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
         ):
             self._document_actions().save_canvas_as(self.window)
 
-        self.assertEqual(self._current_file_path(), "/tmp/original.chemvas")
+        self.assertEqual(self._current_file_path(), "/tmp/original.cdxml")
         self.assertEqual(self.window.statusBar().currentMessage(), "Idle")
 
     def test_save_canvas_as_failure_warns_and_preserves_current_path(self) -> None:
-        self._set_current_file_path("/tmp/original.chemvas")
+        self._set_current_file_path("/tmp/original.cdxml")
         self.window.statusBar().showMessage("Before save as")
-        attempted_path = os.path.realpath("/tmp/renamed.chemvas")
+        attempted_path = os.path.realpath("/tmp/renamed.cdxml")
         doc_service = active_canvas_for_window(
             self.window
         ).services.canvas_document_session_service
@@ -581,7 +581,7 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
         with (
             patch(
                 "chemvas.ui.window.main_window_document_action_service.QFileDialog.getSaveFileName",
-                return_value=("/tmp/renamed.chemvas", ""),
+                return_value=("/tmp/renamed.cdxml", ""),
             ),
             patch.object(
                 doc_service, "save_to_file", side_effect=OSError("disk full")
@@ -601,11 +601,11 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
             "Save Error",
             "Failed to save file:\ndisk full",
         )
-        self.assertEqual(self._current_file_path(), "/tmp/original.chemvas")
+        self.assertEqual(self._current_file_path(), "/tmp/original.cdxml")
         self.assertEqual(self.window.statusBar().currentMessage(), "Before save as")
 
     def test_load_canvas_cancel_keeps_current_path_and_status_message(self) -> None:
-        self._set_current_file_path("/tmp/original.chemvas")
+        self._set_current_file_path("/tmp/original.cdxml")
         self.window.statusBar().showMessage("Idle")
 
         with patch(
@@ -614,13 +614,13 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
         ):
             self._document_actions().load_canvas(self.window)
 
-        self.assertEqual(self._current_file_path(), "/tmp/original.chemvas")
+        self.assertEqual(self._current_file_path(), "/tmp/original.cdxml")
         self.assertEqual(self.window.statusBar().currentMessage(), "Idle")
 
     def test_save_canvas_failure_warns_and_preserves_current_path(self) -> None:
-        self._set_current_file_path("/tmp/original.chemvas")
+        self._set_current_file_path("/tmp/original.cdxml")
         self.window.statusBar().showMessage("Before save")
-        attempted_path = os.path.realpath("/tmp/original.chemvas")
+        attempted_path = os.path.realpath("/tmp/original.cdxml")
         doc_service = active_canvas_for_window(
             self.window
         ).services.canvas_document_session_service
@@ -654,7 +654,7 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
             "Save Error",
             "Failed to save file:\ndisk full",
         )
-        self.assertEqual(self._current_file_path(), "/tmp/original.chemvas")
+        self.assertEqual(self._current_file_path(), "/tmp/original.cdxml")
         self.assertEqual(self.window.statusBar().currentMessage(), "Before save")
 
     def test_load_canvas_failure_warns_and_preserves_existing_scene(self) -> None:
@@ -670,12 +670,12 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
         active_canvas_for_window(self.window).runtime_state.history_state.redo_stack = [
             "keep-redo"
         ]
-        self._set_current_file_path("/tmp/original.chemvas")
+        self._set_current_file_path("/tmp/original.cdxml")
         self.window.statusBar().showMessage("Before load")
 
         with tempfile.TemporaryDirectory() as temp_dir:
-            invalid_path = Path(temp_dir) / "invalid.chemvas"
-            invalid_path.write_text(dumps({"state": {}}), encoding="utf-8")
+            invalid_path = Path(temp_dir) / "invalid.cdxml"
+            write_payload_text(invalid_path, dumps({"state": {}}), encoding="utf-8")
 
             with (
                 patch(
@@ -693,7 +693,7 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
             "Load Error",
             "Failed to load file:\nInvalid Chemvas file. version must be an integer.",
         )
-        self.assertEqual(self._current_file_path(), "/tmp/original.chemvas")
+        self.assertEqual(self._current_file_path(), "/tmp/original.cdxml")
         self.assertEqual(self.window.statusBar().currentMessage(), "Before load")
         self.assertEqual(
             len(active_canvas_for_window(self.window).runtime_state.ring_items()), 1
@@ -928,7 +928,7 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
         added_alpha = added_ring.brush().color().alphaF()
 
         with tempfile.TemporaryDirectory() as temp_dir:
-            path = Path(temp_dir) / "attached-template.chemvas"
+            path = Path(temp_dir) / "attached-template.cdxml"
             canvas.services.canvas_document_session_service.save_to_file(str(path))
             document = read_document(path)
             self.assertEqual(len(document.state["ring_fills"]), 1)

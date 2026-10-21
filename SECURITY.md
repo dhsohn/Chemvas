@@ -27,7 +27,7 @@ Include as much of the following as you can:
 - Chemvas version (`chemvas --version` or the **About Chemvas** dialog), Python
   version, operating system, and whether the RDKit extra is installed
 - The affected entry point: desktop app, a specific CLI command, or the Python API
-- A minimal input file (`.chemvas`, Chemvas SVG, composition/patch/plan JSON,
+- A minimal input file (`.cdxml`, Chemvas SVG, composition/patch/plan JSON,
   or image) and the exact steps or command that trigger the issue
 - The observed impact and what you expected instead
 

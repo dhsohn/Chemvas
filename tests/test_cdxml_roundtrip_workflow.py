@@ -13,8 +13,9 @@ from chemvas.features.export import (
     inspect_cdxml_roundtrip,
     recover_native_cdxml_palette,
 )
+from tests.document_file_helpers import read_payload
 
-FIXTURE = json.loads(
+FIXTURE = read_payload(
     (Path(__file__).parent / "fixtures/native_cdxml_roundtrip.json").read_text()
 )
 APP = Path(__file__).parents[1] / "app"

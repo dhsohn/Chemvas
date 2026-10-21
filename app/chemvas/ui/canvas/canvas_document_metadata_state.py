@@ -3,10 +3,10 @@ from __future__ import annotations
 import hashlib
 import json
 from collections import OrderedDict
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
-from chemvas.ui.window.main_window_path_logic import is_canonical_saved_document_path
+from chemvas.ui.window.main_window_path_logic import is_saved_document_path
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -21,6 +21,8 @@ class _NoteChromeSession:
 
 @dataclass(slots=True)
 class CanvasDocumentMetadataState:
+    cdxml_source: dict[str, Any] | None = None
+    cdxml_item_bindings: dict[str, dict[int, str | None]] = field(default_factory=dict)
     file_path: str | None = None
     display_name: str = "Canvas 1"
     clean_digest: str | None = None
@@ -183,8 +185,8 @@ def set_document_file_path_for(canvas: Any, path: str | None) -> None:
 
 
 def validate_document_file_path(path: str | None) -> None:
-    if path is not None and not is_canonical_saved_document_path(path):
-        msg = "Chemvas document paths must use the .chemvas filename extension."
+    if path is not None and not is_saved_document_path(path):
+        msg = "Chemvas document paths must use the .cdxml filename extension."
         raise ValueError(msg)
 
 

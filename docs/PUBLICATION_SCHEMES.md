@@ -2,7 +2,7 @@
 
 [한국어](PUBLICATION_SCHEMES.ko.md)
 
-This guide demonstrates how to programmatically generate publication-quality chemical reaction figures with consistent physical sizing, professional typography, and fully editable `.chemvas` source files.
+This guide demonstrates how to programmatically generate publication-quality chemical reaction figures with consistent physical sizing, professional typography, and fully editable `.cdxml` source files.
 
 Run the example script from the repository root:
 
@@ -16,7 +16,7 @@ The script generates two sample figures exported at a standardized scale (5 mm p
 
 ![independent-parts.png: one caption describing two independently aligned molecular parts](../examples/publication-independent-parts.png)
 
-The output directory contains the editable `.chemvas` documents, high-resolution exports (SVG, 600 DPI PNG), layout inspection reports, and a summary `manifest.json`.
+The output directory contains the editable `.cdxml` documents, high-resolution exports (SVG, 600 DPI PNG), layout inspection reports, and a summary `manifest.json`.
 
 ## Best Practices for Publication Figures
 

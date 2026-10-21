@@ -9,12 +9,12 @@ from chemvas.ui.window.tab_title_logic import (
 
 
 def test_clean_tab_title_is_the_plain_name():
-    assert decorate_tab_title("Aspirin.chemvas", dirty=False) == "Aspirin.chemvas"
+    assert decorate_tab_title("Aspirin.cdxml", dirty=False) == "Aspirin.cdxml"
 
 
 def test_dirty_tab_title_gets_the_unsaved_marker():
-    result = decorate_tab_title("Aspirin.chemvas", dirty=True)
-    assert result == f"{UNSAVED_MARKER} Aspirin.chemvas"
+    result = decorate_tab_title("Aspirin.cdxml", dirty=True)
+    assert result == f"{UNSAVED_MARKER} Aspirin.cdxml"
     assert result.startswith(UNSAVED_MARKER)
 
 

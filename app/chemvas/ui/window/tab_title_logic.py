@@ -23,7 +23,7 @@ def decorate_tab_title(display_name: str, *, dirty: bool) -> str:
 
 
 def window_title(display_name: str) -> str:
-    """Main-window title, e.g. ``Aspirin.chemvas — Chemvas[*]``.
+    """Main-window title, e.g. ``Aspirin.cdxml — Chemvas[*]``.
 
     The trailing ``[*]`` is Qt's window-modified placeholder: paired with
     ``setWindowModified(dirty)``, the platform renders a native modified hint

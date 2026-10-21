@@ -171,6 +171,8 @@ class _FakeCanvas:
 
 
 _EXPECTED_BOND_TOPOLOGIES = {
+    "wavy": {1: ("polygon",)},
+    "hash_plain": {1: ("line", "line", "line", "line", "line")},
     "single": {
         1: ("line",),
         2: ("line", "line"),
@@ -317,7 +319,7 @@ class BondRendererUnitTest(unittest.TestCase):
             for order in sorted(VALID_BOND_ORDERS)
             if order in _EXPECTED_BOND_TOPOLOGIES[style]
         ]
-        self.assertEqual(len(public_cases), 36)
+        self.assertEqual(len(public_cases), 38)
 
         for ring in (False, True):
             for style, order in public_cases:
@@ -342,7 +344,7 @@ class BondRendererUnitTest(unittest.TestCase):
             for order in sorted(VALID_BOND_ORDERS)
             if order in _EXPECTED_BOND_TOPOLOGIES[style]
         ]
-        self.assertEqual(len(public_cases), 36)
+        self.assertEqual(len(public_cases), 38)
 
         for ring in (False, True):
             for style, order in public_cases:

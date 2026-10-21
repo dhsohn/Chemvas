@@ -7,7 +7,7 @@ from PyQt6.QtCore import QPointF
 from PyQt6.QtGui import QColor
 from PyQt6.QtWidgets import QApplication, QGraphicsTextItem
 
-from chemvas.core.document_io import create_document, read_document, write_document
+from chemvas.core.document_io import create_document
 from chemvas.core.svg_roundtrip import extract_chemvas_document_from_svg
 from chemvas.domain.document import (
     CANVAS_FILE_VERSION,
@@ -21,6 +21,7 @@ from chemvas.ui.history.history_commands import UpdateSceneItemCommand
 from chemvas.ui.scene.scene_decoration_access import add_mark_for, add_mark_for_atom_for
 from tests.calculation_plan_support import _document_state
 from tests.canvas_factory import build_canvas_view
+from tests.document_file_helpers import read_document, write_document
 
 KINDS = ("plus", "radical", "circled_minus")
 
@@ -138,7 +139,7 @@ def test_explicit_color_roundtrip_and_absent_color_undo_are_independent_of_atom(
     history.redo()
     assert canvas.services.canvas_document_session_service.snapshot_state() == colored
     assert _paint_color(item, kind) == "#a20f99"
-    path = tmp_path / "colored.chemvas"
+    path = tmp_path / "colored.cdxml"
     write_document(path, colored, CANVAS_FILE_VERSION)
     restored = read_document(path).state
     canvas.services.canvas_document_session_service.restore_state(restored)
@@ -152,7 +153,7 @@ def test_uncolored_document_bytes_stay_unchanged(drawing, tmp_path, kind):
     add_mark_for(canvas, QPointF(30, 40), kind=kind)
     state = canvas.services.canvas_document_session_service.snapshot_state()
     before = create_document(state, CANVAS_FILE_VERSION).payload
-    before_path = tmp_path / "before.chemvas"
+    before_path = tmp_path / "before.cdxml"
     write_document(before_path, state, CANVAS_FILE_VERSION)
     canvas.services.canvas_document_session_service.restore_state(state)
     assert (
@@ -162,7 +163,7 @@ def test_uncolored_document_bytes_stay_unchanged(drawing, tmp_path, kind):
         ).payload
         == before
     )
-    after_path = tmp_path / "after.chemvas"
+    after_path = tmp_path / "after.cdxml"
     write_document(
         after_path,
         canvas.services.canvas_document_session_service.snapshot_state(),

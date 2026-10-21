@@ -7047,7 +7047,11 @@ try:
     with offscreen_canvas(extract_document_state(request["document"]), command="web-export-figure") as (_canvas, service):
         # The parent owns this folder and removes it, even if this process is killed.
         path = Path(sys.argv[2]) / "figure.svg"
-        service.export_figure(str(path), fmt="svg", scope=request["scope"])
+        if request.get("format") == "cdxml":
+            from chemvas.ui.export.cdxml_document_writer import serialize_cdxml_document
+            path.write_bytes(serialize_cdxml_document(_canvas, extract_document_state(request["document"])))
+        else:
+            service.export_figure(str(path), fmt="svg", scope=request["scope"])
         if path.stat().st_size > MAX_OUTPUT_BYTES:
             raise ValueError(f"rendered output exceeds the {MAX_OUTPUT_BYTES}-byte limit")
         reply = {"svg": path.read_text(encoding="utf-8")}
@@ -7057,7 +7061,7 @@ sys.stdout.write(json.dumps(reply))
 """
 
 
-def figure_svg(document: dict[str, Any], scope: str) -> str:
+def figure_svg(document: dict[str, Any], scope: str, *, fmt: str = "svg") -> str:
     """File > Export Figure as plain SVG, from the desktop's own offscreen export.
 
     That export paints a Qt scene, so it runs in a short-lived child process of
@@ -7066,7 +7070,9 @@ def figure_svg(document: dict[str, Any], scope: str) -> str:
     native owner's refusals come back as its own messages.
     """
     request = json.dumps(
-        {"document": document, "scope": scope}, ensure_ascii=False, allow_nan=False
+        {"document": document, "scope": scope, "format": fmt},
+        ensure_ascii=False,
+        allow_nan=False,
     ).encode()
     # This process owns the export folder, so it is removed after a timeout too:
     # subprocess.run has killed and waited for the child before the folder exits.
@@ -7118,7 +7124,7 @@ class BrowserSession:
         self.info = document_info(new_document(), font=self.font)
         # The document as opened; a recovered draft has none and stays unsaved.
         self.saved: str | None = json.dumps(self.info["document"], sort_keys=True)
-        self.name = "Canvas 1.chemvas"
+        self.name = "Canvas 1.cdxml"
         # The desktop canvas's paste cascade: the payload the next paste
         # offsets from and how many pastes it has seen. Not document data.
         self.paste_source: str | None = None
@@ -7176,7 +7182,7 @@ class BrowserSession:
         if request.get("action") == "recover_draft":
             self.recover_draft(request)
             return
-        name = request.get("name", "Canvas 1.chemvas")
+        name = request.get("name", "Canvas 1.cdxml")
         if not isinstance(name, str):
             raise ValueError("The document name must be text.")
         info = document_info(request["document"], font=self.font)
@@ -7398,11 +7404,13 @@ class BrowserSession:
             payload = adapter.clipboard_payload(request.get("selection"))
             self.paste_source, self.paste_count = payload, 0
             return {"payload": payload, "revision": self.revision}
-        if action == "export":
-            # Save: the one response that carries embedded image sources.
+        if action == "save_cdxml":
             if set(request) - {"session", "revision", "action"}:
-                raise ValueError("Unexpected export fields.")
-            return {"document": self.info["document"], "revision": self.revision}
+                raise ValueError("Unexpected save fields.")
+            return {
+                "cdxml": figure_svg(self.info["document"], "sheet", fmt="cdxml"),
+                "revision": self.revision,
+            }
         if action == "export_figure":
             # File > Export Figure reads the accepted document and changes nothing.
             if (
@@ -7619,7 +7627,7 @@ class BrowserSession:
             "template_preview",
             "bond_preview",
             "atom_input",
-            "export",
+            "save_cdxml",
             "export_mol",
             "export_figure",
             "copy",
@@ -7930,14 +7938,31 @@ class BrowserHandler(BaseHTTPRequestHandler):
                             }
                             if request.get("action") == "recover_draft":
                                 self.server.forget_closed_sessions()
-                if request.get("action") != "export" and "document" in session_result:
+                if "document" in session_result:
                     session_result = {
                         **session_result,
                         "document": without_image_data(session_result["document"]),
                     }
                 self._json(200, session_result)
                 return
-            result = document_info(request, render=False)
+            if (
+                not isinstance(request, dict)
+                or set(request) != {"cdxml"}
+                or not isinstance(request["cdxml"], str)
+            ):
+                raise ValueError("Open a CDXML document.")
+            from chemvas.domain.document import (
+                CANVAS_FILE_VERSION,
+                build_document_payload,
+            )
+            from chemvas.features.cdxml_document import parse_cdxml_document
+
+            parsed = parse_cdxml_document(
+                request["cdxml"].encode("utf-8"), preserve_source=True
+            )
+            result = document_info(
+                build_document_payload(parsed.state, CANVAS_FILE_VERSION), render=False
+            )
         except StaleRevisionError as exc:
             self._json(409, {"error": str(exc)})
         except (ValueError, TypeError, KeyError, OverflowError, RecursionError) as exc:

@@ -100,7 +100,7 @@ def compose_figure(work: Path, out: Path) -> Path:
             ],
         },
     )
-    document = work / "scheme.chemvas"
+    document = work / "scheme.cdxml"
     chemvas("compose-document", str(composition), "--output", str(document), cwd=work)
     render(document, out / "cli-compose.png", width_mm=45.0)
     return document
@@ -120,7 +120,7 @@ def template_figure(work: Path, out: Path, document: Path) -> Path:
             "anchor": {"kind": "free"},
         },
     )
-    added = work / "ring-added.chemvas"
+    added = work / "ring-added.cdxml"
     chemvas(
         "insert-template",
         str(document),
@@ -185,7 +185,7 @@ def patch_figure(work: Path, out: Path, document: Path) -> None:
             ],
         },
     )
-    revised = work / "revised.chemvas"
+    revised = work / "revised.cdxml"
     chemvas(
         "apply-patch", str(document), str(patch), "--output", str(revised), cwd=work
     )
@@ -246,7 +246,7 @@ def arrange_figures(work: Path, out: Path) -> None:
             ],
         },
     )
-    scheme = work / "arrange-source.chemvas"
+    scheme = work / "arrange-source.cdxml"
     chemvas("compose-document", str(source), "--output", str(scheme), cwd=work)
     layout = write_json(
         work / "layout.json",
@@ -274,7 +274,7 @@ def arrange_figures(work: Path, out: Path) -> None:
             ],
         },
     )
-    arranged = work / "arranged.chemvas"
+    arranged = work / "arranged.cdxml"
     chemvas(
         "layout-document",
         str(scheme),
@@ -316,7 +316,7 @@ def align_y_figures(work: Path, out: Path) -> None:
             ],
         },
     )
-    scheme = work / "floating.chemvas"
+    scheme = work / "floating.cdxml"
     chemvas("compose-document", str(source), "--output", str(scheme), cwd=work)
     layout = write_json(
         work / "align-y.json",
@@ -340,7 +340,7 @@ def align_y_figures(work: Path, out: Path) -> None:
             ],
         },
     )
-    aligned = work / "aligned.chemvas"
+    aligned = work / "aligned.cdxml"
     chemvas(
         "layout-document",
         str(scheme),
@@ -381,7 +381,7 @@ def wrap_figure(work: Path, out: Path) -> None:
             "arrows": arrows,
         },
     )
-    scheme = work / "pathway.chemvas"
+    scheme = work / "pathway.cdxml"
     chemvas("compose-document", str(source), "--output", str(scheme), cwd=work)
     layout = write_json(
         work / "wrap.json",
@@ -403,7 +403,7 @@ def wrap_figure(work: Path, out: Path) -> None:
             ],
         },
     )
-    wrapped = work / "wrapped.chemvas"
+    wrapped = work / "wrapped.cdxml"
     chemvas(
         "layout-document",
         str(scheme),

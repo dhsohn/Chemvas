@@ -9,11 +9,11 @@ from unittest.mock import Mock
 import pytest
 
 from chemvas.core import document_io
-from chemvas.core.document_io import write_document
 from chemvas.domain.document import CANVAS_FILE_VERSION, serialize_settings
 from chemvas.features.session import DocDescriptor, WithheldDoc
 from chemvas.ui.session import session_snapshot_store
 from chemvas.ui.session.session_snapshot_store import SessionSnapshotStore
+from tests.document_file_helpers import read_payload, write_document, write_payload_text
 
 
 def _valid_state(marker: str | None = None) -> dict:
@@ -83,9 +83,9 @@ def test_oversized_snapshot_preserves_recovery_and_can_be_retried(
     monkeypatch.setattr(document_io, "MAX_DOCUMENT_BYTES", 32 * 1024)
     store.save_documents([changed])
     current = (
-        store.session_dir / json.loads(manifest.read_bytes())["docs"][0]["snapshot"]
+        store.session_dir / read_payload(manifest.read_bytes())["docs"][0]["snapshot"]
     )
-    assert document_io.read_document(current).state["notes"][0]["text"] == "한" * 1024
+    assert document_io.read_snapshot(current).state["notes"][0]["text"] == "한" * 1024
     assert not snapshot.exists()
 
 
@@ -200,14 +200,14 @@ def test_multiple_recovered_versions_keep_every_snapshot_of_one_file(
     tmp_path, monkeypatch
 ):
     _dead_pids(monkeypatch)
-    path = tmp_path / "shared.chemvas"
+    path = tmp_path / "shared.cdxml"
     write_document(path, _valid_state(), CANVAS_FILE_VERSION)
     root = tmp_path / "sessions"
     for name in ("one", "two"):
         previous = _store(root, name)
         previous.begin()
         previous.save_documents(
-            [DocDescriptor(_valid_state(name), str(path), "shared.chemvas", True)]
+            [DocDescriptor(_valid_state(name), str(path), "shared.cdxml", True)]
         )
     result = _store(root, "next").consume_previous_sessions()
     assert len(result.docs) == 2
@@ -340,7 +340,8 @@ def test_legacy_v1_dirty_snapshot_is_recovered_without_an_owner_sidecar(
         _valid_state("legacy-dirty"),
         CANVAS_FILE_VERSION,
     )
-    (previous / "session.json").write_text(
+    write_payload_text(
+        previous / "session.json",
         json.dumps(
             {
                 "version": 1,
@@ -372,7 +373,7 @@ def test_legacy_v1_dirty_snapshot_is_recovered_without_an_owner_sidecar(
 
 def test_clean_exit_retires_saved_references_without_reopening(tmp_path, monkeypatch):
     root = tmp_path / "sessions"
-    saved = tmp_path / "molecule.chemvas"
+    saved = tmp_path / "molecule.cdxml"
     write_document(saved, _valid_state("on-disk"), CANVAS_FILE_VERSION)
 
     prev = _store(root, "prev", pid=222)
@@ -382,7 +383,7 @@ def test_clean_exit_retires_saved_references_without_reopening(tmp_path, monkeyp
             DocDescriptor(
                 state=_valid_state("on-disk"),
                 file_path=str(saved),
-                display_name="molecule.chemvas",
+                display_name="molecule.cdxml",
                 dirty=False,
             )
         ]
@@ -446,7 +447,7 @@ def test_missing_crash_snapshot_does_not_fall_back_to_disk_path(
             )
         ]
     )
-    manifest = json.loads((root / "prev" / "session.json").read_text())
+    manifest = read_payload((root / "prev" / "session.json").read_text())
     (root / "prev" / manifest["docs"][0]["snapshot"]).unlink()
 
     _dead_pids(monkeypatch)
@@ -484,7 +485,7 @@ def test_crash_recovers_and_clean_session_is_left_alone(tmp_path, monkeypatch):
     # Explicit recovery offers crashed unsaved work and schedules only that
     # session for deferred pruning; startup cleanup owns clean sessions.
     root = tmp_path / "sessions"
-    saved = tmp_path / "kept.chemvas"
+    saved = tmp_path / "kept.cdxml"
     write_document(saved, _valid_state("disk"), CANVAS_FILE_VERSION)
 
     clean = _store(root, "clean-session", pid=10)
@@ -494,7 +495,7 @@ def test_crash_recovers_and_clean_session_is_left_alone(tmp_path, monkeypatch):
             DocDescriptor(
                 state=_valid_state("disk"),
                 file_path=str(saved),
-                display_name="kept.chemvas",
+                display_name="kept.cdxml",
                 dirty=False,
             )
         ]
@@ -569,7 +570,9 @@ def test_unreadable_snapshot_does_not_inflate_recovered_count(tmp_path, monkeypa
             ),
         ]
     )
-    manifest = json.loads((root / "prev" / "session.json").read_text(encoding="utf-8"))
+    manifest = read_payload(
+        (root / "prev" / "session.json").read_text(encoding="utf-8")
+    )
     lost_snapshot = next(
         entry["snapshot"]
         for entry in manifest["docs"]
@@ -862,9 +865,9 @@ def test_malformed_owner_sidecar_discards_identity_and_fails_closed(
     previous = _store(root, "prev", pid=444, process_identity="original-owner")
     previous.begin()
     owner_path = previous.session_dir / session_snapshot_store.OWNER_NAME
-    owner = json.loads(owner_path.read_text(encoding="utf-8"))
+    owner = read_payload(owner_path.read_text(encoding="utf-8"))
     owner["unexpected"] = True
-    owner_path.write_text(json.dumps(owner), encoding="utf-8")
+    write_payload_text(owner_path, json.dumps(owner), encoding="utf-8")
 
     monkeypatch.setattr(session_snapshot_store, "_pid_alive", lambda _pid: True)
     monkeypatch.setattr(
@@ -895,9 +898,9 @@ def test_whitespace_owner_identity_is_rejected_at_store_and_reader_boundaries(tm
     valid = _store(root, "valid", process_identity="original-owner")
     valid.begin()
     owner_path = valid.session_dir / session_snapshot_store.OWNER_NAME
-    owner = json.loads(owner_path.read_text(encoding="utf-8"))
+    owner = read_payload(owner_path.read_text(encoding="utf-8"))
     owner["process_identity"] = " original-owner "
-    owner_path.write_text(json.dumps(owner), encoding="utf-8")
+    write_payload_text(owner_path, json.dumps(owner), encoding="utf-8")
 
     parsed = _store(root, "cur")._read_manifest(valid.session_dir)
     assert parsed is not None
@@ -967,7 +970,7 @@ def test_manifest_writer_never_publishes_more_than_its_read_limit(
             [
                 DocDescriptor(
                     state=_valid_state(),
-                    file_path="/tmp/saved.chemvas",
+                    file_path="/tmp/saved.cdxml",
                     display_name="x" * 100,
                     dirty=False,
                 )
@@ -983,9 +986,9 @@ def test_owner_sidecar_pid_must_match_its_manifest(tmp_path):
     previous = _store(root, "prev", pid=444, process_identity="original-owner")
     previous.begin()
     owner_path = previous.session_dir / session_snapshot_store.OWNER_NAME
-    owner = json.loads(owner_path.read_text(encoding="utf-8"))
+    owner = read_payload(owner_path.read_text(encoding="utf-8"))
     owner["pid"] = 445
-    owner_path.write_text(json.dumps(owner), encoding="utf-8")
+    write_payload_text(owner_path, json.dumps(owner), encoding="utf-8")
 
     parsed = _store(root, "cur")._read_manifest(previous.session_dir)
 
@@ -997,7 +1000,8 @@ def test_store_reads_development_v2_identity_when_no_sidecar_exists(tmp_path):
     root = tmp_path / "sessions"
     previous = root / "development-v2"
     previous.mkdir(parents=True)
-    (previous / "session.json").write_text(
+    write_payload_text(
+        previous / "session.json",
         json.dumps(
             {
                 "version": 2,
@@ -1018,7 +1022,7 @@ def test_store_reads_development_v2_identity_when_no_sidecar_exists(tmp_path):
 
 def test_clean_saved_doc_is_recorded_without_a_snapshot(tmp_path):
     root = tmp_path / "sessions"
-    saved = tmp_path / "x.chemvas"
+    saved = tmp_path / "x.cdxml"
     write_document(saved, _valid_state(), CANVAS_FILE_VERSION)
     store = _store(root, "cur")
     store.begin()
@@ -1028,19 +1032,19 @@ def test_clean_saved_doc_is_recorded_without_a_snapshot(tmp_path):
             DocDescriptor(
                 state=_valid_state(),
                 file_path=str(saved),
-                display_name="x.chemvas",
+                display_name="x.cdxml",
                 dirty=False,
             )
         ]
     )
 
     assert list((root / "cur").glob("doc-*.json")) == []
-    manifest = json.loads((root / "cur" / "session.json").read_text(encoding="utf-8"))
+    manifest = read_payload((root / "cur" / "session.json").read_text(encoding="utf-8"))
     assert set(manifest) == {"version", "pid", "clean_exit", "docs"}
     assert manifest["version"] == 1
     assert manifest["docs"][0]["snapshot"] is None
     assert manifest["docs"][0]["file_path"] == str(saved)
-    owner = json.loads(
+    owner = read_payload(
         (root / "cur" / session_snapshot_store.OWNER_NAME).read_text(encoding="utf-8")
     )
     assert owner == {
@@ -1066,7 +1070,7 @@ def test_pristine_untitled_canvas_is_not_persisted(tmp_path):
         ]
     )
 
-    manifest = json.loads((root / "cur" / "session.json").read_text(encoding="utf-8"))
+    manifest = read_payload((root / "cur" / "session.json").read_text(encoding="utf-8"))
     assert manifest["docs"] == []
 
 
@@ -1106,7 +1110,7 @@ def test_snapshot_names_are_generation_unique_and_pruned_after_commit(tmp_path):
     assert sorted(p.name for p in session.glob("doc-*.json")) == [
         "doc-2-0.json"
     ]  # gen 1 pruned
-    manifest = json.loads((session / "session.json").read_text(encoding="utf-8"))
+    manifest = read_payload((session / "session.json").read_text(encoding="utf-8"))
     assert [entry["snapshot"] for entry in manifest["docs"]] == ["doc-2-0.json"]
 
 
@@ -1152,7 +1156,7 @@ def test_clean_saved_documents_never_hash_or_store_a_payload(tmp_path, monkeypat
     digest = Mock(wraps=session_snapshot_store.canonical_document_digest)
     monkeypatch.setattr(session_snapshot_store, "canonical_document_digest", digest)
     descriptor = DocDescriptor(
-        _valid_state("saved"), str(tmp_path / "saved.chemvas"), "Saved", False
+        _valid_state("saved"), str(tmp_path / "saved.cdxml"), "Saved", False
     )
     store.save_documents([descriptor])
     before = (store.session_dir / "session.json").read_bytes()
@@ -1180,20 +1184,20 @@ def test_clean_signature_still_tracks_open_paths_names_and_order(tmp_path, monke
     store.begin()
     digest = Mock(wraps=session_snapshot_store.canonical_document_digest)
     monkeypatch.setattr(session_snapshot_store, "canonical_document_digest", digest)
-    first = DocDescriptor({}, str(tmp_path / "first.chemvas"), "First", False)
-    second = DocDescriptor({}, str(tmp_path / "second.chemvas"), "Second", False)
+    first = DocDescriptor({}, str(tmp_path / "first.cdxml"), "First", False)
+    second = DocDescriptor({}, str(tmp_path / "second.cdxml"), "Second", False)
     store.save_documents([first, second])
     store.save_documents([second, first])
     manifest_path = store.session_dir / "session.json"
     assert [
-        entry["file_path"] for entry in json.loads(manifest_path.read_bytes())["docs"]
+        entry["file_path"] for entry in read_payload(manifest_path.read_bytes())["docs"]
     ] == [
         second.file_path,
         first.file_path,
     ]
-    saved_as = DocDescriptor({}, str(tmp_path / "renamed.chemvas"), "Renamed", False)
+    saved_as = DocDescriptor({}, str(tmp_path / "renamed.cdxml"), "Renamed", False)
     store.save_documents([saved_as])
-    assert json.loads(manifest_path.read_bytes())["docs"] == [
+    assert read_payload(manifest_path.read_bytes())["docs"] == [
         {
             "file_path": saved_as.file_path,
             "display_name": "Renamed",
@@ -1222,10 +1226,10 @@ def test_dirty_signature_still_hashes_each_tick_and_detects_in_place_edits(
     state["notes"][0]["text"] = "changed without history"
     store.save_documents([descriptor])
     assert digest.call_count == 3
-    manifest = json.loads((store.session_dir / "session.json").read_bytes())
+    manifest = read_payload((store.session_dir / "session.json").read_bytes())
     snapshot = store.session_dir / manifest["docs"][0]["snapshot"]
     assert (
-        json.loads(snapshot.read_bytes())["state"]["notes"][0]["text"]
+        read_payload(snapshot.read_bytes())["state"]["notes"][0]["text"]
         == state["notes"][0]["text"]
     )
 
@@ -1235,7 +1239,7 @@ def test_clean_dirty_save_transitions_retry_failed_manifest_without_losing_paylo
 ):
     store = _store(tmp_path / "sessions", "cur")
     store.begin()
-    path = str(tmp_path / "saved.chemvas")
+    path = str(tmp_path / "saved.cdxml")
     clean = DocDescriptor(_valid_state("saved"), path, "Saved", False)
     dirty = DocDescriptor(_valid_state("edited"), path, "Saved", True)
     store.save_documents([clean])
@@ -1274,7 +1278,7 @@ def test_withheld_document_keeps_its_committed_entry_until_it_closes(
 ):
     store = _store(tmp_path / "sessions", "cur")
     store.begin()
-    path = str(tmp_path / "saved.chemvas")
+    path = str(tmp_path / "saved.cdxml")
     store.save_documents(
         [
             DocDescriptor(_valid_state("draft"), None, "Draft", True, key="draft"),
@@ -1282,7 +1286,7 @@ def test_withheld_document_keeps_its_committed_entry_until_it_closes(
         ]
     )
     manifest_path = store.session_dir / "session.json"
-    committed = json.loads(manifest_path.read_bytes())["docs"]
+    committed = read_payload(manifest_path.read_bytes())["docs"]
     snapshot = store.session_dir / committed[0]["snapshot"]
     payload = snapshot.read_bytes()
     withheld = [
@@ -1299,7 +1303,7 @@ def test_withheld_document_keeps_its_committed_entry_until_it_closes(
                 [DocDescriptor(_valid_state("edit"), None, "Draft", True, key="draft")]
             )
     assert store.save_documents(withheld) == {"draft"}
-    assert json.loads(manifest_path.read_bytes())["docs"] == committed
+    assert read_payload(manifest_path.read_bytes())["docs"] == committed
     assert snapshot.read_bytes() == payload
     files = {file.name: file.stat().st_mtime_ns for file in store.session_dir.iterdir()}
     assert store.save_documents(withheld) == {"draft"}
@@ -1309,7 +1313,7 @@ def test_withheld_document_keeps_its_committed_entry_until_it_closes(
 
     # Closing the draft drops its entry and snapshot with the next commit.
     assert store.save_documents(withheld[1:]) == set()
-    assert json.loads(manifest_path.read_bytes())["docs"] == committed[1:]
+    assert read_payload(manifest_path.read_bytes())["docs"] == committed[1:]
     assert not snapshot.exists()
 
 
@@ -1696,7 +1700,9 @@ def test_snapshot_with_an_uncomparable_number_is_skipped_not_fatal(
             ),
         ]
     )
-    manifest = json.loads((root / "prev" / "session.json").read_text(encoding="utf-8"))
+    manifest = read_payload(
+        (root / "prev" / "session.json").read_text(encoding="utf-8")
+    )
     huge_snapshot = next(
         entry["snapshot"]
         for entry in manifest["docs"]
@@ -1735,7 +1741,7 @@ def test_completed_cleanup_retains_every_recovery_or_uncertain_case(
     previous.begin()
     dirty = case == "dirty"
     previous.save_documents(
-        [DocDescriptor(_valid_state(), "/saved.chemvas", "Saved", dirty)]
+        [DocDescriptor(_valid_state(), "/saved.cdxml", "Saved", dirty)]
     )
     if case != "crash":
         previous.mark_clean_exit()

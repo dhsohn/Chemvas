@@ -2,7 +2,7 @@
 
 [English](IMAGE_OBJECTS.md)
 
-Chemvas는 화학 구조, 텍스트 노트, 화살표와 함께 PNG 및 JPEG 래스터 이미지를 `.chemvas` 문서 안에 직접 내장하여 다룰 수 있습니다. 이미지는 문서 파일 내에 완전히 포함되어 저장되므로 원본 이미지 파일이 없어도 문서를 열고 편집할 수 있습니다.
+Chemvas는 화학 구조, 텍스트 노트, 화살표와 함께 PNG 및 JPEG 래스터 이미지를 `.cdxml` 문서 안에 직접 내장하여 다룰 수 있습니다. 이미지는 문서 파일 내에 완전히 포함되어 저장되므로 원본 이미지 파일이 없어도 문서를 열고 편집할 수 있습니다.
 
 ## 데스크톱 GUI 작업
 
@@ -42,11 +42,11 @@ Composition JSON 매니페스트에 `images` 배열을 추가하여 이미지를
 헤드리스로 문서를 생성하고 렌더링합니다:
 
 ```bash
-chemvas compose-document figure.json --output figure.chemvas
-chemvas check-layout figure.chemvas --sheet-only
-chemvas render-document figure.chemvas --output figure.svg
-chemvas render-document figure.chemvas --output figure.pdf
-chemvas render-document figure.chemvas --output figure.png
+chemvas compose-document figure.json --output figure.cdxml
+chemvas check-layout figure.cdxml --sheet-only
+chemvas render-document figure.cdxml --output figure.svg
+chemvas render-document figure.cdxml --output figure.pdf
+chemvas render-document figure.cdxml --output figure.png
 ```
 
 - `source`: 구성 JSON 파일 기준의 상대 경로 또는 절대 경로.
@@ -56,7 +56,7 @@ chemvas render-document figure.chemvas --output figure.png
 
 ## 문서 스키마 및 제약 조건
 
-`.chemvas` 파일 내에서 각 이미지는 `state.images` 배열 아래에 객체로 저장됩니다:
+`.cdxml` 파일 내에서 각 이미지는 `state.images` 배열 아래에 객체로 저장됩니다:
 
 ```json
 {
@@ -85,5 +85,5 @@ chemvas render-document figure.chemvas --output figure.png
 ## 그림 출력
 
 - **벡터 출력 (SVG, PDF)**: 내장된 이미지는 고해상도 래스터 형태로 벡터 스트림 내에 포함되어 출력됩니다.
-- **편집 가능한 SVG (Editable Chemvas SVG)**: `.chemvas` 메타데이터가 함께 내장되어, 내보낸 SVG 파일을 Chemvas에서 다시 열어 언제든 계속 편집할 수 있습니다.
+- **편집 가능한 SVG (Editable Chemvas SVG)**: `.cdxml` 메타데이터가 함께 내장되어, 내보낸 SVG 파일을 Chemvas에서 다시 열어 언제든 계속 편집할 수 있습니다.
 - **래스터 출력 (PNG, TIFF)**: 지정된 DPI에 맞춰 렌더링되며, 알파 투명 배경을 온전히 지원합니다.

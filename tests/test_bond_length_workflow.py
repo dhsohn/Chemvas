@@ -92,7 +92,7 @@ def test_length_field_export_and_reopen_keep_marked_scheme_geometry(
     first, second = tmp_path / "live.png", tmp_path / "reopened.png"
     session.export_figure(str(first), fmt="png")
     actions = window.services.document_action_service
-    document = tmp_path / "marked.chemvas"
+    document = tmp_path / "marked.cdxml"
     assert actions.save_canvas_to_path(window, str(document))
     assert actions.load_canvas_from_path(window, str(document))
     assert canvas.services.canvas_document_session_service.snapshot_state() == after

@@ -12,6 +12,7 @@ from pathlib import Path
 
 import pytest
 
+from tests.document_file_helpers import read_payload, write_payload_text
 from tests.test_publication_scheme import _command_in_process
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -48,7 +49,7 @@ def comparison(tmp_path_factory):
 
 
 def read_state(directory, name):
-    return json.loads((directory / name).read_text())["state"]
+    return read_payload((directory / name).read_text())["state"]
 
 
 def test_comparison_has_two_complete_explicit_symbolic_rows(comparison):
@@ -107,7 +108,7 @@ def test_comparison_has_two_complete_explicit_symbolic_rows(comparison):
 
 def test_comparison_layout_preserves_graph_and_native_typography(comparison):
     directory, manifest = comparison
-    before = read_state(directory, "comparison-source.chemvas")
+    before = read_state(directory, "comparison-source.cdxml")
     after = read_state(directory, manifest["document"])
     assert before["model"]["bonds"] == after["model"]["bonds"]
     assert before["settings"] == after["settings"]
@@ -147,12 +148,12 @@ def test_comparison_layout_preserves_graph_and_native_typography(comparison):
 
 def test_comparison_ownership_columns_and_captions_are_explicit(comparison):
     directory, _ = comparison
-    request = json.loads((directory / "comparison-layout.json").read_text())
-    report = json.loads((directory / "comparison-layout-report.json").read_text())
+    request = read_payload((directory / "comparison-layout.json").read_text())
+    report = read_payload((directory / "comparison-layout-report.json").read_text())
     assert (
         request["source_sha256"]
         == hashlib.sha256(
-            (directory / "comparison-source.chemvas").read_bytes()
+            (directory / "comparison-source.cdxml").read_bytes()
         ).hexdigest()
     )
     assert request["caption_alignment"] == "structure"
@@ -165,7 +166,7 @@ def test_comparison_ownership_columns_and_captions_are_explicit(comparison):
     assert placements[1]["center_x"] == placements[3]["center_x"]
     for caption, block in zip(report["caption_placements"], placements, strict=True):
         assert caption["center_x"] == block["center_x"]
-    state = read_state(directory, "comparison.chemvas")
+    state = read_state(directory, "comparison.cdxml")
     for index, group in enumerate(state["groups"]):
         assert group == {
             "atoms": list(range(index * 4, index * 4 + 4)),
@@ -196,7 +197,7 @@ def test_comparison_is_readable_at_one_common_physical_scale(comparison):
             "bond_units"
         ] * 25.4 / 72 == pytest.approx(5, abs=0.04)
         assert Path(report["output"]).is_file()
-    check = json.loads((directory / "comparison-check.json").read_text())
+    check = read_payload((directory / "comparison-check.json").read_text())
     assert check["ok"] and check["warning_count"] == 0
     receipt = manifest["layout_check"]
     assert receipt["report"] == "comparison-check.json"
@@ -209,7 +210,7 @@ def test_comparison_is_readable_at_one_common_physical_scale(comparison):
         report["source_sha256"] == manifest["source_sha256"]
         for report in manifest["exports"].values()
     )
-    inventory = json.loads((directory / "comparison-graph.json").read_text())
+    inventory = read_payload((directory / "comparison-graph.json").read_text())
     assert inventory["atom_count"] == 16 and inventory["bond_count"] == 8
 
 
@@ -217,9 +218,9 @@ def test_comparison_fits_native_sheet(comparison):
     from PyQt6.QtWidgets import QApplication
 
     from chemvas.bootstrap.document_cli_shared import offscreen_canvas
-    from chemvas.core.document_io import read_document
     from chemvas.ui.canvas.sheet_setup_access import sheet_rect_for
     from chemvas.ui.export.export_scope import collect_export_items, content_bounds
+    from tests.document_file_helpers import read_document
 
     application = QApplication.instance() or QApplication([])
     directory, manifest = comparison
@@ -267,10 +268,10 @@ def test_comparison_rejects_outside_molecules_before_export(tmp_path, monkeypatc
         report = _command_in_process(*args)
         if args[0] == "layout-document":
             path = Path(args[-1])
-            native = json.loads(path.read_text())
+            native = read_payload(path.read_text())
             for atom in native["state"]["model"]["atoms"].values():
                 atom["x"] += 1000
-            path.write_text(json.dumps(native))
+            write_payload_text(path, json.dumps(native))
         return report
 
     monkeypatch.setitem(namespace["build"].__globals__, "command", displaced)

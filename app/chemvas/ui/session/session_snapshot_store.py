@@ -26,8 +26,8 @@ from chemvas.core.document_io import (
     ATOMIC_STAGING_PREFIX,
     ATOMIC_STAGING_SUFFIX,
     atomic_write_text,
-    read_document,
-    write_document,
+    read_snapshot,
+    write_snapshot,
 )
 from chemvas.domain.document import CANVAS_FILE_VERSION
 from chemvas.domain.json_io import strict_json_loads
@@ -47,7 +47,7 @@ from chemvas.features.session import (
     should_persist,
 )
 from chemvas.ui.canvas.canvas_document_metadata_state import canonical_document_digest
-from chemvas.ui.window.main_window_path_logic import is_canonical_saved_document_path
+from chemvas.ui.window.main_window_path_logic import is_saved_document_path
 
 if TYPE_CHECKING:
     from collections.abc import Collection, Hashable, Mapping, Sequence
@@ -764,7 +764,7 @@ class SessionSnapshotStore:
         # recover missing edits and must not be presented as a successful copy.
         file_path = (
             entry.file_path
-            if entry.file_path and is_canonical_saved_document_path(entry.file_path)
+            if entry.file_path and is_saved_document_path(entry.file_path)
             else None
         )
         if entry.snapshot:
@@ -791,7 +791,11 @@ class SessionSnapshotStore:
         # either means this entry is not recoverable. A programming error must
         # not be mistaken for a corrupt document and drop it from the restore.
         try:
-            return read_document(path).state
+            if path.suffix.lower() == ".cdxml":
+                from chemvas.features.document_files import read_document as read_cdxml
+
+                return read_cdxml(path).state
+            return read_snapshot(path).state
         except (OSError, ValueError):
             return None
 
@@ -913,7 +917,7 @@ class SessionSnapshotStore:
         )
 
     def _write_snapshot(self, name: str, state: dict) -> None:
-        write_document(self._dir / name, state, CANVAS_FILE_VERSION)
+        write_snapshot(self._dir / name, state, CANVAS_FILE_VERSION)
 
     def _prune_snapshots(self, keep: set[str]) -> None:
         for child in self._dir.glob("doc-*.json"):

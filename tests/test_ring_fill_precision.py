@@ -12,7 +12,6 @@ from PyQt6.QtTest import QTest
 from PyQt6.QtWidgets import QApplication, QToolButton
 
 from chemvas.bootstrap.main_window import build_main_window
-from chemvas.core.document_io import read_document
 from chemvas.domain.document import (
     CANVAS_FILE_VERSION,
     AnnotationCollection,
@@ -25,6 +24,7 @@ from chemvas.ui.annotations.state import ring_state_dict
 from chemvas.ui.history.history_commands import UpdateSceneItemCommand
 from chemvas.ui.window.main_window_ports import active_canvas_for_window
 from tests.canvas_factory import build_canvas_view
+from tests.document_file_helpers import read_document
 
 
 @pytest.fixture(scope="module")
@@ -90,7 +90,7 @@ def test_ring_alpha_survives_compose_patch_gui_save_reopen(canvas, tmp_path, alp
         == alpha
     )
     for number in range(2):
-        output = tmp_path / f"reopened-{number}.chemvas"
+        output = tmp_path / f"reopened-{number}.cdxml"
         assert session.save_to_file(str(output)) == []
         saved = read_document(output).state
         assert saved["ring_fills"][0]["alpha"] == alpha

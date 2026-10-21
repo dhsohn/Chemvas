@@ -81,7 +81,7 @@ def _root_help() -> str:
         "  chemvas <command> [options]\n\n"
         "Run with no arguments to launch the desktop app.\n"
         f"{adapter_help}"
-        "Pass a .chemvas, .svg, or .mol document to open it at startup.\n\n"
+        "Pass a .cdxml, .svg, or .mol document to open it at startup.\n\n"
         "Options:\n"
         "  -h, --help         show this help message and exit\n"
         "  --version          show version and exit\n\n"

@@ -11,7 +11,6 @@ from PyQt6.QtTest import QTest
 from PyQt6.QtWidgets import QApplication
 
 from chemvas.bootstrap.window_registry import open_new_window
-from chemvas.core.document_io import read_document, write_document
 from chemvas.domain.document import CANVAS_FILE_VERSION
 from chemvas.features.document_composition import compose_document_state
 from chemvas.features.session import DocDescriptor
@@ -21,6 +20,7 @@ from chemvas.ui.molecule.structure_mutation_access import add_bond_between_point
 from chemvas.ui.session.session_snapshot_store import OWNER_NAME, SessionSnapshotStore
 from chemvas.ui.window import recent_documents_store
 from chemvas.ui.window.main_window_ports import active_canvas_for_window
+from tests.document_file_helpers import read_document, read_payload, write_document
 
 pytestmark = pytest.mark.skipif(os.name != "posix", reason="POSIX hard-link identity")
 
@@ -49,7 +49,7 @@ def _state():
 def test_hardlinked_recents_cannot_break_document_operations(
     tmp_path, monkeypatch, application, operation
 ):
-    source = tmp_path / "source.chemvas"
+    source = tmp_path / "source.cdxml"
     write_document(source, _state(), CANVAS_FILE_VERSION)
     original_bytes = source.read_bytes()
     recent = tmp_path / "recent.json"
@@ -75,13 +75,11 @@ def test_hardlinked_recents_cannot_break_document_operations(
         os.link(recent, backup)
         recent_bytes = recent.read_bytes()
         if operation == "save_user_hardlink":
-            os.link(source, tmp_path / "source-backup.chemvas")
+            os.link(source, tmp_path / "source-backup.cdxml")
         warning = Mock()
         error = None
         result = None
-        destination = (
-            tmp_path / "saved-as.chemvas" if operation == "save_as" else source
-        )
+        destination = tmp_path / "saved-as.cdxml" if operation == "save_as" else source
         try:
             if operation == "already_open":
                 result = actions.load_canvas_from_path(
@@ -106,7 +104,7 @@ def test_hardlinked_recents_cannot_break_document_operations(
         if operation == "save_user_hardlink":
             warning.warning.assert_called_once()
             assert "hard-link" in warning.warning.call_args.args[2]
-            assert os.path.samefile(source, tmp_path / "source-backup.chemvas")
+            assert os.path.samefile(source, tmp_path / "source-backup.cdxml")
         else:
             warning.warning.assert_not_called()
         if operation in {"already_open", "save_user_hardlink"}:
@@ -140,7 +138,7 @@ def test_hardlinked_recents_cannot_break_document_operations(
 
 @pytest.mark.parametrize("operation", ["save", "record", "clear"])
 def test_recent_store_preserves_hardlinked_metadata_as_best_effort(tmp_path, operation):
-    source = tmp_path / "source.chemvas"
+    source = tmp_path / "source.cdxml"
     source.write_bytes(b"synthetic")
     recent = tmp_path / "recent.json"
     recent.write_text('{"version":1,"paths":[]}', encoding="utf-8")
@@ -175,7 +173,7 @@ def test_hardlinked_owner_sidecar_does_not_fail_committed_session_snapshot(tmp_p
     store.save_documents([DocDescriptor(_state(), None, "Synthetic unsaved", True)])
     assert owner.read_bytes() == backup.read_bytes() == before
     assert os.path.samefile(owner, backup)
-    manifest = json.loads((store.session_dir / "session.json").read_text())
+    manifest = read_payload((store.session_dir / "session.json").read_text())
     assert len(manifest["docs"]) == 1
     entry = manifest["docs"][0]
     assert entry["dirty"] is True

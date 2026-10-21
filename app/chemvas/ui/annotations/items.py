@@ -126,6 +126,7 @@ class NoteItem(ExportTextItem):
         self.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsFocusable, True)
         self._last_text = ""
         self._last_html = ""
+        self.format_popup_open = False
         self._fitting_text_width = False
         document = self.document()
         assert document is not None
@@ -241,7 +242,10 @@ class NoteItem(ExportTextItem):
     @override
     def focusOutEvent(self, event) -> None:
         super().focusOutEvent(event)
-        if event.reason() == Qt.FocusReason.PopupFocusReason:
+        if event.reason() == Qt.FocusReason.PopupFocusReason or (
+            self.format_popup_open
+            and event.reason() == Qt.FocusReason.ActiveWindowFocusReason
+        ):
             # A font/menu popup temporarily borrows focus from the editor.
             # Keep its cursor and native text Undo until a real editor exit.
             return

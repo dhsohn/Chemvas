@@ -13,7 +13,6 @@ from PyQt6.QtCore import QPointF
 from PyQt6.QtWidgets import QApplication, QComboBox, QDialog, QDoubleSpinBox
 
 from chemvas.bootstrap.document_cli_shared import offscreen_canvas
-from chemvas.core.document_io import read_document, write_document
 from chemvas.domain.document import CANVAS_FILE_VERSION, build_document_payload
 from chemvas.domain.document.sheet import POINTS_PER_MM, SHEET_SIZES_MM
 from chemvas.features.document_composition import compose_document_state
@@ -22,6 +21,7 @@ from chemvas.ui.canvas.sheet_setup_logic import sheet_dimensions_px
 from chemvas.ui.canvas.sheet_setup_service import change_sheet_setup_for
 from chemvas.ui.window.main_window_document_dialogs import prompt_sheet_setup
 from tests.canvas_factory import build_canvas_view
+from tests.document_file_helpers import read_document, write_document
 
 pytestmark = pytest.mark.usefixtures("qt_application")
 
@@ -74,11 +74,11 @@ def app():
 @pytest.mark.parametrize("size", SHEET_SIZES_MM)
 def test_standard_sizes_reach_scene_and_file(size, tmp_path):
     state = state_with_sheet(size)
-    path = tmp_path / "paper.chemvas"
+    path = tmp_path / "paper.cdxml"
     write_document(path, state, CANVAS_FILE_VERSION)
     restored = read_document(path)
     assert restored.state == json.loads(json.dumps(state))
-    assert restored.payload["version"] == 9
+    assert restored.payload["version"] == CANVAS_FILE_VERSION
     expected = sheet_dimensions_px(size, "portrait")
     with borrowed_canvas(restored.state, command="test-sheet") as (canvas, _):
         rect = sheet_rect_for(canvas)
@@ -87,10 +87,12 @@ def test_standard_sizes_reach_scene_and_file(size, tmp_path):
     assert sheet_dimensions_px(size, "landscape") == expected[::-1]
 
 
-@pytest.mark.parametrize("dimensions", [[600, 400], [10, 2000], [333.33, 222.22]])
+@pytest.mark.parametrize(
+    "dimensions", [[600, 400], [10, 2000], [3000, 2031.3], [333.33, 222.22]]
+)
 def test_custom_dimensions_roundtrip_and_headless_scene(dimensions, tmp_path):
     state = state_with_sheet("Custom", dimensions)
-    path = tmp_path / "custom.chemvas"
+    path = tmp_path / "custom.cdxml"
     write_document(path, state, CANVAS_FILE_VERSION)
     restored = read_document(path)
     assert restored.state == json.loads(json.dumps(state))
@@ -108,7 +110,7 @@ def test_custom_dimensions_roundtrip_and_headless_scene(dimensions, tmp_path):
         None,
         [],
         [0, 100],
-        [2001, 100],
+        [3001, 100],
         [True, 100],
         [float("nan"), 100],
         [float("inf"), 100],
@@ -156,7 +158,7 @@ def test_custom_resize_history_and_failure_preserve_content(app, tmp_path):
             with pytest.raises(RuntimeError, match="failed history"):
                 change_sheet_setup_for(canvas, "Custom", "portrait", (1000, 700))
         assert session.snapshot_state() == custom
-        path = tmp_path / "custom.chemvas"
+        path = tmp_path / "custom.cdxml"
         write_document(path, custom, CANVAS_FILE_VERSION)
         session.apply_state(read_document(path).state)
         assert session.snapshot_state() == custom

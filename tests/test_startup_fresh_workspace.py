@@ -17,7 +17,7 @@ def test_desktop_launch_never_reopens_previous_documents(tmp_path, mode):
         from chemvas.ui.session import app_data_paths
         from chemvas.ui.session import session_snapshot_store
         from chemvas.features.document_composition import compose_document_state
-        from chemvas.core.document_io import write_document
+        from tests.document_file_helpers import write_document
         from chemvas.domain.document import CANVAS_FILE_VERSION
         from chemvas.adapters.qt import FileOpenEventFilter
         from chemvas.features.session import DocDescriptor, request_snapshot
@@ -29,9 +29,9 @@ def test_desktop_launch_never_reopens_previous_documents(tmp_path, mode):
         session_snapshot_store._pid_alive=lambda pid:False
         def state(text):
             return compose_document_state({'format':'chemvas-document-composition','version':1,'atoms':[],'bonds':[], 'notes':[{'text':text,'x':0,'y':0}]})
-        target=root/'requested.chemvas'
+        target=root/'requested.cdxml'
         write_document(target,state('requested'),CANVAS_FILE_VERSION)
-        previous_path=root/'previous.chemvas'
+        previous_path=root/'previous.cdxml'
         write_document(previous_path,state('previous'),CANVAS_FILE_VERSION)
         old_roots=[]
         for name,clean in [('clean',True),('crash',False)]:

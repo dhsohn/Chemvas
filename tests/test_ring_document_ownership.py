@@ -11,7 +11,6 @@ from PyQt6 import sip
 from PyQt6.QtCore import QEvent, QPointF
 from PyQt6.QtGui import QColor, QPolygonF
 
-from chemvas.core.document_io import read_document
 from chemvas.domain.document import CLIPBOARD_SELECTION_VERSION
 from chemvas.ui.annotations.state import (
     atom_state_dict_for,
@@ -24,6 +23,7 @@ from chemvas.ui.scene.scene_clipboard_access import (
     build_selection_clipboard_payload_for_canvas,
 )
 from tests.canvas_factory import build_canvas_view
+from tests.document_file_helpers import read_document
 from tests.gui_workflow_support import app as app
 from tests.gui_workflow_support import drawing as drawing
 from tests.gui_workflow_support import qt_errors as qt_errors
@@ -61,7 +61,7 @@ def test_save_and_copy_keep_ring_without_projection(canvas, tmp_path, loss):
     before = session.snapshot_state()
     record_id = _lose(canvas, loss)
     assert session.snapshot_state() == before
-    path = tmp_path / "ring.chemvas"
+    path = tmp_path / "ring.cdxml"
     assert session.save_to_file(str(path)) == []
     assert read_document(path).state["ring_fills"] == json.loads(
         json.dumps(before["ring_fills"])
@@ -246,7 +246,7 @@ def test_native_ring_drag_delete_history_and_reopen(
         assert session.snapshot_state()["ring_fills"] == []
         history.undo()
         assert session.snapshot_state() == moved
-        path = tmp_path / "native-ring.chemvas"
+        path = tmp_path / "native-ring.cdxml"
         assert session.save_to_file(str(path)) == []
         session.apply_state(read_document(path).state)
         assert session.snapshot_state() == moved

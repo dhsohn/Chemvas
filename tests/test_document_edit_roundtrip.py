@@ -12,7 +12,6 @@ from PyQt6.QtTest import QTest
 from PyQt6.QtWidgets import QApplication, QFileDialog, QMessageBox
 
 from chemvas.bootstrap.file_open import open_document
-from chemvas.core.document_io import read_document
 from chemvas.domain.document import (
     CANVAS_FILE_VERSION,
     deserialize_model_state,
@@ -23,6 +22,7 @@ from chemvas.shell.window_registry import open_windows
 from chemvas.ui.transactions.document import DocumentSavepoint
 from chemvas.ui.window.main_window_ports import active_canvas_for_window
 from tests.canvas_factory import build_canvas_view
+from tests.document_file_helpers import read_document, read_payload
 from tests.gui_workflow_support import _click, _tool
 from tests.gui_workflow_support import qt_errors as qt_errors
 
@@ -87,7 +87,7 @@ def test_open_and_save_preserve_overlapping_atoms(
     documents = canvas.services.canvas_document_session_service
 
     documents.apply_state(state)
-    output = tmp_path / "reopened.chemvas"
+    output = tmp_path / "reopened.cdxml"
     assert documents.save_to_file(str(output)) == []
 
     assert state == original
@@ -216,7 +216,7 @@ def test_patch_move_preserves_projected_depth_through_desktop_save(canvas, tmp_p
 
     documents = canvas.services.canvas_document_session_service
     documents.apply_state(patched)
-    output = tmp_path / "perspective.chemvas"
+    output = tmp_path / "perspective.cdxml"
     assert documents.save_to_file(str(output)) == []
     assert read_document(output).state["perspective"] == patched["perspective"]
 
@@ -317,10 +317,10 @@ def _assert_frozen_v7_content(literal_state, live_state):
 def test_frozen_v7_gui_open_edit_undo_save_as_and_reopen(
     app, document_windows, tmp_path, name
 ):
-    source = Path(__file__).parent / "fixtures" / "document-v7" / f"{name}.chemvas"
+    source = Path(__file__).parent / "fixtures" / "document-v7" / f"{name}.cdxml"
     original_bytes = source.read_bytes()
-    literal = json.loads(original_bytes)
-    assert literal["version"] == 7
+    literal = read_payload(original_bytes)
+    assert literal["version"] == CANVAS_FILE_VERSION
     with (
         mock.patch.object(
             QMessageBox,
@@ -375,7 +375,7 @@ def test_frozen_v7_gui_open_edit_undo_save_as_and_reopen(
         history.redo()
         assert documents.snapshot_state() == after
 
-        destination = tmp_path / f"{name}-edited.chemvas"
+        destination = tmp_path / f"{name}-edited.cdxml"
         file_menu = next(
             action.menu()
             for action in window.menuBar().actions()
@@ -391,7 +391,7 @@ def test_frozen_v7_gui_open_edit_undo_save_as_and_reopen(
             ).trigger()
         chooser.assert_called_once()
         saved = read_document(destination)
-        assert json.loads(destination.read_bytes())["version"] == CANVAS_FILE_VERSION
+        assert read_payload(destination.read_bytes())["version"] == CANVAS_FILE_VERSION
         assert json.loads(json.dumps(saved.state)) == json.loads(json.dumps(after))
         assert not services.canvas_document_service.is_dirty(canvas)
         assert services.canvas_document_service.file_path(canvas) == str(destination)
@@ -465,7 +465,7 @@ def test_shortcuts_follow_replaced_model_through_saved_reopen(canvas, tmp_path):
     canvas.services.history_service.redo()
     assert documents.snapshot_state() == after
 
-    output = tmp_path / "shortcut-edited.chemvas"
+    output = tmp_path / "shortcut-edited.cdxml"
     assert documents.save_to_file(str(output)) == []
     saved = read_document(output).state
     assert _json_form(saved) == _json_form(after)

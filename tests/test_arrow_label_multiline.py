@@ -13,11 +13,11 @@ from PyQt6.QtWidgets import (
     QScrollArea,
 )
 
-from chemvas.core.document_io import read_document, write_document
 from chemvas.domain.document import CANVAS_FILE_VERSION
 from chemvas.features.annotations import arrow_label_html
 from chemvas.ui.canvas.graphics_items import ArrowLabelItem
 from chemvas.ui.dialogs.arrow_label_dialog import prompt_arrow_labels
+from tests.document_file_helpers import read_document, write_document
 from tests.gui_workflow_support import app as app
 from tests.gui_workflow_support import drawing as drawing
 
@@ -251,7 +251,7 @@ def test_loaded_label_preserves_edge_whitespace_when_only_other_side_changes(
     )
     state = canvas.services.canvas_document_session_service.snapshot_state()
     state["arrows"][0]["labels"] = {"above": raw}
-    path = tmp_path / "external.chemvas"
+    path = tmp_path / "external.cdxml"
     write_document(path, state, CANVAS_FILE_VERSION)
     documents = canvas.services.canvas_document_session_service
     documents.apply_state(read_document(path).state)
@@ -324,7 +324,7 @@ def test_new_multiline_edges_are_preserved_and_whitespace_only_removes_label(
     history.redo()
     assert canvas.services.canvas_document_session_service.snapshot_state() == after
     documents = canvas.services.canvas_document_session_service
-    path = tmp_path / "edited.chemvas"
+    path = tmp_path / "edited.cdxml"
     assert documents.save_to_file(str(path)) == []
     documents.apply_state(read_document(path).state)
     assert canvas.services.canvas_document_session_service.snapshot_state() == after
@@ -405,7 +405,7 @@ def test_actual_arrow_double_click_multiline_export_save_reopen_and_undo(
             assert bands == 5  # Two lines above, the arrow, two lines below.
         assert canvas.services.canvas_document_session_service.snapshot_state() == after
         history.verify_stack_snapshot(stacks)
-    path = tmp_path / "multiline.chemvas"
+    path = tmp_path / "multiline.cdxml"
     assert documents.save_to_file(str(path)) == []
     saved = read_document(path).state
     assert saved["arrows"][0]["labels"] == after["arrows"][0]["labels"]

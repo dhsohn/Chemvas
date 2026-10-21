@@ -15,6 +15,11 @@ from chemvas.ui.canvas.molecule_scene_renderer import (
     prepare_molecule_for_scene,
     render_molecule,
 )
+from chemvas.ui.canvas.native_document_layout import (
+    native_bond_metrics,
+    native_caption_layouts,
+    place_native_caption,
+)
 from chemvas.ui.canvas.sheet_setup_logic import normalize_sheet_setup
 from chemvas.ui.scene.scene_selectability import make_item_selectable
 
@@ -145,11 +150,17 @@ def populate_document_scene(
         rotation.projection_center_3d,
         rotation.projection_anchor_2d,
     ) = perspective_from_state(state.get("perspective"))
+    from chemvas.ui.molecule.native_atom_labels import native_atom_labels
+
+    context.state.atom_graphics_state.native_labels = native_atom_labels(state)
+    context.state.bond_graphics_state.native_metrics = native_bond_metrics(state)
     prepare_molecule_for_scene(context.model)
     render_molecule(context)
 
-    for item_state in state["notes"]:
-        attach({**item_state, "kind": "note"}, "note_items")
+    caption_layouts = native_caption_layouts(state)
+    for index, item_state in enumerate(state["notes"]):
+        item = attach({**item_state, "kind": "note"}, "note_items")
+        place_native_caption(item, caption_layouts.get(index))
     for item_state in state["marks"]:
         mark = {
             **item_state,

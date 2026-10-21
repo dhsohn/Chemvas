@@ -14,11 +14,11 @@ from PyQt6.QtWidgets import (
 )
 
 from chemvas.bootstrap.main_window import build_main_window
-from chemvas.core.document_io import read_document
 from chemvas.ui.annotations.state import scene_item_state_for
 from chemvas.ui.dialogs.note_appearance_dialog import NoteAppearanceDialog
 from chemvas.ui.transactions.document import DocumentSavepoint
 from chemvas.ui.window.main_window_ports import active_canvas_for_window
+from tests.document_file_helpers import read_document
 
 
 @pytest.fixture(scope="module")
@@ -208,7 +208,7 @@ def test_minimum_arrow_and_note_controls_save_and_reopen(drawing, app, tmp_path)
     before = session.snapshot_state()
     assert before["settings"]["arrow_head_scale"] == 0.1
     assert before["settings"]["text_line_spacing"] == 0.8
-    path = tmp_path / "minimum-controls.chemvas"
+    path = tmp_path / "minimum-controls.cdxml"
     assert session.save_to_file(str(path)) == []
     reopened = read_document(path)
     session.apply_state(reopened.state)

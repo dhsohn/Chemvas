@@ -9,13 +9,13 @@ from PyQt6.QtGui import QBrush, QColor, QPen
 from PyQt6.QtWidgets import QApplication
 
 from chemvas.bootstrap.document_cli_shared import offscreen_canvas
-from chemvas.core.document_io import read_document, write_document
 from chemvas.domain.document import CANVAS_FILE_VERSION
 from chemvas.features.document_composition import compose_document_state
 from chemvas.features.scheme_layout import validate_layout_request
 from chemvas.ui.canvas.canvas_document_state import document_item_lists_for
 from chemvas.ui.canvas.graphics_items import note_paint_scene_path
 from chemvas.ui.dialogs.scheme_layout_service import arrange_canvas, plan_canvas_layout
+from tests.document_file_helpers import read_document, write_document
 
 
 @pytest.fixture(scope="module", autouse=True)
@@ -96,7 +96,7 @@ def test_arranged_caption_boxes_clear_bonds_and_each_other_after_reopen(
     with offscreen_canvas(source, command="caption-box-test") as (canvas, _):
         candidate, _ = arrange_canvas(canvas, source, request)
     assert source == original
-    output = tmp_path / "arranged.chemvas"
+    output = tmp_path / "arranged.cdxml"
     write_document(output, candidate, version=CANVAS_FILE_VERSION)
     reopened = read_document(output).state
     with offscreen_canvas(reopened, command="caption-box-reopen-test") as (canvas, _):

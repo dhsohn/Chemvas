@@ -15,6 +15,8 @@ from unittest import mock
 import pytest
 from PIL import Image
 
+from tests.document_file_helpers import encode_payload, read_payload
+
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PyQt6.QtCore import QEvent
@@ -22,7 +24,6 @@ from PyQt6.QtGui import QImage
 
 from chemvas.bootstrap import document_render as cli
 from chemvas.bootstrap.document_cli_shared import offscreen_canvas
-from chemvas.core.document_io import write_document
 from chemvas.domain.document import (
     CANVAS_FILE_VERSION,
     Atom,
@@ -33,6 +34,7 @@ from chemvas.domain.document import (
     serialize_settings,
 )
 from chemvas.features.document_composition import compose_document_state
+from tests.document_file_helpers import write_document
 
 pytestmark = pytest.mark.usefixtures("qt_application")
 
@@ -200,7 +202,7 @@ def test_view_free_scene_matches_editor_for_all_document_item_families(
         image_state_from_bytes(image_bytes.getvalue(), x=110.0, y=80.0, width=24.0)
     ]
     before = json.dumps(state, sort_keys=True)
-    source = tmp_path / "all-items.chemvas"
+    source = tmp_path / "all-items.cdxml"
     source_bytes = _write_source(source, state=state)
     editor_output = tmp_path / f"editor.{output_format}"
     scene_output = tmp_path / f"scene.{output_format}"
@@ -301,13 +303,13 @@ def test_empty_graphics_measure_atoms_and_null_graphics_remain_invalid(
         "ring_fills",
     ):
         state[key] = []
-    source = tmp_path / "source.chemvas"
+    source = tmp_path / "source.cdxml"
     source_bytes = _write_source(source, state=state)
     output = tmp_path / f"native.{output_format}"
     if null_graphics:
-        payload = json.loads(source_bytes)
+        payload = read_payload(source_bytes)
         payload["state"]["notes"] = None
-        source_bytes = json.dumps(payload).encode()
+        source_bytes = encode_payload(payload)
         source.write_bytes(source_bytes)
         with pytest.raises(SystemExit) as error:
             cli.run(
@@ -351,7 +353,7 @@ def test_render_is_byte_deterministic_and_reports_exact_hashes(
     capsys: pytest.CaptureFixture[str],
     output_format: str,
 ) -> None:
-    source = tmp_path / "source.chemvas"
+    source = tmp_path / "source.cdxml"
     source_bytes = _write_source(source)
     first = tmp_path / f"first.{output_format}"
     second = tmp_path / f"second.{output_format}"
@@ -444,7 +446,7 @@ def test_render_is_byte_deterministic_and_reports_exact_hashes(
 def test_default_white_png_and_current_document_render(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    source = tmp_path / "current.chemvas"
+    source = tmp_path / "current.cdxml"
     _write_source(source, version=CANVAS_FILE_VERSION)
     output = tmp_path / "current.png"
 
@@ -463,7 +465,7 @@ def test_width_uses_shared_export_size_and_preserves_aspect_ratio(
     capsys: pytest.CaptureFixture[str],
     output_format: str,
 ) -> None:
-    source = tmp_path / "source.chemvas"
+    source = tmp_path / "source.cdxml"
     source_bytes = _write_source(source)
     default_output = tmp_path / f"default.{output_format}"
     sized_output = tmp_path / f"sized.{output_format}"
@@ -540,7 +542,7 @@ def test_invalid_physical_options_fail_before_scene_creation(
     option: str,
     value: str,
 ) -> None:
-    source = tmp_path / "source.chemvas"
+    source = tmp_path / "source.cdxml"
     _write_source(source)
     output = tmp_path / "invalid.svg"
 
@@ -582,7 +584,7 @@ def test_font_guard_reports_coverage_without_changing_output_bytes(
     capsys: pytest.CaptureFixture[str],
     output_format: str,
 ) -> None:
-    source = tmp_path / "source.chemvas"
+    source = tmp_path / "source.cdxml"
     source_bytes = _write_source(source)
     first = tmp_path / f"plain.{output_format}"
     checked = tmp_path / f"checked.{output_format}"
@@ -607,7 +609,7 @@ def test_font_guard_rejects_before_publication_and_reports_minimum_witness(
     capsys: pytest.CaptureFixture[str],
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    source = tmp_path / "source.chemvas"
+    source = tmp_path / "source.cdxml"
     source_bytes = _write_source(source)
     output = tmp_path / "too-small.svg"
 
@@ -648,7 +650,7 @@ def test_default_export_does_not_invoke_font_measurement(
     monkeypatch.setattr(
         export_readability_service, "assess_export_readability", unexpected_measurement
     )
-    source = tmp_path / "source.chemvas"
+    source = tmp_path / "source.cdxml"
     _write_source(source)
     assert (
         cli.run(
@@ -676,7 +678,7 @@ def test_physical_size_limits_fail_before_painting(
     options: list[str],
     message: str,
 ) -> None:
-    source = tmp_path / "source.chemvas"
+    source = tmp_path / "source.cdxml"
     source_bytes = _write_source(source)
     output = tmp_path / f"limited.{output_format}"
 
@@ -702,9 +704,9 @@ def test_empty_document_and_extreme_geometry_publish_nothing(
     empty_state = _state()
     empty_state["model"] = serialize_model_state(MoleculeModel())
     empty_state["notes"] = []
-    empty = tmp_path / "empty.chemvas"
+    empty = tmp_path / "empty.cdxml"
     _write_source(empty, state=empty_state)
-    huge = tmp_path / "huge.chemvas"
+    huge = tmp_path / "huge.cdxml"
     _write_source(huge, state=_state(far_x=1_000_000.0))
 
     for source, name in ((empty, "empty.svg"), (huge, "huge.png")):
@@ -720,7 +722,7 @@ def test_source_and_graphics_limits_fail_before_render(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    source = tmp_path / "source.chemvas"
+    source = tmp_path / "source.cdxml"
     source_bytes = _write_source(source)
     output = tmp_path / "limited.svg"
 
@@ -742,7 +744,7 @@ def test_rendered_output_limit_leaves_no_final_or_staging_file(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    source = tmp_path / "source.chemvas"
+    source = tmp_path / "source.cdxml"
     _write_source(source)
     output = tmp_path / "too-large.svg"
     monkeypatch.setattr(cli, "MAX_OUTPUT_BYTES", 1)
@@ -759,7 +761,7 @@ def test_rendered_output_limit_leaves_no_final_or_staging_file(
 def test_existing_file_and_directory_outputs_are_preserved(
     tmp_path: Path, output_format: str
 ) -> None:
-    source = tmp_path / "source.chemvas"
+    source = tmp_path / "source.cdxml"
     _write_source(source)
     targets = [
         tmp_path / f"file.{output_format}",
@@ -780,7 +782,7 @@ def test_existing_file_and_directory_outputs_are_preserved(
 def test_existing_symlink_output_is_preserved(
     tmp_path: Path, output_format: str
 ) -> None:
-    source = tmp_path / "source.chemvas"
+    source = tmp_path / "source.cdxml"
     _write_source(source)
     output = tmp_path / f"link.{output_format}"
     try:
@@ -803,7 +805,7 @@ def test_atomic_publish_rejects_target_created_after_preflight(
     monkeypatch: pytest.MonkeyPatch,
     output_format: str,
 ) -> None:
-    source = tmp_path / "source.chemvas"
+    source = tmp_path / "source.cdxml"
     _write_source(source)
     output = tmp_path / f"raced.{output_format}"
     original_atomic_create = cli.atomic_create_bytes
@@ -826,8 +828,8 @@ def test_atomic_publish_rejects_target_created_after_preflight(
     ("source_name", "output_name"),
     [
         ("source.json", "output.svg"),
-        ("source.chemvas", "output.webp"),
-        ("source.chemvas", "missing/output.svg"),
+        ("source.cdxml", "output.webp"),
+        ("source.cdxml", "missing/output.svg"),
     ],
 )
 def test_invalid_paths_are_rejected(
@@ -878,7 +880,7 @@ def test_module_import_is_qt_and_rdkit_free_until_rendering() -> None:
 def test_read_only_cli_never_imports_editor_or_history(
     tmp_path: Path, command: str
 ) -> None:
-    source = tmp_path / "source.chemvas"
+    source = tmp_path / "source.cdxml"
     source_bytes = _write_source(source)
     output = tmp_path / "scene.png"
     env = os.environ.copy()
@@ -925,7 +927,7 @@ main()
 def test_python_module_entrypoint_renders_without_desktop_startup(
     tmp_path: Path, output_format: str
 ) -> None:
-    source = tmp_path / "source.chemvas"
+    source = tmp_path / "source.cdxml"
     source_bytes = _write_source(source)
     output = tmp_path / f"entrypoint.{output_format}"
     env = os.environ.copy()
@@ -974,7 +976,7 @@ def test_rendering_does_not_load_rdkit_or_leave_visible_windows(
     qt_application,
     output_format: str,
 ) -> None:
-    source = tmp_path / "source.chemvas"
+    source = tmp_path / "source.cdxml"
     _write_source(source)
     output = tmp_path / f"output.{output_format}"
     rdkit_modules_before = {
@@ -1013,7 +1015,7 @@ def test_pdf_is_one_vector_page_with_exact_report_and_requested_width(
     background: str,
     dpi: int,
 ) -> None:
-    source = tmp_path / "source.chemvas"
+    source = tmp_path / "source.cdxml"
     source_bytes = _write_source(source)
     output = tmp_path / "figure.pdf"
     assert (
@@ -1072,7 +1074,7 @@ def test_pdf_minimum_font_option_fails_before_scene_creation(
     capsys: pytest.CaptureFixture[str],
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    source = tmp_path / "source.chemvas"
+    source = tmp_path / "source.cdxml"
     source_bytes = _write_source(source)
     output = tmp_path / "unsupported-font-check.pdf"
 
@@ -1102,7 +1104,7 @@ def test_pdf_height_limit_includes_native_page_rounding(
     capsys: pytest.CaptureFixture[str],
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    source = tmp_path / "source.chemvas"
+    source = tmp_path / "source.cdxml"
     source_bytes = _write_source(source)
     output = tmp_path / "rounded-page.pdf"
     with offscreen_canvas(_state(), command="test-pdf-rounding") as (_, service):

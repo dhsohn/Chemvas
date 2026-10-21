@@ -3,8 +3,8 @@
 from PyQt6.QtCore import QPointF, Qt
 from PyQt6.QtTest import QTest
 
-from chemvas.core.document_io import read_document
 from chemvas.ui.molecule.structure_mutation_access import add_bond_for
+from tests.document_file_helpers import read_document
 from tests.gui_workflow_support import _click, _tool
 from tests.gui_workflow_support import app as app
 from tests.gui_workflow_support import fresh_window as fresh_window
@@ -57,7 +57,7 @@ def test_bond_drag_extends_group_then_keyboard_move_undo_reopen(
             Qt.KeyboardModifier.ControlModifier | Qt.KeyboardModifier.ShiftModifier,
         )
     assert canvas.services.canvas_document_session_service.snapshot_state() == moved
-    path = tmp_path / "grouped-sprout.chemvas"
+    path = tmp_path / "grouped-sprout.cdxml"
     documents = canvas.services.canvas_document_session_service
     assert documents.save_to_file(str(path)) == []
     documents.apply_state(read_document(path).state)

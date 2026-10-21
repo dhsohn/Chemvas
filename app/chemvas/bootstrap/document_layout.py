@@ -15,10 +15,11 @@ from chemvas.bootstrap.document_cli_shared import (
     offscreen_canvas,
     read_json_request,
 )
-from chemvas.core.document_io import atomic_create_bytes, read_exact_document
+from chemvas.core.document_io import atomic_create_bytes
 from chemvas.domain.document import (
     build_normalized_document_payload,
 )
+from chemvas.features.document_files import read_exact_document
 from chemvas.features.scheme_layout import validate_layout_request
 
 MAX_LAYOUT_BYTES = 1024 * 1024
@@ -94,23 +95,23 @@ def _argument_parser() -> argparse.ArgumentParser:
     command = commands.add_parser(
         "layout-document", help="align structures and captions in a new document"
     )
-    command.add_argument("document", help="input .chemvas document")
+    command.add_argument("document", help="input .cdxml document")
     command.add_argument(
         "--layout", required=True, help="source-pinned scheme layout v1 JSON"
     )
     command.add_argument(
-        "--output", required=True, help="new non-overwriting .chemvas path"
+        "--output", required=True, help="new non-overwriting .cdxml path"
     )
     return parser
 
 
 def _validate_paths(source: Path, layout: Path, output: Path) -> None:
-    if source.suffix.lower() != ".chemvas" or not source.is_file():
-        raise ValueError("input must be an existing .chemvas document")
+    if source.suffix.lower() != ".cdxml" or not source.is_file():
+        raise ValueError("input must be an existing .cdxml document")
     if layout.suffix.lower() != ".json" or not layout.is_file():
         raise ValueError("layout must be an existing .json request")
-    if output.suffix.lower() != ".chemvas":
-        raise ValueError("output must use the .chemvas filename extension")
+    if output.suffix.lower() != ".cdxml":
+        raise ValueError("output must use the .cdxml filename extension")
     if output.exists() or output.is_symlink():
         raise ValueError(f"output path already exists: {output}")
     if not output.parent.is_dir():

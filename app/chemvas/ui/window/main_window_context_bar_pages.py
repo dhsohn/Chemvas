@@ -128,6 +128,7 @@ class MainWindowContextBarPageBuilder:
             toggle_subscript=lambda: self._note_command(
                 window, "toggle_text_subscript"
             ),
+            set_size=lambda size: self._note_command(window, "set_text_size", size),
             adjust_size=lambda delta: self._note_command(
                 window, "adjust_text_size", delta
             ),

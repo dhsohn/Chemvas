@@ -115,7 +115,7 @@ class ExportDialogLogicTest(unittest.TestCase):
 
     def test_default_export_path_swaps_suffix(self):
         self.assertEqual(
-            default_export_path("/work/mol.chemvas", "pdf"),
+            default_export_path("/work/mol.cdxml", "pdf"),
             str(Path("/work/mol.pdf")),
         )
         self.assertEqual(default_export_path("", "pdf"), "")

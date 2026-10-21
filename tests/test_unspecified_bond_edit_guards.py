@@ -163,7 +163,7 @@ def _unknown_with_redo(drawing, tmp_path):
     history = canvas.services.history_service
     history.undo()
     assert window.services.document_action_service.save_canvas_to_path(
-        window, str(tmp_path / "unknown-double.chemvas")
+        window, str(tmp_path / "unknown-double.cdxml")
     )
     assert not window.isWindowModified()
     return (

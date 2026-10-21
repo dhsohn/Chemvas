@@ -16,9 +16,13 @@ from chemvas.bootstrap import (
     document_render,
     document_template,
 )
-from chemvas.core.document_io import read_exact_document, write_document
 from chemvas.domain.document import CANVAS_FILE_VERSION
 from chemvas.features.document_composition import compose_document_state
+from tests.document_file_helpers import (
+    read_exact_document,
+    write_document,
+    write_payload_text,
+)
 
 OPERATIONS = (
     "inspect-document",
@@ -54,12 +58,13 @@ def _write_source(source: Path) -> bytes:
 
 
 def _case(directory: Path, operation: str):
-    source, output = directory / "source.chemvas", directory / "output.chemvas"
+    source, output = directory / "source.cdxml", directory / "output.cdxml"
     _write_source(source)
     digest = hashlib.sha256(source.read_bytes()).hexdigest()
     if operation == "layout-document":
         request = directory / "layout.json"
-        request.write_text(
+        write_payload_text(
+            request,
             json.dumps(
                 {
                     "format": "chemvas-scheme-layout",
@@ -84,7 +89,8 @@ def _case(directory: Path, operation: str):
         )
     if operation == "insert-template":
         request = directory / "template.json"
-        request.write_text(
+        write_payload_text(
+            request,
             json.dumps(
                 {
                     "format": "chemvas-template-insertion",
@@ -113,7 +119,8 @@ def _case(directory: Path, operation: str):
         )
     if operation == "apply-patch":
         request = directory / "patch.json"
-        request.write_text(
+        write_payload_text(
+            request,
             json.dumps(
                 {
                     "format": "chemvas-graph-patch",
@@ -209,12 +216,10 @@ def test_public_cli_hashes_exact_source_once(tmp_path, operation):
 
 @pytest.mark.parametrize("spelling", ["compact", "indent", "bom"])
 def test_reader_digest_is_exact_even_when_json_normalizes(tmp_path, spelling):
-    source = tmp_path / "원본.chemvas"
-    payload = json.loads(_write_source(source))
-    payload["state"]["notes"][0]["text"] = "합성 Δ"
-    text = json.dumps(
-        payload, ensure_ascii=False, indent=None if spelling == "compact" else 2
-    )
+    source = tmp_path / "원본.cdxml"
+    text = '<CDXML><page id="1" Width="842" Height="595"><t id="2" p="20 40"><s>합성 Δ</s></t></page></CDXML>'
+    if spelling == "indent":
+        text = text.replace("><", ">\n  <")
     original = text.encode("utf-8")
     if spelling == "bom":
         original = b"\xef\xbb\xbf" + original

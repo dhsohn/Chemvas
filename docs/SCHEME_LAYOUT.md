@@ -9,10 +9,10 @@
 You can script the layout pipeline using `layout-document`:
 
 ```bash
-chemvas inspect-document scheme.chemvas
-chemvas layout-document scheme.chemvas --layout layout.json --output arranged.chemvas
-chemvas check-layout arranged.chemvas
-chemvas render-document arranged.chemvas --output arranged.svg --width-mm 174 --max-height-mm 120
+chemvas inspect-document scheme.cdxml
+chemvas layout-document scheme.cdxml --layout layout.json --output arranged.cdxml
+chemvas check-layout arranged.cdxml
+chemvas render-document arranged.cdxml --output arranged.svg --width-mm 174 --max-height-mm 120
 ```
 
 ### Layout Specification (Arrange Mode)
@@ -128,7 +128,7 @@ When a reaction wraps:
 Before finalizing figures, enforce minimum font size and height constraints during headless rendering:
 
 ```bash
-chemvas render-document arranged.chemvas --output arranged.svg --width-mm 174 --min-font-pt 6
+chemvas render-document arranged.cdxml --output arranged.svg --width-mm 174 --min-font-pt 6
 ```
 
 - `--min-font-pt`: Rejects exports if scaling causes any text (including sub/superscripts) to fall below the specified threshold.

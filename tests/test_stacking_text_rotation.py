@@ -5,7 +5,6 @@ from PIL import Image
 from PyQt6.QtGui import QImage
 
 from chemvas.bootstrap.document_cli_shared import offscreen_canvas
-from chemvas.core.document_io import read_document, write_document
 from chemvas.domain.document import CANVAS_FILE_VERSION, validate_image_state
 from chemvas.features.document_composition import compose_document_state
 from chemvas.ui.canvas.canvas_document_state import (
@@ -15,6 +14,7 @@ from chemvas.ui.canvas.canvas_document_state import (
 from chemvas.ui.export.export_render_service import export_scene
 from chemvas.ui.scene.scene_clipboard_controller import SceneClipboardController
 from chemvas.ui.scene.stacking_actions import stack_selection
+from tests.document_file_helpers import read_document, write_document
 
 pytestmark = pytest.mark.usefixtures("qt_application")
 
@@ -85,7 +85,7 @@ def test_shape_image_stacking_pixels_history_and_reopen(tmp_path):
         payload = SceneClipboardController(canvas).selection_payload_for_clipboard()
         assert {s["kind"] for s in payload["scene_items"]} == {"shape", "image"}
         assert all("z" in s for s in payload["scene_items"])
-        path = tmp_path / "stacking.chemvas"
+        path = tmp_path / "stacking.cdxml"
         write_document(path, saved, CANVAS_FILE_VERSION)
     with offscreen_canvas(read_document(path).state, command="reopen") as (canvas, _):
         restored = document_item_lists_for(canvas)
@@ -130,7 +130,7 @@ def test_text_rotation_visible_bounds_undo_clipboard_save_and_export(tmp_path):
         assert snapshot_canvas_document_state(canvas) == rotated
         payload = SceneClipboardController(canvas).selection_payload_for_clipboard()
         assert payload["scene_items"][0]["rotation"] == 90
-        path = tmp_path / "rotated.chemvas"
+        path = tmp_path / "rotated.cdxml"
         write_document(path, rotated, CANVAS_FILE_VERSION)
         output = tmp_path / "rotated.png"
         export_scene(canvas.scene(), str(output), fmt="png", margin=0, dpi=72)

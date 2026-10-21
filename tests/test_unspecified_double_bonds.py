@@ -13,7 +13,6 @@ from PyQt6.QtTest import QTest
 from PyQt6.QtWidgets import QApplication
 
 from chemvas.bootstrap.main_window import build_main_window
-from chemvas.core.document_io import read_document, write_document
 from chemvas.core.molfile import parse_molfile, write_molfile
 from chemvas.core.svg_roundtrip import extract_chemvas_document_from_svg
 from chemvas.domain.document import (
@@ -30,6 +29,7 @@ from chemvas.features.document_composition import compose_document_state
 from chemvas.features.document_patch import apply_document_patch
 from chemvas.ui.window.main_window_ports import active_canvas_for_window
 from tests.canvas_factory import build_canvas_view
+from tests.document_file_helpers import read_document, write_document
 
 
 @pytest.fixture(scope="module")
@@ -160,7 +160,7 @@ def test_native_editable_svg_clipboard_and_history_preserve_unknown(canvas, tmp_
     documents.apply_state(compose_document_state(_composition()))
     before = documents.snapshot_state()
     expected_lines = _lines(canvas)
-    document = tmp_path / "unspecified.chemvas"
+    document = tmp_path / "unspecified.cdxml"
     write_document(document, before, version=CANVAS_FILE_VERSION)
     restored = read_document(document).state
     assert restored == json.loads(json.dumps(before))

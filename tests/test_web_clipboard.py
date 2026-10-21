@@ -129,7 +129,7 @@ def rich_session() -> BrowserSession:
             "revision": 0,
             "action": "load",
             "document": rich_document(),
-            "name": "Rich.chemvas",
+            "name": "Rich.cdxml",
         }
     )
     session.dispatch(

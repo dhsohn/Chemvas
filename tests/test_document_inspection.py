@@ -178,7 +178,7 @@ _PURE_INSPECTION = dedent(
 
     assert not any(blocked(name) for name in sys.modules)
     sys.meta_path.insert(0, RejectOptionalDependencies())
-    from chemvas.core.document_io import read_document
+    from chemvas.features.document_files import read_document
     document = read_document(sys.argv[2])
     state = document.state
     before = deepcopy(state)
@@ -236,7 +236,7 @@ _PURE_INSPECTION = dedent(
 def test_generic_inspection_consumers_do_not_import_calculation_or_optional_backends(
     operation,
 ):
-    fixture = Path(__file__).parent / "fixtures" / "document-v7" / "minimal.chemvas"
+    fixture = Path(__file__).parent / "fixtures" / "document-v7" / "minimal.cdxml"
     result = subprocess.run(
         [sys.executable, "-c", _PURE_INSPECTION, operation, str(fixture)],
         env=source_subprocess_env({"PYTHONDONTWRITEBYTECODE": "1"}),

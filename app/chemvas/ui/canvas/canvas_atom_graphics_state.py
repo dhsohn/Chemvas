@@ -8,6 +8,7 @@ from typing import Any
 class CanvasAtomGraphicsState:
     atom_items: dict[int, Any] = field(default_factory=dict)
     atom_dots: dict[int, Any] = field(default_factory=dict)
+    native_labels: dict[int, Any] = field(default_factory=dict)
 
 
 def set_atom_items_for(canvas: Any, items: dict[int, Any]) -> None:
@@ -41,6 +42,7 @@ def pop_atom_dot_for(canvas: Any, atom_id: int):
 def clear_atom_graphics_for(canvas: Any) -> None:
     set_atom_items_for(canvas, {})
     set_atom_dots_for(canvas, {})
+    canvas.runtime_state.atom_graphics_state.native_labels = {}
 
 
 __all__ = [

@@ -65,11 +65,11 @@ class MainWindowCanvasDocumentServiceTest(unittest.TestCase):
         self.assertTrue(
             self.window.services.document_action_service.save_canvas_to_path(
                 self.window,
-                str(self.directory / "first.chemvas"),
+                str(self.directory / "first.cdxml"),
             )
         )
 
-        opened_path = str(self.directory / "opened.chemvas")
+        opened_path = str(self.directory / "opened.cdxml")
         opened = self.service.open_state(
             self.window, state=state, file_path=opened_path
         )
@@ -77,7 +77,7 @@ class MainWindowCanvasDocumentServiceTest(unittest.TestCase):
         self.assertIsNot(opened, first)
         self.assertEqual(self.window.tab_references.canvas_count(), 2)
         self.assertEqual(
-            self.window.tab_references.canvas_tabs.tabText(1), "opened.chemvas"
+            self.window.tab_references.canvas_tabs.tabText(1), "opened.cdxml"
         )
         self.assertEqual(
             opened.runtime_state.document_metadata_state.file_path, opened_path
@@ -87,11 +87,11 @@ class MainWindowCanvasDocumentServiceTest(unittest.TestCase):
         canvas = active_canvas_for_window(self.window)
         state = canvas.services.canvas_document_session_service.snapshot_state()
 
-        with self.assertRaisesRegex(ValueError, r"\.chemvas filename extension"):
+        with self.assertRaisesRegex(ValueError, r"\.cdxml filename extension"):
             self.service.set_file_path(canvas, "/tmp/retired.json")
         self.assertIsNone(canvas.runtime_state.document_metadata_state.file_path)
 
-        with self.assertRaisesRegex(ValueError, r"\.chemvas filename extension"):
+        with self.assertRaisesRegex(ValueError, r"\.cdxml filename extension"):
             self.service.open_state(
                 self.window,
                 state=state,
@@ -100,7 +100,7 @@ class MainWindowCanvasDocumentServiceTest(unittest.TestCase):
         self.assertIsNone(canvas.runtime_state.document_metadata_state.file_path)
         self.assertEqual(self.window.tab_references.canvas_count(), 1)
 
-        with self.assertRaisesRegex(ValueError, r"\.chemvas filename extension"):
+        with self.assertRaisesRegex(ValueError, r"\.cdxml filename extension"):
             self.service.add_canvas(
                 self.window,
                 state=state,

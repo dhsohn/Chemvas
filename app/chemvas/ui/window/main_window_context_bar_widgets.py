@@ -3,8 +3,7 @@ from __future__ import annotations
 from decimal import Decimal
 from typing import override
 
-from PyQt6.QtCore import QPointF, QSize, Qt
-from PyQt6.QtGui import QColor, QPainter, QPolygonF
+from PyQt6.QtCore import QSize, Qt, QTimer
 from PyQt6.QtWidgets import (
     QDoubleSpinBox,
     QFrame,
@@ -12,6 +11,7 @@ from PyQt6.QtWidgets import (
     QLabel,
     QLineEdit,
     QMenu,
+    QPushButton,
     QSizePolicy,
     QSlider,
     QSpinBox,
@@ -31,50 +31,14 @@ from chemvas.shell.theme import (
     TOOLBAR_BUTTON_SIZE,
     TOOLBAR_BUTTON_STYLE,
 )
-from chemvas.shell.toolbar_buttons import CornerMenuButton
+from chemvas.shell.toolbar_buttons import ArrowButton, CornerMenuButton
 from chemvas.ui.window.main_window_config import (
     ATOM_INPUT_SPEC,
     BOND_LENGTH_INPUT_SPEC,
     ROTATE_ANGLE_DEFAULT,
     ROTATE_ANGLE_RANGE,
+    TEXT_POINT_SIZE_RANGE,
 )
-
-
-class _StepArrowButton(QToolButton):
-    """A flat button that paints a small triangle centered in its rect."""
-
-    def __init__(self, direction: str) -> None:
-        super().__init__()
-        self._direction = direction
-        self.setAutoRaise(True)
-        self.setFocusPolicy(Qt.FocusPolicy.NoFocus)
-        self.setCursor(Qt.CursorShape.PointingHandCursor)
-
-    @override
-    def paintEvent(self, event) -> None:
-        super().paintEvent(event)
-        painter = QPainter(self)
-        painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
-        painter.setPen(Qt.PenStyle.NoPen)
-        painter.setBrush(QColor(PALETTE["text_muted"]))
-        half_w = 3.5
-        half_h = 2.0
-        cx = self.width() / 2.0
-        cy = self.height() / 2.0
-        if self._direction == "up":
-            points = [
-                QPointF(cx, cy - half_h),
-                QPointF(cx + half_w, cy + half_h),
-                QPointF(cx - half_w, cy + half_h),
-            ]
-        else:
-            points = [
-                QPointF(cx - half_w, cy - half_h),
-                QPointF(cx + half_w, cy - half_h),
-                QPointF(cx, cy + half_h),
-            ]
-        painter.drawPolygon(QPolygonF(points))
-
 
 _ICON_SIZE = QSize(CONTEXT_BAR_ICON_SIZE, CONTEXT_BAR_ICON_SIZE)
 _ICON_BUTTON_STYLE = (
@@ -177,6 +141,69 @@ def icon_button(
     button.setStyleSheet(_ICON_BUTTON_STYLE)
     button.setCursor(Qt.CursorShape.PointingHandCursor)
     return button
+
+
+class TextSizeButton(QToolButton):
+    """A size readout with a popup editor that preserves the text selection."""
+
+    def __init__(self, set_size) -> None:
+        super().__init__()
+        self.setObjectName("textSizeButton")
+        self.setToolTip("Font size in points (click to enter a size)")
+        self.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        self.setFixedHeight(CONTEXT_BAR_BUTTON_HEIGHT)
+        self.setMinimumWidth(72)
+        self.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
+        menu = QMenu(self)
+        panel = QWidget(menu)
+        layout = QHBoxLayout(panel)
+        self.size_input = QDoubleSpinBox(panel)
+        self.size_input.setObjectName("textSizeInput")
+        self.size_input.setAccessibleName("Font size in points")
+        self.size_input.setRange(*TEXT_POINT_SIZE_RANGE)
+        self.size_input.setDecimals(2)
+        self.size_input.setSuffix(" pt")
+        self.size_input.setKeyboardTracking(False)
+        self.size_input.setSizePolicy(
+            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum
+        )
+        apply_button = QPushButton("Apply", panel)
+        apply_button.setSizePolicy(
+            QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Minimum
+        )
+        layout.addWidget(self.size_input)
+        layout.addWidget(apply_button)
+        action = QWidgetAction(menu)
+        action.setDefaultWidget(panel)
+        menu.addAction(action)
+        self.setMenu(menu)
+
+        def apply() -> None:
+            self.size_input.interpretText()
+            size = self.size_input.value()
+            menu.close()
+            # Restore the popup editor focus before applying to its selection.
+            QTimer.singleShot(0, lambda: set_size(size))
+
+        def focus_input() -> None:
+            self.size_input.setFocus(Qt.FocusReason.PopupFocusReason)
+            self.size_input.selectAll()
+
+        apply_button.clicked.connect(apply)
+        line_edit = self.size_input.lineEdit()
+        assert line_edit is not None
+        line_edit.returnPressed.connect(apply)
+        menu.aboutToShow.connect(focus_input)
+
+    def sync_size(self, size: float | None, *, enabled: bool) -> None:
+        self.setEnabled(enabled)
+        self.setText(
+            f"{size:g} pt" if size is not None else "Mixed" if enabled else "— pt"
+        )
+        menu = self.menu()
+        assert menu is not None
+        if not menu.isVisible():
+            self.size_input.setValue(size if size is not None else 12.0)
 
 
 class SegmentedButtonGroup(QFrame):
@@ -330,11 +357,11 @@ def _stepper_frame(
     stepper_col = QVBoxLayout(stepper)
     stepper_col.setContentsMargins(0, 1, 0, 1)
     stepper_col.setSpacing(0)
-    up_btn = _StepArrowButton("up")
+    up_btn = ArrowButton("up")
     up_btn.setFixedSize(20, 13)
     up_btn.setToolTip(up_tooltip)
     up_btn.clicked.connect(on_step_up)
-    down_btn = _StepArrowButton("down")
+    down_btn = ArrowButton("down")
     down_btn.setFixedSize(20, 13)
     down_btn.setToolTip(down_tooltip)
     down_btn.clicked.connect(on_step_down)

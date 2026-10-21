@@ -144,7 +144,7 @@ def test_process_identity_validation_and_policy_reject_whitespace():
 
 
 def test_identity_extension_preserves_the_original_public_call_shapes():
-    entry = _entry(file_path="/a/x.chemvas", dirty=False, snapshot=None)
+    entry = _entry(file_path="/a/x.cdxml", dirty=False, snapshot=None)
     manifest = SessionManifest(42, False, [entry])
 
     assert manifest.docs == [entry]
@@ -210,7 +210,7 @@ def test_entries_to_restore_crash_keeps_unsaved_work():
         pid=1,
         clean_exit=False,
         docs=[
-            _entry(file_path="/a/x.chemvas"),
+            _entry(file_path="/a/x.cdxml"),
             _entry(file_path=None, dirty=True, snapshot="doc-0.json"),
         ],
     )
@@ -224,10 +224,10 @@ def test_manifest_writer_stays_strict_v1_and_round_trips_documents():
         process_identity="linux:boot-id:12345",
         docs=[
             _entry(
-                file_path="/a/x.chemvas",
+                file_path="/a/x.cdxml",
                 dirty=True,
                 snapshot="doc-0.json",
-                name="x.chemvas",
+                name="x.cdxml",
             )
         ],
     )
@@ -239,8 +239,8 @@ def test_manifest_writer_stays_strict_v1_and_round_trips_documents():
         "clean_exit": False,
         "docs": [
             {
-                "file_path": "/a/x.chemvas",
-                "display_name": "x.chemvas",
+                "file_path": "/a/x.cdxml",
+                "display_name": "x.cdxml",
                 "dirty": True,
                 "snapshot": "doc-0.json",
             }

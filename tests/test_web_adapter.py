@@ -49,6 +49,7 @@ from chemvas.ui.window.main_window_config import (
     COLOR_TOOL_MESSAGES,
     TEMPLATE_ENTRY_SPECS,
 )
+from tests.document_file_helpers import read_payload
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -943,13 +944,13 @@ def test_ring_document_continues_web_qt_web_with_shared_records(
     canvas.services.structure_build_service.add_benzene_ring(
         QPointF(100, 100), attach_bond_id=0
     )
-    saved_path = tmp_path / "adapter-roundtrip.chemvas"
+    saved_path = tmp_path / "adapter-roundtrip.cdxml"
     desktop.save_to_file(str(saved_path))
     reopened = session.dispatch(
         {
             "revision": 1,
             "action": "load",
-            "document": json.loads(saved_path.read_text()),
+            "document": read_payload(saved_path.read_text()),
         }
     )
     assert len(reopened["document"]["state"]["model"]["atoms"]) == 10
@@ -2277,7 +2278,7 @@ def test_http_read_recovers_a_stale_revision_and_document_name(server):
                 "revision": 0,
                 "action": "load",
                 "document": new_document(),
-                "name": "Recovered.chemvas",
+                "name": "Recovered.cdxml",
             }
         ),
     )
@@ -2306,7 +2307,7 @@ def test_http_read_recovers_a_stale_revision_and_document_name(server):
     assert status == 200
     recovered = json.loads(body)
     assert recovered["revision"] == 2
-    assert recovered["name"] == "Recovered.chemvas"
+    assert recovered["name"] == "Recovered.cdxml"
     assert len(recovered["document"]["state"]["model"]["atoms"]) == 6
     assert recovered["can_undo"] and recovered["dirty"]
     status, body, _ = request(
@@ -7554,7 +7555,7 @@ def test_browser_sheet_setup_matches_native_and_preserves_drawing(
         {"custom_size_mm": [10]},
         {"custom_size_mm": [True, 20]},
         {"custom_size_mm": [9.99, 20]},
-        {"custom_size_mm": [20, 2000.01]},
+        {"custom_size_mm": [20, 3000.01]},
         {"custom_size_mm": ["10", 20]},
         {"extra": 1},
     ],
@@ -9531,7 +9532,7 @@ def test_orbital_session_preview_history_and_native_reopen(desktop_canvas, kind)
     current = session.dispatch({"action": "undo", "revision": current["revision"]})
     saved = json.loads(json.dumps(current["document"]))
     reopened = BrowserSession().dispatch(
-        {"action": "load", "revision": 0, "document": saved, "name": "orbitals.chemvas"}
+        {"action": "load", "revision": 0, "document": saved, "name": "orbitals.cdxml"}
     )
     assert not reopened["dirty"] and not reopened["can_undo"]
     assert not reopened["unsupported"]
@@ -10595,13 +10596,13 @@ def test_caret_formatted_note_persists_like_the_desktop_typing_format(
     assert undone["document"] == loaded and not session.history.can_undo()
     redone = session.dispatch({"revision": session.revision, "action": "redo"})
     assert redone["document"] == committed
-    exported = session.dispatch({"revision": session.revision, "action": "export"})
-    assert exported["document"] == committed
+    exported = session.dispatch({"revision": session.revision, "action": "save_cdxml"})
+    assert read_payload(exported["cdxml"]) == json.loads(json.dumps(committed))
     reopened = BrowserSession().dispatch(
         {
             "revision": 0,
             "action": "load",
-            "document": json.loads(json.dumps(exported["document"])),
+            "document": read_payload(exported["cdxml"]),
         }
     )["document"]
     assert reopened["state"]["notes"] == committed["state"]["notes"]
@@ -11226,10 +11227,10 @@ def test_images_are_editable_and_travel_by_reference(server):
         server,
         "/api/session",
         method="POST",
-        body=json.dumps({"session": session, "revision": 1, "action": "export"}),
+        body=json.dumps({"session": session, "revision": 1, "action": "save_cdxml"}),
     )
     assert status == 200
-    assert json.loads(body)["document"] == json.loads(json.dumps(source))
+    assert read_payload(json.loads(body)["cdxml"]) == json.loads(json.dumps(source))
 
 
 IMAGE_EDITS = {

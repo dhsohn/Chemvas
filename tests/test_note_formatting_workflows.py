@@ -11,9 +11,9 @@ from PyQt6.QtWidgets import (
     QToolButton,
 )
 
-from chemvas.core.document_io import read_document
 from chemvas.ui.canvas.canvas_note_snapshots import _NoteSceneRectTransaction
 from chemvas.ui.scene.note_item_access import NoteTextState
+from tests.document_file_helpers import read_document
 from tests.gui_workflow_support import _tool
 from tests.gui_workflow_support import app as app
 from tests.gui_workflow_support import drawing as drawing
@@ -248,7 +248,7 @@ def test_real_file_menu_save_preserves_live_editing_and_serializes_text(
 ):
     window, canvas = drawing
     _controller, note = _note(drawing, "Caption")
-    path = tmp_path / "menu-saved.chemvas"
+    path = tmp_path / "menu-saved.cdxml"
     actions = window.services.document_action_service
     assert actions.save_canvas_to_path(window, str(path))
     _select(note, 7, 7)
@@ -349,7 +349,9 @@ FORMAT_BUTTONS = [
 
 
 @pytest.mark.parametrize("selection_route", ["note-registry", "qt-only", "both"])
-@pytest.mark.parametrize("tooltip,html_marker", FORMAT_BUTTONS)
+@pytest.mark.parametrize(
+    "tooltip,html_marker", FORMAT_BUTTONS + [("Font size entry", "font-size:18.5pt")]
+)
 def test_all_text_buttons_reach_selected_notes_once_and_roundtrip(
     drawing, tmp_path, selection_route, tooltip, html_marker
 ):
@@ -371,7 +373,10 @@ def test_all_text_buttons_reach_selected_notes_once_and_roundtrip(
         note.isSelected(),
         tuple(canvas.runtime_state.selection_state.selected_notes),
     )
-    _button(window, tooltip)
+    if tooltip == "Font size entry":
+        controller.set_text_size(18.5)
+    else:
+        _button(window, tooltip)
     assert html_marker in note.toHtml()
     assert len(history.state.history) == count + 1
     assert (
@@ -383,7 +388,7 @@ def test_all_text_buttons_reach_selected_notes_once_and_roundtrip(
     assert canvas.services.canvas_document_session_service.snapshot_state() == before
     history.redo()
     assert canvas.services.canvas_document_session_service.snapshot_state() == after
-    path = tmp_path / "formatted.chemvas"
+    path = tmp_path / "formatted.cdxml"
     actions = window.services.document_action_service
     assert actions.save_canvas_to_path(window, str(path))
     canvas.services.canvas_document_session_service.apply_state(
@@ -659,3 +664,120 @@ def test_annotation_options_follow_real_tool_settings(drawing):
         QTest.mouseClick(buttons[other], Qt.MouseButton.LeftButton)
         assert getattr(canvas.runtime_state.tool_settings_state, setting) == other
         assert [key for key, button in buttons.items() if button.isChecked()] == [other]
+
+
+@pytest.mark.parametrize("cancel", [False, True])
+@pytest.mark.parametrize("reverse", [False, True])
+def test_size_entry_preserves_selection_other_formats_and_native_undo(
+    drawing, cancel, reverse
+):
+    window, canvas = drawing
+    controller, note = _note(drawing, "CH2Cl2 reflux")
+    fmt = QTextCharFormat()
+    fmt.setFontItalic(True)
+    _format_range(note, 0, 3, fmt)
+    _select(note, 3 if reverse else 0, 0 if reverse else 3)
+    selection = (note.textCursor().anchor(), note.textCursor().position())
+    before = note.toHtml()
+    unselected_size = _char_format(note, 5).fontPointSize()
+    service = window.services.context_bar_service
+    service.reflect_text_state(window)
+    button = service._text_size_button
+    assert button.text() == "12 pt"
+    errors = []
+
+    def enter_size():
+        try:
+            spin = button.size_input
+            spin.setFocus()
+            spin.selectAll()
+            QTest.keyClicks(spin, "18.5")
+            QTest.keyClick(spin, Qt.Key.Key_Escape if cancel else Qt.Key.Key_Return)
+        except Exception as error:
+            errors.append(error)
+        finally:
+            button.menu().close()
+
+    QTimer.singleShot(0, enter_size)
+    QTest.mouseClick(button, Qt.MouseButton.LeftButton)
+    QApplication.processEvents()
+    if errors:
+        raise errors[0]
+    assert (note.textCursor().anchor(), note.textCursor().position()) == selection
+    assert note.hasFocus()
+    assert _char_format(note, 0).fontItalic()
+    assert _char_format(note, 5).fontPointSize() == unselected_size
+    if cancel:
+        assert note.toHtml() == before
+    else:
+        assert _char_format(note, 0).fontPointSize() == 18.5
+        assert button.text() == "18.5 pt"
+        QTest.keySequence(canvas, QKeySequence(QKeySequence.StandardKey.Undo))
+        assert note.toHtml() == before
+        service.reflect_text_state(window)
+        assert button.text() == "12 pt"
+        QTest.keySequence(canvas, QKeySequence(QKeySequence.StandardKey.Redo))
+        assert _char_format(note, 0).fontPointSize() == 18.5
+    _select(note, 0, 12)
+    service.reflect_text_state(window)
+    assert button.text() == ("12 pt" if cancel else "Mixed")
+
+
+@pytest.mark.parametrize("size", [0, 97, float("nan"), float("inf")])
+def test_direct_size_rejects_invalid_values_without_changing_text(drawing, size):
+    controller, note = _note(drawing)
+    before = note.toHtml()
+    with pytest.raises(ValueError, match="Font size must be between"):
+        controller.set_text_size(size)
+    assert note.toHtml() == before
+
+
+@pytest.mark.parametrize("dismissal", ["inactive", "removed", "deleted", "no-canvas"])
+def test_size_popup_does_not_restore_an_inactive_or_disposed_editor(
+    drawing, monkeypatch, dismissal
+):
+    from unittest.mock import Mock
+
+    from PyQt6 import sip
+
+    window, canvas = drawing
+    controller, note = _note(drawing, "Popup lifetime")
+    service = window.services.context_bar_service
+    service.reflect_text_state(window)
+    button = service._text_size_button
+    scene = canvas.scene()
+    activate = Mock()
+    monkeypatch.setattr(QApplication, "setActiveWindow", activate)
+    errors = []
+
+    def dismiss():
+        try:
+            button.menu().close()
+            if dismissal == "inactive":
+                monkeypatch.setattr(
+                    QApplication,
+                    "applicationState",
+                    lambda: Qt.ApplicationState.ApplicationInactive,
+                )
+            elif dismissal == "no-canvas":
+                monkeypatch.setattr(
+                    type(window.tab_references),
+                    "active_canvas_or_none",
+                    lambda self, index: None,
+                )
+            else:
+                scene.removeItem(note)
+                if dismissal == "deleted":
+                    sip.delete(note)
+        except Exception as exc:
+            errors.append(exc)
+
+    QTimer.singleShot(0, dismiss)
+    QTest.mouseClick(button, Qt.MouseButton.LeftButton)
+    QApplication.processEvents()
+    assert not errors
+    activate.assert_not_called()
+    if dismissal != "deleted":
+        assert not note.format_popup_open
+    if dismissal == "removed":
+        scene.addItem(note)

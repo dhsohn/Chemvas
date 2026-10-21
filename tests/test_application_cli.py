@@ -219,8 +219,8 @@ def test_template_command_dispatches_to_headless_runner(
 @pytest.mark.parametrize(
     ("argument", "expected"),
     [
-        ("drawing.chemvas", "drawing.chemvas"),
-        ("drawing.CHEMVAS", "drawing.CHEMVAS"),
+        ("drawing.cdxml", "drawing.cdxml"),
+        ("drawing.CDXML", "drawing.CDXML"),
         ("drawing.svg", "drawing.svg"),
         ("structure.mol", "structure.mol"),
         ("structure.MOL", "structure.MOL"),
@@ -289,7 +289,7 @@ def test_windows_gui_rejects_console_commands_before_dispatch(
 
 
 def test_startup_path_keeps_windows_unicode_spaces_and_ampersand() -> None:
-    path = "C:/그림 폴더/OH & OMe 구조.CHEMVAS"
+    path = "C:/그림 폴더/OH & OMe 구조.CDXML"
     assert application._startup_document_path(["chemvas.exe", path]) == path
 
 
@@ -302,7 +302,7 @@ def test_startup_path_keeps_windows_unicode_spaces_and_ampersand() -> None:
         ["--versio"],
         ["-V"],
         ["--bogus"],
-        ["drawing.chemvas", "--bogus"],
+        ["drawing.cdxml", "--bogus"],
         ["-platform", "offscreen", "--bogus"],
         ["-platform"],
     ],

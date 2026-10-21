@@ -13,7 +13,8 @@ from chemvas.bootstrap.document_cli_shared import (
     sha256_hex,
     validate_source_document,
 )
-from chemvas.core.document_io import atomic_create_bytes, read_exact_document
+from chemvas.core.document_io import atomic_create_bytes
+from chemvas.features.document_files import read_exact_document
 from chemvas.features.document_patch import (
     DocumentPatchResult,
     apply_document_patch,
@@ -56,13 +57,13 @@ def _argument_parser() -> argparse.ArgumentParser:
         "inspect-document",
         help="inspect the complete chemical graph and notes as deterministic JSON",
     )
-    inspect_parser.add_argument("document", help="input .chemvas document")
+    inspect_parser.add_argument("document", help="input .cdxml document")
 
     patch_parser = subparsers.add_parser(
         "apply-patch",
         help="validate or apply a transactional Chemvas Graph Patch v1",
     )
-    patch_parser.add_argument("document", help="input .chemvas document")
+    patch_parser.add_argument("document", help="input .cdxml document")
     patch_parser.add_argument("patch", help="Chemvas Graph Patch v1 JSON file")
     destination = patch_parser.add_mutually_exclusive_group(required=True)
     destination.add_argument(
@@ -72,7 +73,7 @@ def _argument_parser() -> argparse.ArgumentParser:
     )
     destination.add_argument(
         "--output",
-        help="new non-overwriting .chemvas output path",
+        help="new non-overwriting .cdxml output path",
     )
     return parser
 
@@ -173,8 +174,8 @@ def _read_patch(path: Path) -> object:
 
 
 def _validate_new_output(source: Path, output: Path) -> None:
-    if output.suffix.lower() != ".chemvas":
-        raise ValueError("output must use the .chemvas filename extension")
+    if output.suffix.lower() != ".cdxml":
+        raise ValueError("output must use the .cdxml filename extension")
     if output.absolute() == source.absolute():
         raise ValueError(
             "apply-patch writes a new document; output must differ from input"

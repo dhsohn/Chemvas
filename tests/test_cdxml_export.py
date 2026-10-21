@@ -15,7 +15,6 @@ import pytest
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from chemvas.bootstrap.document_cli_shared import offscreen_document_scene
-from chemvas.core.document_io import write_document
 from chemvas.domain.document import (
     CANVAS_FILE_VERSION,
     Atom,
@@ -33,6 +32,7 @@ from chemvas.ui.export.export_cdxml import (
     serialize_cdxml,
 )
 from chemvas.ui.export.figure_export_service import FigureExportService
+from tests.document_file_helpers import write_document
 
 pytestmark = pytest.mark.usefixtures("qt_application")
 
@@ -619,7 +619,7 @@ def test_public_cli_bold_labelled_endpoints_and_source_preserved(tmp_path, rever
         atoms={0: Atom("O", 0.0, 0.0), 1: Atom("N", 70.0, 30.0)},
         bonds=[Bond(1, 0, style="bold_in") if reverse else Bond(0, 1, style="bold_in")],
     )
-    source, dest = tmp_path / "bold.chemvas", tmp_path / "bold.cdxml"
+    source, dest = tmp_path / "bold-source.cdxml", tmp_path / "bold.cdxml"
     write_document(source, state, CANVAS_FILE_VERSION)
     before = source.read_bytes()
     cli._render_document(
@@ -1003,7 +1003,7 @@ def test_existing_file_preserved_on_failure(tmp_path):
 def test_cli_cdxml_output(tmp_path):
     from chemvas.bootstrap import document_render as cli
 
-    source = tmp_path / "test.chemvas"
+    source = tmp_path / "test-source.cdxml"
     state = _simple_state()
     write_document(source, state, CANVAS_FILE_VERSION)
     output = tmp_path / "test.cdxml"
@@ -1027,7 +1027,7 @@ def test_cli_cdxml_output(tmp_path):
 def test_cli_cdxml_nonoverwrite(tmp_path):
     from chemvas.bootstrap import document_render as cli
 
-    source = tmp_path / "test.chemvas"
+    source = tmp_path / "test-source.cdxml"
     state = _simple_state()
     write_document(source, state, CANVAS_FILE_VERSION)
     output = tmp_path / "test.cdxml"
@@ -1050,7 +1050,7 @@ def test_cli_cdxml_nonoverwrite(tmp_path):
 def test_cli_cdxml_min_font_rejected(tmp_path):
     from chemvas.bootstrap import document_render as cli
 
-    source = tmp_path / "test.chemvas"
+    source = tmp_path / "test-source.cdxml"
     state = _simple_state()
     write_document(source, state, CANVAS_FILE_VERSION)
     output = tmp_path / "test.cdxml"
@@ -1207,7 +1207,7 @@ def test_refuse_group_with_item_ids_in_export():
 def test_refuse_group_via_cli(tmp_path):
     from chemvas.bootstrap import document_render as cli
 
-    source = tmp_path / "grouped.chemvas"
+    source = tmp_path / "grouped-source.cdxml"
     state = _simple_state(
         notes=[{"text": "grouped note", "x": 0.0, "y": 30.0}],
         groups=[{"atoms": [], "items": [["notes", 0]]}],
@@ -1911,7 +1911,7 @@ def test_source_bytes_and_model_unchanged(tmp_path):
     from chemvas.bootstrap import document_render as cli
 
     state = _simple_state()
-    source_path = tmp_path / "source.chemvas"
+    source_path = tmp_path / "source.cdxml"
     write_document(source_path, state, CANVAS_FILE_VERSION)
     before_bytes = source_path.read_bytes()
     before_json = json.dumps(state, sort_keys=True)
@@ -1929,7 +1929,7 @@ def test_source_bytes_and_model_unchanged(tmp_path):
     after_bytes = source_path.read_bytes()
     after_json = json.dumps(state, sort_keys=True)
 
-    assert before_bytes == after_bytes, ".chemvas bytes mutated during export"
+    assert before_bytes == after_bytes, ".cdxml bytes mutated during export"
     assert before_json == after_json, "state dict mutated during export"
 
     with offscreen_document_scene(state, command="test-cdxml") as context:
@@ -2676,7 +2676,7 @@ def test_cli_export_preserves_ring_and_stereo_and_leaves_source_unchanged(tmp_pa
         bonds=ring_bonds + stereo_bonds,
         ring_fills=[ring],
     )
-    source = tmp_path / "ring_and_stereo.chemvas"
+    source = tmp_path / "ring_and_stereo-source.cdxml"
     write_document(source, state, CANVAS_FILE_VERSION)
     before = source.read_bytes()
     output = tmp_path / "ring_and_stereo.cdxml"
@@ -3079,7 +3079,7 @@ def test_raw_ar_requires_explicit_semantics_before_writing(tmp_path):
     state = _label_state("Ar")
     with pytest.raises(CdxmlUnsupportedObjectError, match="ambiguous"):
         _export_cdxml(state)
-    source = tmp_path / "unbound.chemvas"
+    source = tmp_path / "unbound-source.cdxml"
     write_document(source, state, CANVAS_FILE_VERSION)
     before = source.read_bytes()
     output = tmp_path / "output.cdxml"
@@ -3350,7 +3350,7 @@ def test_label_refusal_keeps_destination_and_writes_nothing(tmp_path, label):
 def test_group_label_cli_export_leaves_source_unchanged(tmp_path):
     from chemvas.bootstrap import document_render as cli
 
-    source = tmp_path / "me.chemvas"
+    source = tmp_path / "me-source.cdxml"
     write_document(source, _label_state("Me"), CANVAS_FILE_VERSION)
     before = source.read_bytes()
     output = tmp_path / "me.cdxml"

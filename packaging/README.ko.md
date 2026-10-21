@@ -33,12 +33,12 @@ pyinstaller packaging/chemvas.spec
 
 ## Linux 데스크톱 통합
 
-데스크톱 아이콘 및 `.chemvas` MIME 연결 등록:
+데스크톱 아이콘 및 `.cdxml` MIME 연결 등록:
 
 ```bash
 xdg-mime install --novendor packaging/linux/chemvas.xml
 xdg-icon-resource install --context mimetypes --size 256 \
-  app/chemvas/assets/icon/chemvas-256.png application-x-chemvas
+  app/chemvas/assets/icon/chemvas-256.png chemical-x-cdxml
 install -Dm644 app/chemvas/assets/icon/chemvas-256.png \
   ~/.local/share/icons/hicolor/256x256/apps/chemvas.png
 desktop-file-install --dir="$HOME/.local/share/applications" packaging/linux/chemvas.desktop

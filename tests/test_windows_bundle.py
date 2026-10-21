@@ -142,7 +142,7 @@ def test_other_platform_bundle_shape_is_preserved(monkeypatch, target):
     bundle = next(call for call in calls if call.kind == "BUNDLE")
     assert bundle.kwargs["info_plist"]["CFBundleDocumentTypes"][0][
         "CFBundleTypeExtensions"
-    ] == ["chemvas"]
+    ] == ["cdxml"]
 
 
 @pytest.mark.parametrize("target", ["win32", "darwin", "linux"])

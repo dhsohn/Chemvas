@@ -32,7 +32,7 @@ QT_QPA_PLATFORM=offscreen python scripts/capture_first_scheme.py --output-dir /t
 생성된 파일 복사:
 
 ```bash
-cp /tmp/chemvas-demo-capture/first-scheme.chemvas examples/first-scheme.chemvas
+cp /tmp/chemvas-demo-capture/first-scheme.cdxml examples/first-scheme.cdxml
 cp /tmp/chemvas-demo-capture/first-scheme.svg examples/first-scheme.svg
 cp /tmp/chemvas-demo-capture/first-scheme.png examples/first-scheme.png
 cp /tmp/chemvas-demo-capture/demo.gif docs/images/demo.gif
@@ -42,9 +42,9 @@ cp /tmp/chemvas-demo-capture/demo.png docs/images/demo.png
 문서 검사 및 헤드리스 렌더링 확인:
 
 ```bash
-chemvas inspect-document examples/first-scheme.chemvas
-chemvas check-layout examples/first-scheme.chemvas
-chemvas render-document examples/first-scheme.chemvas --output /tmp/first-scheme-check.svg
+chemvas inspect-document examples/first-scheme.cdxml
+chemvas check-layout examples/first-scheme.cdxml
+chemvas render-document examples/first-scheme.cdxml --output /tmp/first-scheme-check.svg
 ```
 
 ## 기능별 워크스루 재생성

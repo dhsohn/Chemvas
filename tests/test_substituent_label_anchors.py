@@ -9,10 +9,10 @@ from PyQt6.QtWidgets import QApplication
 
 from chemvas.adapters.qt.renderer import Renderer
 from chemvas.bootstrap.document_cli_shared import offscreen_document_scene
-from chemvas.core.document_io import read_exact_document, write_document
 from chemvas.domain.document import CANVAS_FILE_VERSION
 from chemvas.ui.canvas.canvas_view import CanvasView
 from chemvas.ui.canvas.graphics_items import AtomLabelItem
+from tests.document_file_helpers import read_exact_document, write_document
 from tests.test_abbreviation_attachment import _draw
 
 
@@ -76,7 +76,7 @@ def test_relayout_save_and_headless_keep_attachment_and_raw_label(
     neighbor.x, neighbor.y = -40, 40 * math.sqrt(3)
     canvas.bond_renderer.redraw_bond(0)
     _assert_attachment(canvas, raw, 120)
-    path = tmp_path / "substituent.chemvas"
+    path = tmp_path / "substituent.cdxml"
     write_document(path, session.snapshot_state(), CANVAS_FILE_VERSION)
     reopened = read_exact_document(path).document
     assert reopened.state["model"]["atoms"]["1"]["element"] == raw
