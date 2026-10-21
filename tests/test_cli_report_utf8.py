@@ -59,7 +59,7 @@ def _byte_name(stem, suffix):
 def test_public_cli_byte_paths_emit_parseable_utf8_json(
     tmp_path, stdout_errors, command
 ):
-    source = tmp_path / _byte_name("입력", "chemvas")
+    source = tmp_path / _byte_name("입력", "cdxml")
     write_document(source, compose_document_state(_composition()), CANVAS_FILE_VERSION)
     original = source.read_bytes()
     output = None
@@ -70,7 +70,7 @@ def test_public_cli_byte_paths_emit_parseable_utf8_json(
             request, json.dumps(_composition(), ensure_ascii=False), encoding="utf-8"
         )
         request_bytes = request.read_bytes()
-        output = tmp_path / _byte_name("결과", "chemvas")
+        output = tmp_path / _byte_name("결과", "cdxml")
         args = [command, str(request), "--output", str(output)]
     elif command == "render-document":
         output = tmp_path / _byte_name("결과", "svg")

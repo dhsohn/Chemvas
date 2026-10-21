@@ -49,6 +49,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Preserve note selection and native text undo when the font-size popup returns focus on Linux and other Qt backends.
+
 - Keep embedded editing state when only trailing XML whitespace changes, and resolve molecular-area colors through the native color mapping with explicit missing-color errors.
 
 - Check large sparse figures with bounded spatial collision candidates instead

@@ -3,9 +3,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from PyQt6.QtCore import Qt
+from PyQt6.QtCore import Qt, QTimer
 from PyQt6.QtGui import QColor, QKeySequence
 from PyQt6.QtWidgets import (
+    QApplication,
     QButtonGroup,
     QColorDialog,
     QLineEdit,
@@ -14,6 +15,7 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
+from chemvas.ui.annotations.items import NoteItem
 from chemvas.ui.window.main_window_config import (
     ALIGN_SPECS,
     ARROW_MENU_SPECS,
@@ -57,6 +59,7 @@ from chemvas.ui.window.main_window_context_bar_widgets import (
     rotate_angle_input,
     slider_dropdown_button,
 )
+from chemvas.ui.window.main_window_ports import active_canvas_for_window
 from chemvas.ui.window.main_window_toolbar_logic import (
     BOND_STYLE_BY_LABEL,
     ORBITAL_TYPE_BY_LABEL,
@@ -469,6 +472,34 @@ def build_text_page(
     page, layout = new_context_page()
     layout.addWidget(hint_label(CONTEXT_PAGE_CAPTIONS["text"]))
     size_button = TextSizeButton(set_size)
+    saved_editor = None
+
+    def remember_editor() -> None:
+        nonlocal saved_editor
+        canvas = active_canvas_for_window(window)
+        scene = canvas.scene()
+        assert scene is not None
+        item = scene.focusItem()
+        saved_editor = None
+        if isinstance(item, NoteItem):
+            item.format_popup_open = True
+            saved_editor = (canvas, item, item.textCursor())
+
+    def restore_editor() -> None:
+        nonlocal saved_editor
+        if saved_editor is not None:
+            canvas, item, cursor = saved_editor
+            saved_editor = None
+            QApplication.setActiveWindow(canvas.window())
+            canvas.setFocus(Qt.FocusReason.PopupFocusReason)
+            item.setFocus(Qt.FocusReason.PopupFocusReason)
+            item.setTextCursor(cursor)
+            item.format_popup_open = False
+
+    size_menu = size_button.menu()
+    assert size_menu is not None
+    size_menu.aboutToShow.connect(remember_editor)
+    size_menu.aboutToHide.connect(lambda: QTimer.singleShot(0, restore_editor))
     layout.addWidget(size_button)
     for icon, tip, delta in TEXT_SIZE_ACTION_SPECS:
         layout.addWidget(

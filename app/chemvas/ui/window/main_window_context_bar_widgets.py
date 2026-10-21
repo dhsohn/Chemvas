@@ -3,7 +3,7 @@ from __future__ import annotations
 from decimal import Decimal
 from typing import override
 
-from PyQt6.QtCore import QSize, Qt
+from PyQt6.QtCore import QSize, Qt, QTimer
 from PyQt6.QtWidgets import (
     QDoubleSpinBox,
     QFrame,
@@ -182,7 +182,8 @@ class TextSizeButton(QToolButton):
             self.size_input.interpretText()
             size = self.size_input.value()
             menu.close()
-            set_size(size)
+            # Restore the popup editor focus before applying to its selection.
+            QTimer.singleShot(0, lambda: set_size(size))
 
         def focus_input() -> None:
             self.size_input.setFocus(Qt.FocusReason.PopupFocusReason)
