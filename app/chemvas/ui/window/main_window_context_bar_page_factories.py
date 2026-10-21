@@ -60,7 +60,10 @@ from chemvas.ui.window.main_window_context_bar_widgets import (
     rotate_angle_input,
     slider_dropdown_button,
 )
-from chemvas.ui.window.main_window_ports import active_canvas_for_window
+from chemvas.ui.window.main_window_ports import (
+    active_canvas_for_window,
+    active_canvas_or_none_for_window,
+)
 from chemvas.ui.window.main_window_toolbar_logic import (
     BOND_STYLE_BY_LABEL,
     ORBITAL_TYPE_BY_LABEL,
@@ -480,7 +483,7 @@ def build_text_page(
             popup_canvas is not None
             and not sip.isdeleted(popup_canvas)
             and QApplication.applicationState() == Qt.ApplicationState.ApplicationActive
-            and active_canvas_for_window(window) is popup_canvas
+            and active_canvas_or_none_for_window(window) is popup_canvas
             and (
                 saved_editor is None
                 or (

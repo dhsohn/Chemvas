@@ -732,7 +732,7 @@ def test_direct_size_rejects_invalid_values_without_changing_text(drawing, size)
     assert note.toHtml() == before
 
 
-@pytest.mark.parametrize("dismissal", ["inactive", "removed", "deleted"])
+@pytest.mark.parametrize("dismissal", ["inactive", "removed", "deleted", "no-canvas"])
 def test_size_popup_does_not_restore_an_inactive_or_disposed_editor(
     drawing, monkeypatch, dismissal
 ):
@@ -758,6 +758,12 @@ def test_size_popup_does_not_restore_an_inactive_or_disposed_editor(
                     QApplication,
                     "applicationState",
                     lambda: Qt.ApplicationState.ApplicationInactive,
+                )
+            elif dismissal == "no-canvas":
+                monkeypatch.setattr(
+                    type(window.tab_references),
+                    "active_canvas_or_none",
+                    lambda self, index: None,
                 )
             else:
                 scene.removeItem(note)
