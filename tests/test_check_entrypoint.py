@@ -138,7 +138,7 @@ def _run_probe_gate(tmp_path, platform, failing=None, *, arguments=()):
         ("darwin", "test_gui_smoke.py"),
         ("darwin", "test_note_formatting_workflows.py"),
         ("win32", None),
-        ("win32", "test_root.py"),
+        ("win32", "test_nested.py"),
         ("win32", "test_gui_smoke.py"),
     ],
 )
