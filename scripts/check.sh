@@ -250,17 +250,34 @@ case "$platform" in
       test_atom_charge_interaction.py
       test_atom_glyph_bond_clearance.py
       test_atom_label_service.py
+      test_bond_length_workflow.py
       test_canvas_document_session_service.py
+      test_canvas_usability_workflows.py
+      test_cdxml_document.py
+      test_cdxml_native_atom_labels.py
+      test_cdxml_native_layout.py
+      test_document_edit_roundtrip.py
+      test_document_patch_note_workflow.py
+      test_editing_followup_workflows.py
       test_export_readability_service.py
+      test_group_membership_additions.py
+      test_group_membership_delete.py
+      test_group_membership_workflows.py
+      test_gui_document_template.py
       test_gui_smoke.py
+      test_journal_composition.py
       test_journal_layout_checks.py
       test_layout_qa_service.py
+      test_main_window_text_edit_actions.py
       test_native_document_editability.py
-      test_document_patch_note_workflow.py
-      test_session_recovery_integration.py
+      test_note_appearance_workflows.py
+      test_note_dirty_chrome.py
+      test_note_editing_workflows.py
       test_note_export_typography.py
+      test_note_formatting_workflows.py
       test_scaled_bond_label_clearance.py
       test_scheme_layout_canvas.py
+      test_session_recovery_integration.py
       test_startup_fresh_workspace.py
       test_ui_audit_regressions.py
       test_web_adapter.py

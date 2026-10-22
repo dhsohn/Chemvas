@@ -16,6 +16,9 @@ from chemvas.features.cdxml_document import (
 )
 from chemvas.ui.window.main_window_ports import active_canvas_for_window
 
+# Keep Qt global caches and widget lifetimes within one application per process.
+pytestmark = pytest.mark.usefixtures("qt_application")
+
 NATIVE = b"""<?xml version="1.0"?><!DOCTYPE CDXML SYSTEM "http://www.cambridgesoft.com/xml/cdxml.dtd">
 <CDXML BondLength="20"><page id="1" Width="400" Height="300"><fragment id="2">
 <n id="3" p="100 100"/><n id="4" p="120 100" Element="8"><t><s>O</s></t></n>

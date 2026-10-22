@@ -16,6 +16,8 @@ from tests.document_file_helpers import read_payload
 ROOT = Path(__file__).resolve().parents[1]
 _PROBE_TESTS = [
     "tests/test_root.py",
+    "tests/test_cdxml_document.py",
+    "tests/test_cdxml_native_atom_labels.py",
     "tests/nested folder/test_nested.py",
     "tests/test_note_formatting_workflows.py",
     "tests/test_note_appearance_workflows.py",
@@ -38,6 +40,10 @@ _NATIVE = {
         "windows",
         {
             "test_gui_smoke.py",
+            "test_cdxml_document.py",
+            "test_cdxml_native_atom_labels.py",
+            "test_note_formatting_workflows.py",
+            "test_note_appearance_workflows.py",
             "test_native_document_editability.py",
             "test_session_recovery_integration.py",
         },
@@ -122,7 +128,7 @@ def _run_probe_gate(tmp_path, platform, failing=None, *, arguments=()):
 
 # Each host passes, fails in a common file that is not the last of its batch,
 # so the rest of the batch must still run, and, where it has one, fails in a
-# native file. The other host's native name is such a common file.
+# native file. Common-file failures must stay outside each native list.
 @pytest.mark.parametrize(
     ("platform", "failing"),
     [
@@ -132,7 +138,7 @@ def _run_probe_gate(tmp_path, platform, failing=None, *, arguments=()):
         ("darwin", "test_gui_smoke.py"),
         ("darwin", "test_note_formatting_workflows.py"),
         ("win32", None),
-        ("win32", "test_note_formatting_workflows.py"),
+        ("win32", "test_nested.py"),
         ("win32", "test_gui_smoke.py"),
     ],
 )

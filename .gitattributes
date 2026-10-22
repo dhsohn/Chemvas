@@ -1,3 +1,6 @@
 # Historical documents are byte fixtures; checkout must preserve their hashes.
-tests/fixtures/document-v7/*.chemvas -text
-tests/fixtures/document-v8/*.chemvas -text
+tests/fixtures/document-v7/*.json -text
+tests/fixtures/document-v8/*.json -text
+# Working documents contain an integrity-bound snapshot of exact XML bytes.
+tests/fixtures/document-v7/*.cdxml -text
+tests/fixtures/document-v8/*.cdxml -text
