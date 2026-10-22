@@ -37,7 +37,8 @@ def test_untouched_native_tree_is_preserved_including_nested_chemistry():
     state = imported()
     assert len(state["model"]["atoms"]) == 2
     assert state["model"]["atoms"][1]["element"] == "OMe"
-    assert len(state["images"]) == 2
+    assert len(state["images"]) == 1
+    assert len(state["arrows"]) == 1
     assert ET.canonicalize(update_native_document(state).decode()) == ET.canonicalize(
         state["cdxml_source"]["xml"]
     )
@@ -68,8 +69,8 @@ def test_moving_curve_keeps_native_control_points_and_reaction_reference():
 
 def test_deleted_arrow_is_removed_from_reaction_step():
     state = imported()
-    state["images"].pop()
-    state["cdxml_source"]["items"]["images"].pop()
+    state["arrows"].pop()
+    state["cdxml_source"]["items"]["arrows"].pop()
     root = native(state)
     assert root.find(".//step").attrib == {"id": "17", "ReactionStepReactants": "3"}
     assert root.find(".//arrow") is None
@@ -131,6 +132,7 @@ def test_new_caption_and_arrow_have_native_elements():
     state["notes"].append(dict(text="New", html="", x=0, y=0))
     state["cdxml_source"]["items"]["notes"].append(None)
     state["arrows"].append(dict(kind="arrow", start=[0, 0], end=[30, 0]))
+    state["cdxml_source"]["items"]["arrows"].append(None)
     root = native(state)
     assert any("New" == "".join(t.itertext()) for t in root.iter("t"))
     assert len(list(root.iter("arrow"))) == 2
@@ -236,7 +238,8 @@ def test_invalid_embedded_png_is_refused_without_metafile_execution():
 def test_empty_native_curve_is_preserved_without_display_object():
     raw = NATIVE.replace(b"</page>", b'<curve id="31" CurveType="12"/></page>')
     state = parse_cdxml_document(raw, preserve_source=True).state
-    assert len(state["images"]) == 2
+    assert len(state["images"]) == 1
+    assert len(state["arrows"]) == 1
     assert native(state).find('.//curve[@id="31"]').get("CurveType") == "12"
 
 

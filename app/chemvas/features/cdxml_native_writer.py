@@ -87,7 +87,7 @@ class _NativeWriter:
             parent.remove(e)
 
     def color_index(self, color: str) -> str:
-        if color.lower() == "#000000":
+        if color.lower() == "#000000" and self.root.get("fgcolor", "0") == "0":
             return "0"
         if color.lower() == "#ffffff":
             return "1"
@@ -353,6 +353,41 @@ class _NativeWriter:
                     ]
                     for graphic in superseded:
                         transform_native(graphic, sx=sx, sy=sy, tx=tx, ty=ty)
+                elif collection == "arrows":
+                    from chemvas.features.cdxml_editable_arrows import update_arrow
+
+                    update_arrow(e, before, after, self.offset, self.color_index)
+                    # Update transitive legacy line copies as well. Their IDs may
+                    # themselves be used by reaction metadata.
+                    pending = {identity}
+                    remaining = list(self.root.iter("graphic"))
+                    while pending:
+                        targets, pending = pending, set()
+                        for graphic in remaining[:]:
+                            if graphic.get("SupersededBy") not in targets:
+                                continue
+                            if graphic.find(".//represent") is not None:
+                                raise ValueError(
+                                    "Editing a native chemical annotation requires updating its atom property."
+                                )
+                            pending.add(graphic.get("id"))
+                            remaining.remove(graphic)
+                            if graphic.get("GraphicType", "Line") != "Line":
+                                raise ValueError("Native arrow fallback is not a line.")
+                            coordinates = [
+                                after[key][axis] + self.offset[axis]
+                                for key in ("end", "start")
+                                for axis in (0, 1)
+                            ]
+                            graphic.set(
+                                "BoundingBox",
+                                " ".join(f"{v:.12g}" for v in coordinates),
+                            )
+                            if after.get("color") != before.get("color"):
+                                graphic.set(
+                                    "color",
+                                    self.color_index(after.get("color") or "#000000"),
+                                )
                 elif collection == "notes":
                     transform_native(
                         e, tx=after["x"] - before["x"], ty=after["y"] - before["y"]

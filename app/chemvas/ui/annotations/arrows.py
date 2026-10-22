@@ -102,6 +102,22 @@ class ArrowRenderer:
             pen.setColor(QColor(record.color))
         item.setPen(pen)
         item.setBrush(rebuilt.brush())
+        native = self.context.state.native_arrow_styles.get(item.data(ARROW_ID_ROLE))
+        if native is not None and record.kind in {
+            "line",
+            "line_dashed",
+            "line_bold",
+            "arrow",
+            "dotted",
+            "equilibrium",
+        }:
+            from chemvas.ui.annotations.native_arrows import native_arrow_paint
+
+            path, pen, brush = native_arrow_paint(record, native)
+            item.setZValue(native.z)
+            item.setPath(path)
+            item.setPen(pen)
+            item.setBrush(brush)
         item.setData(0, record.kind)
         self.render_labels(item)
 

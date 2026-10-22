@@ -90,6 +90,10 @@ def parse_cdxml_document(raw: bytes, *, preserve_source: bool = False) -> CdxmlD
         extract_document_state(payload)
         normalized = normalize_json_numbers(payload)
         assert isinstance(normalized, dict)
+        from chemvas.features.cdxml_editable_arrows import promote_snapshot_arrows
+
+        promote_snapshot_arrows(normalized["state"])
+        build_document_payload(normalized["state"], CANVAS_FILE_VERSION)
         return CdxmlDocument(normalized["state"], digest)
     if preserve_source:
         from chemvas.features.cdxml_preservation import PreservingImporter

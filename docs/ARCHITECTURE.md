@@ -395,3 +395,6 @@ process locking and envelope storage ([ADR 0032](adr/0032-browser-clipboard-and-
 - [ADR 0057: Bounded spatial layout checks](adr/0057-bounded-spatial-layout-checks.md)
 
 - [ADR 0058: Desktop CDXML documents](adr/0058-desktop-cdxml-documents.md)
+
+- [ADR 0060: Editable native CDXML straight annotations](adr/0060-editable-native-arrows-and-local-platform-gates.md)
+- [ADR 0061: Run platform validation locally](adr/0061-local-platform-validation.md)

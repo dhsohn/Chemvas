@@ -44,9 +44,8 @@ make check
 RDKit 설치 여부를 표시합니다. 기존 제외 규칙을 유지하고 실행되지 않은 제품 모듈도
 분모에 넣습니다. 선별 검사 수치는 전체 테스트 기준선이 아닙니다.
 
-Linux `test` 잡은 Python 3.12와 3.13에서 공통 스위트를 실행합니다. 각 실행은
-커버리지 요약과 `coverage-common-*` artifact를 게시하고 14일간 보관합니다.
-선택 수동 `windows-native`와 CI `package-smoke` 잡은 그 보고서를 올리지 않습니다. 변경 검증
+GitHub CI는 `quality`(Ruff·format·mypy), `package-smoke`, 비밀정보 검사만 실행합니다.
+OS별 전체 스위트는 로컬 `make check`로 검증합니다. 변경 검증
 결과에는 줄·분기 수치, 플랫폼, 실행 범위, RDKit 포함 여부를 적습니다. 보고서를
 생성했어도 테스트가 실패하면 게이트는 실패합니다. `scripts/run_test_files.sh`는
 각 `test_*.py`를 자기 pytest 프로세스에서, 여러 파일을 동시에 실행합니다.
@@ -97,9 +96,8 @@ Undo/Redo, 저장·재열기, 서식 포커스, 창 닫기 취소, 비정상 종
 
 Linux/WSL에서는 offscreen으로 대신 통과시키지 않고 실행을 거부합니다. 작은 회귀
 검증 묶음이므로 전체 플랫폼 검사나 변경 기능의 직접 조작을 대체하지 않습니다.
-릴리스 전에는 [릴리스 절차](RELEASING.ko.md)의 macOS **Platform tests**
-전체 검증도 실행합니다. Windows 전체·패키징 검사는 **Optional Windows tests**
-(`windows.yml`)에서 필요할 때 수동 실행하며 머지·릴리스 필수 조건이 아닙니다.
+릴리스 전에는 로컬 `make check`를 실행하고 플랫폼과 커버리지를 기록합니다.
+GitHub에서는 Linux·macOS·Windows 테스트 스위트를 실행하지 않습니다.
 
 ## 아키텍처 규칙
 

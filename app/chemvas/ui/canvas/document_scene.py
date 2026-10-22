@@ -190,8 +190,17 @@ def populate_document_scene(
             else:
                 mark.pop("text", None)
         attach(mark, "mark_items")
-    for item_state in state["arrows"]:
-        attach(item_state, "arrow_items")
+    from chemvas.ui.annotations.native_arrows import native_arrow_styles
+
+    styles = native_arrow_styles(state)
+    context.state.native_arrow_styles.clear()
+    for index, item_state in enumerate(state["arrows"]):
+        item = attach(item_state, "arrow_items")
+        if index in styles:
+            context.state.native_arrow_styles[require_scene_record_id(item)] = styles[
+                index
+            ]
+            context.arrows.render_record(item, context.arrows.record(item))
     for item_state in state["ts_brackets"]:
         attach(item_state, "ts_bracket_items")
     for item_state in state["shapes"]:

@@ -250,6 +250,7 @@ class PreservingImporter(_Importer):
 
     @override
     def state(self) -> dict[str, Any]:
+        from chemvas.features.cdxml_editable_arrows import editable_arrow
         from chemvas.features.cdxml_graphics import graphic_image
 
         atoms = [self.atom(e, i) for i, e in enumerate(self.nodes)]
@@ -278,7 +279,11 @@ class PreservingImporter(_Importer):
             "bonds": bonds,
             "next_atom_id": len(atoms),
         }
-        bindings: dict[str, list[str | None]] = {"notes": [], "images": []}
+        bindings: dict[str, list[str | None]] = {
+            "notes": [],
+            "images": [],
+            "arrows": [],
+        }
         state["images"] = []
         for e in self.page.iter():
             if self.has_ancestor(e, "n"):
@@ -293,6 +298,11 @@ class PreservingImporter(_Importer):
                 bindings["images"].append(e.get("id"))
             elif e.tag in {"graphic", "arrow", "curve", "ColoredMolecularArea"}:
                 if e.get("SupersededBy"):
+                    continue
+                arrow = editable_arrow(self, e)
+                if arrow is not None:
+                    state["arrows"].append(arrow)
+                    bindings["arrows"].append(e.get("id"))
                     continue
                 image = graphic_image(self, e)
                 if image is not None:

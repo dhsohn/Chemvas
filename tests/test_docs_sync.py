@@ -545,16 +545,15 @@ def test_contributor_docs_match_ci_and_the_test_runner() -> None:
     )
     present = "\n".join((ci, runner, checker, suite))
     jobs = set(re.findall(r"(?m)^  ([A-Za-z0-9-]+):", ci))
-    assert {"test", "package-smoke"} <= jobs
+    assert {"quality", "package-smoke"} <= jobs
     assert "windows-native" not in jobs
-    assert "  windows-native:" in _read(ROOT / ".github/workflows/windows.yml")
     reports_rdkit = 'find_spec("rdkit")' in reporter
     for path in _CONTRIBUTOR_DOCS:
         text = _read(path)
-        assert "coverage-common" in text, path.name
+        assert "quality" in text, path.name
         assert "run_test_files.sh" in text, path.name
         assert "package-smoke" in text, path.name
-        assert "windows-native" in text, path.name
+        assert "windows-native" not in text, path.name
         assert ("RDKit" in text) is reports_rdkit, path.name
         for token in _RETIRED_CHECK_CLAIMS:
             if token in present:

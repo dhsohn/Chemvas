@@ -12,17 +12,15 @@ Version number is sourced from `chemvas.__version__` in [`app/chemvas/__init__.p
 
 1. Update `__version__` in `app/chemvas/__init__.py`.
 2. Update [`CHANGELOG.md`](CHANGELOG.md) by moving unreleased items to the new version section.
-3. Open a PR, merge it into `main`, and ensure CI passes on exact `main`. Then
-   run the **Platform tests** workflow on `main` (Actions → Platform tests → Run workflow)
-   and ensure the macOS suite passes; pull request CI does not run it.
-   Windows checks are optional diagnostics: run **Optional Windows tests**
-   (`windows.yml`) manually when needed. They are not merge or release gates.
+3. Run local `make check` and record platform, coverage and manual GUI verification.
+   Open a PR, merge it into `main`, and ensure the quick CI checks pass on exact `main`.
+   GitHub OS test suites are not run or required.
    Verify distribution artifacts locally:
    ```bash
    python -m build
    python scripts/verify_dist.py dist/*
    ```
-   `python -m build` first builds the sdist, then builds the wheel from that sdist. `scripts/verify_dist.py` checks the artifact inventory and packaged build inputs; it does not itself execute a rebuild. CI checks real distribution artifacts and installed CLI behavior. The Windows job tests the bundle spec and native installer compiler; it does not build and launch the full PyInstaller application. Verify a frozen application separately before distributing that bundle.
+   `python -m build` first builds the sdist, then builds the wheel from that sdist. `scripts/verify_dist.py` checks the artifact inventory and packaged build inputs; it does not itself execute a rebuild. CI checks real distribution artifacts and installed CLI behavior. Verify a frozen application separately before distributing that bundle.
 4. Tag and push the release from exact `main`:
 
 ```bash

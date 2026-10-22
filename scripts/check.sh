@@ -188,7 +188,7 @@ case "$platform" in
   win32) echo "[check] Scope: Windows common suite (Qt offscreen) and serial native Windows editing, recovery and text-measuring files." ;;
   *) echo "[check] Scope: $platform common suite (Qt offscreen); platform support is not established." ;;
 esac
-echo "[check] Platform/dependency skips are reported by pytest; native packaging has a dedicated CI job."
+echo "[check] Platform/dependency skips are reported by pytest; GitHub CI runs quick checks only."
 
 
 echo "[check] Ruff"
