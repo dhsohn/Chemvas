@@ -83,6 +83,7 @@ class _NativeWriter:
     def delete(self, e: ET.Element) -> None:
         parent = self.parents.get(e)
         if parent is not None and e in list(parent):
+            self.removed_ids.update(n.attrib["id"] for n in e.iter() if n.get("id"))
             parent.remove(e)
 
     def color_index(self, color: str) -> str:
@@ -369,6 +370,28 @@ class _NativeWriter:
                             )
                         self.note_writer(self.root, e, after)
 
+    def remove_deleted_fallbacks(self) -> None:
+        # Superseded graphics are hidden alternate representations of their target,
+        # not independent artwork. Remove the fallback too, never reactivate it.
+        fallbacks: dict[str, list[ET.Element]] = {}
+        for graphic in self.root.iter("graphic"):
+            target = graphic.get("SupersededBy")
+            if target:
+                fallbacks.setdefault(target, []).append(graphic)
+        pending = list(self.removed_ids)
+        while pending:
+            for graphic in fallbacks.pop(pending.pop(), []):
+                if graphic.find(".//represent") is not None:
+                    raise ValueError(
+                        "Deleting a native chemical annotation requires updating its atom property; the file was not replaced."
+                    )
+                pending.extend(
+                    n.attrib["id"]
+                    for n in graphic.iter()
+                    if n.get("id") and n.attrib["id"] not in self.removed_ids
+                )
+                self.delete(graphic)
+
     def validate_references(self) -> None:
         reference_keys = {
             "ReactionStepReactants",
@@ -387,6 +410,19 @@ class _NativeWriter:
             "BondCircularOrdering",
         }
         for e in self.root.iter():
+            if e.tag == "step":
+                for key in (
+                    "ReactionStepArrows",
+                    "ReactionStepObjectsAboveArrow",
+                    "ReactionStepObjectsBelowArrow",
+                ):
+                    references = e.get(key, "").split()
+                    if self.removed_ids.intersection(references):
+                        remaining = [r for r in references if r not in self.removed_ids]
+                        if remaining:
+                            e.set(key, " ".join(remaining))
+                        else:
+                            e.attrib.pop(key)
             for key in reference_keys:
                 if self.removed_ids.intersection(e.get(key, "").split()):
                     raise ValueError(
@@ -398,6 +434,7 @@ class _NativeWriter:
         self.add_atoms()
         self.update_bonds()
         self.update_items()
+        self.remove_deleted_fallbacks()
         self.validate_references()
         for identity in self.changed_nodes:
             e = self.byid[identity]
