@@ -79,10 +79,12 @@ def _run_probe_gate(tmp_path, platform, failing=None, *, arguments=()):
         "    boundary = args.index('-m', 2)\n"
         "    coverage, args = args[:boundary], args[boundary:]\n"
         "if args[:5] == ['-m', 'pytest', '-q', '-ra', '--capture=tee-sys']:\n"
-        "    assert len(args) == 6, args\n"
+        "    assert len(args) == 8 and args[5] == '--basetemp', args\n"
+        "    basetemp = args[6]\n"
+        "    args = args[:5] + args[7:]\n"
         "    target = pathlib.Path(os.environ['GATE_PROBE_OUTPUT']) / "
         "(pathlib.Path(args[5]).name + '.json')\n"
-        "    target.write_text(json.dumps({'args': args, 'coverage': coverage, "
+        "    target.write_text(json.dumps({'args': args, 'basetemp': basetemp, 'coverage': coverage, "
         "'qt': os.environ['QT_QPA_PLATFORM'], "
         "'jobs': os.environ['CHECK_JOBS']}), encoding='utf-8')\n"
         "    sys.exit(1 if pathlib.Path(args[5]).name == os.environ['GATE_PROBE_FAIL'] else 0)\n"
@@ -123,6 +125,8 @@ def _run_probe_gate(tmp_path, platform, failing=None, *, arguments=()):
         timeout=30,
     )
     observed = [read_payload(path.read_text()) for path in output.glob("*.json")]
+    assert len({entry["basetemp"] for entry in observed}) == len(observed)
+    assert all(not Path(entry["basetemp"]).exists() for entry in observed)
     return result, observed
 
 
