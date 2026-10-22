@@ -257,3 +257,35 @@ def test_native_background_line_remains_behind_chemical_structure():
             iter(canvas.render_context.state.scene_items_state.arrow_items.values())
         )
         assert item.zValue() == -3
+
+
+@pytest.mark.parametrize("edit_other", [False, True])
+def test_canvas_save_preserves_untouched_native_xml(tmp_path, edit_other):
+    from chemvas.bootstrap.document_cli_shared import offscreen_canvas
+
+    state = imported(
+        '<graphic id="9" GraphicType="Line" SupersededBy="10" BoundingBox="100.000 50.000 20.000 50.000"/>'
+        '<arrow id="10" Tail3D="20.000 50.000 0.000" Head3D="100.000 50.000 0.000" BoundingBox="19 49 101 51"/>'
+        '<arrow id="11" Tail3D="20 80 0" Head3D="100 80 0"/>'
+    )
+    original = ET.fromstring(state["cdxml_source"]["xml"])
+    with offscreen_canvas(state, command="test-untouched-native-stroke") as (
+        canvas,
+        service,
+    ):
+        if edit_other:
+            context = canvas.render_context
+            item = list(context.state.scene_items_state.arrow_items.values())[1]
+            context.arrows.set_record(
+                item, replace(context.arrows.record(item), end=(-70, -60))
+            )
+        path = tmp_path / "untouched.cdxml"
+        service.save_to_file(str(path))
+        root = ET.fromstring(path.read_bytes())
+        for identity in ("9", "10"):
+            assert (
+                root.find(f'.//*[@id="{identity}"]').attrib
+                == original.find(f'.//*[@id="{identity}"]').attrib
+            )
+        if edit_other:
+            assert root.find('.//*[@id="11"]').get("Head3D") == "130 90 0"
