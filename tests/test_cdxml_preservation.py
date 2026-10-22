@@ -66,12 +66,13 @@ def test_moving_curve_keeps_native_control_points_and_reaction_reference():
     assert root.find(".//step").get("ReactionStepArrows") == "15"
 
 
-def test_dangling_native_references_block_deletion():
+def test_deleted_arrow_is_removed_from_reaction_step():
     state = imported()
     state["images"].pop()
     state["cdxml_source"]["items"]["images"].pop()
-    with pytest.raises(ValueError, match="references"):
-        update_native_document(state)
+    root = native(state)
+    assert root.find(".//step").attrib == {"id": "17", "ReactionStepReactants": "3"}
+    assert root.find(".//arrow") is None
 
 
 def test_source_provenance_survives_snapshot_json_numbers():

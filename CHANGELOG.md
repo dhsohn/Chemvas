@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.26.1] - 2026-10-22
+
+### Fixed
+
+- Remove hidden native CDXML fallback graphics when their visible object is
+  deleted, allowing Save without leaving dangling `SupersededBy` references.
+  Remove deleted artwork from reaction arrow and caption lists while retaining
+  other reaction metadata and chemical annotation protections.
+
 ## [0.26.0] - 2026-10-22
 
 ### Changed

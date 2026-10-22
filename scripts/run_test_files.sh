@@ -64,7 +64,9 @@ run_files() {
     file="$2"
     log="$logs/$index.log"
     command=("$PYTHON")
-    pytest_args=(-q -ra --capture=tee-sys "$file")
+    # Parallel pytest sessions must not race over pytest-current or clean up
+    # the numbered temporary directories of another session.
+    pytest_args=(-q -ra --capture=tee-sys --basetemp "$logs/tmp-$index" "$file")
     if [[ -n "$coverage_dir" ]]; then
       # The runner also executes external test fixtures from their directory.
       command+=(-m coverage run --rcfile "$RUNNER_ROOT/pyproject.toml" --data-file "$coverage_dir/.coverage" --source "$RUNNER_ROOT/app/chemvas")
