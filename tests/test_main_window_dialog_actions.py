@@ -4,6 +4,8 @@ from unittest import mock
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
+from PyQt6 import sip
+from PyQt6.QtCore import QEvent
 from PyQt6.QtWidgets import QApplication
 
 from chemvas.bootstrap.main_window import build_main_window
@@ -20,7 +22,11 @@ class MainWindowDialogActionsTest(unittest.TestCase):
         self.window = build_main_window()
 
     def tearDown(self) -> None:
-        self.window.close()
+        self.assertTrue(self.window.close())
+        # processEvents alone does not drain WA_DeleteOnClose deferred deletes.
+        # Dispose the C++ window while QApplication and its services are alive.
+        self.app.sendPostedEvents(self.window, QEvent.Type.DeferredDelete)
+        self.assertTrue(sip.isdeleted(self.window))
         self.app.processEvents()
 
     def test_zoom_label_double_click_applies_typed_percent(self) -> None:
