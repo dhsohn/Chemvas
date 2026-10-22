@@ -14,7 +14,9 @@ Version number is sourced from `chemvas.__version__` in [`app/chemvas/__init__.p
 2. Update [`CHANGELOG.md`](CHANGELOG.md) by moving unreleased items to the new version section.
 3. Open a PR, merge it into `main`, and ensure CI passes on exact `main`. Then
    run the **Platform tests** workflow on `main` (Actions → Platform tests → Run workflow)
-   and ensure macOS and Windows suites pass; pull request CI does not run them.
+   and ensure the macOS suite passes; pull request CI does not run it.
+   Windows checks are optional diagnostics: run **Optional Windows tests**
+   (`windows.yml`) manually when needed. They are not merge or release gates.
    Verify distribution artifacts locally:
    ```bash
    python -m build

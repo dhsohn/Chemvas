@@ -545,7 +545,9 @@ def test_contributor_docs_match_ci_and_the_test_runner() -> None:
     )
     present = "\n".join((ci, runner, checker, suite))
     jobs = set(re.findall(r"(?m)^  ([A-Za-z0-9-]+):", ci))
-    assert {"test", "windows-native", "package-smoke"} <= jobs
+    assert {"test", "package-smoke"} <= jobs
+    assert "windows-native" not in jobs
+    assert "  windows-native:" in _read(ROOT / ".github/workflows/windows.yml")
     reports_rdkit = 'find_spec("rdkit")' in reporter
     for path in _CONTRIBUTOR_DOCS:
         text = _read(path)

@@ -47,7 +47,7 @@ modules in the denominator. Selected-file results are not a full-suite baseline.
 
 The Linux `test` job runs the common suite on Python 3.12 and 3.13. Each run
 publishes its coverage summary and a `coverage-common-*` artifact, retained for
-14 days. The `windows-native` and `package-smoke` jobs do not publish that
+14 days. The optional manual `windows-native` and CI `package-smoke` jobs do not publish that
 report. Report both line and branch percentages, platform, scope and RDKit
 availability with a change's verification results. A failed test remains a gate
 failure even if a coverage report was generated. `scripts/run_test_files.sh`
@@ -101,7 +101,9 @@ session files and a simulated dead process, not a killed application.
 The command rejects Linux/WSL rather than silently running offscreen. It is a
 small regression check, not the full platform suite or a substitute for manual
 interaction with the affected feature. Before a release, also run the full
-macOS/Windows **Platform tests** workflow as described in [Releasing](RELEASING.md).
+macOS **Platform tests** workflow as described in [Releasing](RELEASING.md).
+Windows suites and packaging tests run only through **Optional Windows tests**
+(`windows.yml`); they are not merge or release requirements.
 
 ## Architecture Conventions
 
