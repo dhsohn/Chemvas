@@ -27,6 +27,27 @@ def qt_application():
 
 
 @pytest.fixture(autouse=True)
+def _retain_cdxml_fixture_application(request, monkeypatch):
+    """Keep Qt alive only when a test serializes a real CDXML fixture.
+
+    JSON/read-only helpers and subprocess-only tests never request Qt. The
+    serializer remains the production implementation; only its app lifetime is
+    owned by the existing session fixture instead of each temporary canvas.
+    """
+    from tests import document_file_helpers
+
+    encode = document_file_helpers.encode_cli_document
+
+    def encode_with_application(*args, **kwargs):
+        request.getfixturevalue("qt_application")
+        return encode(*args, **kwargs)
+
+    monkeypatch.setattr(
+        document_file_helpers, "encode_cli_document", encode_with_application
+    )
+
+
+@pytest.fixture(autouse=True)
 def _isolate_chemvas_app_data(tmp_path_factory, monkeypatch):
     """Redirect Chemvas's writable app-data dir (recent files, autosave
     snapshots) to a throwaway per-test location.
