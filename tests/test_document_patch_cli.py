@@ -27,6 +27,9 @@ from tests.document_file_helpers import (
     write_payload_text,
 )
 
+# Keep Qt global caches and widget lifetimes within one application per process.
+pytestmark = pytest.mark.usefixtures("qt_application")
+
 if TYPE_CHECKING:
     from pathlib import Path
 
