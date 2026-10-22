@@ -25,7 +25,7 @@ make check
 보고서를 남긴다. 완료 보고에는 두 수치와 실행 플랫폼·전체/선별 범위·RDKit 포함 여부를
 적는다. 선별 검사 수치를 전체 기준선으로 보고하지 않는다. CI의 Linux `test` 잡은
 Python 3.12와 3.13에서 공통 스위트를 돌리고, 각 실행의 커버리지 요약과
-`coverage-common-*` artifact를 14일간 남긴다. `windows-native`와 `package-smoke`는
+`coverage-common-*` artifact를 14일간 남긴다. 선택 수동 `windows-native`와 CI `package-smoke`는
 그 보고서를 올리지 않는다.
 
 Ruff·format·mypy를 돌린 뒤 **테스트를 `test_*.py` 파일마다 별도 pytest 프로세스로**
@@ -39,8 +39,10 @@ Ruff·format·mypy를 돌린 뒤 **테스트를 `test_*.py` 파일마다 별도 
 글꼴 측정 때문에 실패하는 새 테스트 파일은 이 목록에 넣는다. 실제 Python의 OS에 따라
 범위를 선택하고 범위·skip 사유를 출력한다. CI는 `main` push와 PR 커밋마다 한 번씩
 돈다. 실행을 취소하면 그 커밋에 취소된 필수 체크가 남아 머지가 막히므로, 앞선 실행은
-취소하지 않고 끝까지 둔다. PR CI는 Linux에서만 게이트를 돌리고, macOS·Windows 공통
+취소하지 않고 끝까지 둔다. PR CI는 Linux에서만 게이트를 돌리고, macOS 공통
 검사는 수동 실행 워크플로 `Platform tests`로 릴리스 전에 돌린다(RELEASING.md).
+Windows 전체·패키징 검사는 `Optional Windows tests` (`windows.yml`)로 필요할 때만
+수동 실행하며 머지·릴리스 필수 조건이 아니다.
 macOS 변경은 로컬 `make check`로도 확인한다.
 Linux/WSL의 비 UTF-8 바이트 파일명 검사는 다른 OS에서 제외하고, 경로 별칭·대화상자
 표시 차이는 공통 테스트에서 처리한다. Windows는 Git Bash에서 같은 게이트를 실행하며

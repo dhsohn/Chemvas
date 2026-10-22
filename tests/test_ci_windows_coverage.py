@@ -15,6 +15,7 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW = ROOT / ".github" / "workflows" / "ci.yml"
+WINDOWS_WORKFLOW = ROOT / ".github" / "workflows" / "windows.yml"
 PLATFORM_WORKFLOW = ROOT / ".github" / "workflows" / "platform.yml"
 FILES = (
     "tests/test_windows_bundle.py",
@@ -29,9 +30,13 @@ def _job_env(job: str) -> str:
     return match.group(1) if match else ""
 
 
-def test_macos_and_windows_run_the_full_host_gate_on_demand() -> None:
+@pytest.mark.parametrize(
+    "path,hosts_expected",
+    [(PLATFORM_WORKFLOW, {"macos-15"}), (WINDOWS_WORKFLOW, {"windows-2025"})],
+)
+def test_host_gates_run_on_demand(path, hosts_expected) -> None:
     assert "platform-tests:" not in WORKFLOW.read_text(encoding="utf-8")
-    workflow = PLATFORM_WORKFLOW.read_text(encoding="utf-8")
+    workflow = path.read_text(encoding="utf-8")
     trigger = re.search(r"(?ms)^on:\n(.*?)^\S", workflow)
     assert trigger
     assert re.findall(r"(?m)^  (\w+):", trigger.group(1)) == ["workflow_dispatch"]
@@ -40,10 +45,7 @@ def test_macos_and_windows_run_the_full_host_gate_on_demand() -> None:
     job = match.group(0)
     hosts = re.search(r"(?m)^        os: \[(.+)\]$", job)
     assert hosts
-    assert {host.strip() for host in hosts.group(1).split(",")} == {
-        "macos-15",
-        "windows-2025",
-    }
+    assert {host.strip() for host in hosts.group(1).split(",")} == hosts_expected
     assert "    name: Common tests (${{ matrix.os }})\n" in job
     assert "    runs-on: ${{ matrix.os }}\n" in job
     # Without it the gate would build its own .venv instead of using the
@@ -75,6 +77,8 @@ def test_each_pull_request_commit_runs_once() -> None:
     # stacked pull request reruns the same commit when its base moves, so a
     # superseded run is left to finish.
     assert "concurrency:" not in workflow
+    assert "windows-native:" not in workflow
+    assert "windows-2025" not in workflow
 
 
 def test_python_bin_in_a_step_env_is_not_the_jobs() -> None:
@@ -93,9 +97,9 @@ def test_python_bin_in_a_step_env_is_not_the_jobs() -> None:
 def _windows_job() -> str:
     match = re.search(
         r"(?ms)^  windows-native:.*?(?=^  \w[\w-]*:|\Z)",
-        WORKFLOW.read_text(encoding="utf-8"),
+        WINDOWS_WORKFLOW.read_text(encoding="utf-8"),
     )
-    assert match, "Windows native tests must have a dedicated CI job"
+    assert match, "Windows native tests must have an optional manual job"
     return match.group(0)
 
 

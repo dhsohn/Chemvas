@@ -14,8 +14,9 @@ Chemvas는 GitHub Actions의 Trusted Publishing (OIDC)을 통해 [PyPI](https://
 2. [`CHANGELOG.md`](CHANGELOG.md)의 Unreleased 항목을 신규 버전 섹션으로 정리합니다.
 3. PR을 열어 `main`에 머지한 후, 정확한 `main` 커밋에서 CI가 통과했는지 확인합니다. 이어서
    `main`에서 **Platform tests** 워크플로(Actions → Platform tests → Run workflow)를
-   실행해 macOS와 Windows 테스트가 통과하는지 확인합니다. PR CI는 이 테스트를
-   돌리지 않습니다. 로컬에서 배포 아티팩트를 검증합니다:
+   실행해 macOS 테스트가 통과하는지 확인합니다. PR CI는 이 테스트를
+   돌리지 않습니다. Windows 검사는 필요할 때 **Optional Windows tests**
+   (`windows.yml`)를 수동 실행하는 선택 진단이며, 머지·릴리스 필수 조건이 아닙니다. 로컬에서 배포 아티팩트를 검증합니다:
    ```bash
    python -m build
    python scripts/verify_dist.py dist/*

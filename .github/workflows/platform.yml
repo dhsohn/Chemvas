@@ -1,7 +1,7 @@
 name: Platform tests
 
-# The macOS and Windows common suites run on demand, for example before a
-# release, instead of on every pull request.
+# The macOS release gate runs on demand. Windows validation is optional
+# and lives in windows.yml.
 on:
   workflow_dispatch:
 
@@ -16,7 +16,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [macos-15, windows-2025]
+        os: [macos-15]
     permissions:
       contents: read
     env:
