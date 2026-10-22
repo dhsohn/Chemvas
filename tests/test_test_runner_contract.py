@@ -100,6 +100,30 @@ def test_runner_keeps_recursive_path_failure_logs_distinct(tmp_path) -> None:
     assert "flat-marker" in result.stderr
 
 
+def test_runner_isolates_and_cleans_parallel_temporary_directories(tmp_path) -> None:
+    files = []
+    for index in range(2):
+        test = tmp_path / f"test_temp_{index}.py"
+        report = tmp_path / f"root-{index}.txt"
+        test.write_text(
+            "from pathlib import Path\n"
+            "def test_temp(tmp_path, request):\n"
+            "    base = request.config.option.basetemp\n"
+            "    assert base is not None, 'shared pytest cleanup must be disabled'\n"
+            "    assert tmp_path.is_relative_to(Path(base).resolve())\n"
+            f"    Path({str(report)!r}).write_text(str(Path(base).resolve()))\n",
+            encoding="utf-8",
+        )
+        files.append(test)
+
+    result = _run_runner(*files, jobs="2")
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    roots = [Path((tmp_path / f"root-{i}.txt").read_text()) for i in range(2)]
+    assert roots[0] != roots[1]
+    assert all(not root.exists() for root in roots)
+
+
 def test_runner_retains_native_stderr_and_exit_code_after_abrupt_exit(tmp_path) -> None:
     crash = tmp_path / "test_crash.py"
     passing = tmp_path / "test_pass.py"
