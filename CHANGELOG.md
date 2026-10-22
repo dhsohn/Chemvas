@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Import native CDXML straight lines, dashed/bold lines, full-head and equilibrium
+  arrows as editable Chemvas annotations. Preserve source IDs, stroke metrics,
+  arrowhead artwork and reaction references when moving endpoints or recoloring.
+  Decorative arcs and unsupported graphics retain their native projections.
+- Keep GitHub CI to lint, formatting, type checking, wheel smoke and secret scans.
+  Remove Linux test matrices and macOS/Windows workflows; run full platform
+  validation locally with `make check`.
+
 ## [0.26.1] - 2026-10-22
 
 ### Fixed

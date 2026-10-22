@@ -21,17 +21,17 @@ def drawing(extra=""):
     ).encode()
 
 
-def delete_image(state, identity="10"):
-    bindings = state["cdxml_source"]["items"]["images"]
+def delete_arrow(state, identity="10"):
+    bindings = state["cdxml_source"]["items"]["arrows"]
     index = bindings.index(identity)
     bindings.pop(index)
-    state["images"].pop(index)
+    state["arrows"].pop(index)
 
 
 def test_delete_removes_only_target_and_transitive_fallbacks():
     state = parse_cdxml_document(drawing(), preserve_source=True).state
     original = deepcopy(state)
-    delete_image(state)
+    delete_arrow(state)
     before_save = deepcopy(state)
     raw = update_native_document(state)
     root = ET.fromstring(raw)
@@ -43,7 +43,7 @@ def test_delete_removes_only_target_and_transitive_fallbacks():
             old.find(f'.//*[@id="{identity}"]')
         )
     reopened = parse_cdxml_document(raw, preserve_source=True).state
-    assert reopened["cdxml_source"]["items"]["images"] == ["12"]
+    assert reopened["cdxml_source"]["items"]["arrows"] == ["12"]
     assert update_native_document(reopened) == raw
     # Undo restores both the visible target and its original fallback chain.
     assert ET.canonicalize(
@@ -59,7 +59,7 @@ def test_reaction_reference_to_deleted_alias_or_target_is_pruned(target):
         'ReactionStepObjectsBelowArrow="12"/></scheme>'
     )
     state = parse_cdxml_document(raw, preserve_source=True).state
-    delete_image(state)
+    delete_arrow(state)
     root = ET.fromstring(update_native_document(state))
     assert root.find(".//step").attrib == {
         "id": "21",
@@ -83,7 +83,7 @@ def test_fallback_chemical_annotation_is_not_silently_discarded():
         b'<represent attribute="Charge" object="30"/></graphic>',
     )
     state = parse_cdxml_document(raw, preserve_source=True).state
-    delete_image(state)
+    delete_arrow(state)
     with pytest.raises(ValueError, match="chemical annotation"):
         update_native_document(state)
 
@@ -96,7 +96,7 @@ def test_references_to_deleted_descendants_are_not_left_dangling():
         1,
     )
     state = parse_cdxml_document(raw, preserve_source=True).state
-    delete_image(state)
+    delete_arrow(state)
     with pytest.raises(ValueError, match="BasisObjects"):
         update_native_document(state)
 
@@ -106,21 +106,21 @@ def test_save_reopen_and_failed_save_preserve_destination(tmp_path):
     from chemvas.features.document_files import read_document
 
     state = parse_cdxml_document(drawing(), preserve_source=True).state
-    delete_image(state)
+    delete_arrow(state)
     path = tmp_path / "drawing.cdxml"
     with offscreen_canvas(state, command="test-delete-save") as (_, service):
         service.save_to_file(str(path))
         loaded = read_document(path).state
-        assert len(loaded["images"]) == 1
+        assert len(loaded["arrows"]) == 1
         service.apply_state(loaded)
         service.save_to_file(str(path))
-        assert len(read_document(path).state["images"]) == 1
+        assert len(read_document(path).state["arrows"]) == 1
         saved = path.read_bytes()
         blocked = parse_cdxml_document(
             drawing('<scheme id="20"><step id="21" BasisObjects="9"/></scheme>'),
             preserve_source=True,
         ).state
-        delete_image(blocked)
+        delete_arrow(blocked)
         service.apply_state(blocked)
         with pytest.raises(ValueError, match="BasisObjects"):
             service.save_to_file(str(path))

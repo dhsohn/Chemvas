@@ -72,7 +72,11 @@ def test_new_document_all_elements_save_reopen(tmp_path, collection, kind):
         assert second.count(b"<!-- ChemvasDocument:") == 1
         native = raw[: raw.rfind(b"\n<!-- ChemvasDocument:")]
         projected = parse_cdxml_document(native, preserve_source=True)
-        assert projected.state["model"]["atoms"] or projected.state["images"]
+        assert (
+            projected.state["model"]["atoms"]
+            or projected.state["images"]
+            or projected.state["arrows"]
+        )
 
 
 def test_cdxml_only_paths_and_old_json_rejection(tmp_path):

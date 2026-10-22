@@ -88,6 +88,7 @@ class SceneRenderState:
     shape_state: AnnotationCollection[Shape] = field(
         default_factory=AnnotationCollection
     )
+    native_arrow_styles: dict[int, Any] = field(default_factory=dict)
     arrow_state: AnnotationCollection[Arrow] = field(
         default_factory=AnnotationCollection
     )

@@ -106,10 +106,13 @@ def _append_arrow(
         return
     head, tail = {
         "arrow": ("Full", "None"),
+        "dotted": ("Full", "None"),
         "line": ("None", "None"),
         "line_dashed": ("None", "None"),
         "line_bold": ("None", "None"),
-        "equilibrium": ("HalfLeft", "HalfLeft"),
+        "equilibrium": ("HalfRight", "HalfRight")
+        if item.get("mirrored")
+        else ("HalfLeft", "HalfLeft"),
     }.get(kind, (None, None))
     if head is None or tail is None:
         raise ValueError(f"New native arrow type {kind} is unsupported.")
@@ -124,7 +127,7 @@ def _append_arrow(
         ArrowheadType="Solid",
         color=color,
     )
-    if kind == "line_dashed":
+    if kind in {"line_dashed", "dotted"}:
         e.set("LineType", "Dashed")
     if kind == "line_bold":
         e.set("LineWidth", "2")

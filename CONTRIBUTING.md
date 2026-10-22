@@ -45,10 +45,8 @@ startup. The report identifies full or selected test scope and whether RDKit is
 installed. Coverage uses the existing exclusions and includes unexecuted production
 modules in the denominator. Selected-file results are not a full-suite baseline.
 
-The Linux `test` job runs the common suite on Python 3.12 and 3.13. Each run
-publishes its coverage summary and a `coverage-common-*` artifact, retained for
-14 days. The optional manual `windows-native` and CI `package-smoke` jobs do not publish that
-report. Report both line and branch percentages, platform, scope and RDKit
+GitHub CI runs `quality` (Ruff, format, mypy), `package-smoke`, and secret scanning.
+OS suites run locally through `make check`, not on GitHub. Report both line and branch percentages, platform, scope and RDKit
 availability with a change's verification results. A failed test remains a gate
 failure even if a coverage report was generated. `scripts/run_test_files.sh`
 runs each `test_*.py` file in its own pytest process, several files at a time.
@@ -100,10 +98,8 @@ session files and a simulated dead process, not a killed application.
 
 The command rejects Linux/WSL rather than silently running offscreen. It is a
 small regression check, not the full platform suite or a substitute for manual
-interaction with the affected feature. Before a release, also run the full
-macOS **Platform tests** workflow as described in [Releasing](RELEASING.md).
-Windows suites and packaging tests run only through **Optional Windows tests**
-(`windows.yml`); they are not merge or release requirements.
+interaction with the affected feature. Before a release, run local `make check` and record its platform and coverage.
+GitHub does not run Linux, macOS or Windows test suites.
 
 ## Architecture Conventions
 

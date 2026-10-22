@@ -12,16 +12,14 @@ Chemvas는 GitHub Actions의 Trusted Publishing (OIDC)을 통해 [PyPI](https://
 
 1. `app/chemvas/__init__.py`의 `__version__`을 갱신합니다.
 2. [`CHANGELOG.md`](CHANGELOG.md)의 Unreleased 항목을 신규 버전 섹션으로 정리합니다.
-3. PR을 열어 `main`에 머지한 후, 정확한 `main` 커밋에서 CI가 통과했는지 확인합니다. 이어서
-   `main`에서 **Platform tests** 워크플로(Actions → Platform tests → Run workflow)를
-   실행해 macOS 테스트가 통과하는지 확인합니다. PR CI는 이 테스트를
-   돌리지 않습니다. Windows 검사는 필요할 때 **Optional Windows tests**
-   (`windows.yml`)를 수동 실행하는 선택 진단이며, 머지·릴리스 필수 조건이 아닙니다. 로컬에서 배포 아티팩트를 검증합니다:
+3. 로컬 `make check`를 실행하고 플랫폼·커버리지·GUI 확인 결과를 기록합니다.
+   PR을 머지한 정확한 `main`에서 빠른 CI 검사 통과를 확인합니다.
+   GitHub OS 테스트 스위트는 실행하거나 요구하지 않습니다. 로컬에서 배포 아티팩트를 검증합니다:
    ```bash
    python -m build
    python scripts/verify_dist.py dist/*
    ```
-   `python -m build`는 sdist를 먼저 빌드한 뒤 해당 sdist로부터 wheel을 빌드합니다. `scripts/verify_dist.py`는 아티팩트의 파일 목록과 포함된 빌드 입력을 확인하며, 자체적으로 재빌드를 실행하지는 않습니다. CI는 실제 배포 아티팩트와 설치된 환경의 CLI 동작을 검사합니다. Windows 잡은 번들 spec과 네이티브 설치 프로그램 컴파일러를 검사하며, 전체 PyInstaller 앱을 빌드하고 실행하지는 않습니다. 동결 앱 번들을 배포할 때는 해당 번들을 별도로 검증해야 합니다.
+   `python -m build`는 sdist를 먼저 빌드한 뒤 해당 sdist로부터 wheel을 빌드합니다. `scripts/verify_dist.py`는 아티팩트의 파일 목록과 포함된 빌드 입력을 확인하며, 자체적으로 재빌드를 실행하지는 않습니다. CI는 실제 배포 아티팩트와 설치된 환경의 CLI 동작을 검사합니다. 동결 앱 번들을 배포할 때는 해당 번들을 별도로 검증해야 합니다.
 4. 정확한 `main`에서 릴리스 태그를 생성하고 푸시합니다:
 
 ```bash
