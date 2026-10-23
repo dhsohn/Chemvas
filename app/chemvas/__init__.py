@@ -1,3 +1,3 @@
 """Chemvas application package."""
 
-__version__ = "0.26.4"
+__version__ = "0.27.0"
