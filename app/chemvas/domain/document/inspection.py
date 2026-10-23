@@ -19,6 +19,7 @@ from chemvas.domain.atom_aliases import (
     modeled_atom_formal_charge,
 )
 
+from .cdxml_source import parse_native_xml
 from .graph import connected_atom_components
 from .state import deserialize_model_state
 
@@ -101,17 +102,28 @@ def document_annotations(
     marks = state.get("marks", ())
     if not isinstance(marks, Sequence) or isinstance(marks, (str, bytes)):
         raise ValueError("Invalid Chemvas document state: marks are invalid.")
+    native_charges: dict[int, int] = {}
+    source = state.get("cdxml_source")
+    if isinstance(source, Mapping):
+        root = parse_native_xml(cast("str", source["xml"]))
+        nodes = {node.get("id"): node for node in root.iter("n")}
+        for atom_id, native_id in cast("Mapping[str, str]", source["atoms"]).items():
+            node = nodes[native_id]
+            if int(atom_id) in model.atoms and "Charge" in node.attrib:
+                native_charges[int(atom_id)] = int(node.attrib["Charge"])
     return _resolve_annotations(
         model,
         cast("Sequence[object]", marks),
+        native_charges,
     )
 
 
 def _resolve_annotations(
-    model: MoleculeModel, marks: Sequence[object]
+    model: MoleculeModel, marks: Sequence[object], native_charges: Mapping[int, int]
 ) -> dict[int, dict[str, int]]:
     mark_totals: dict[int, dict[str, int]] = {}
     electronic_marked_atom_ids: set[int] = set()
+    charge_marked_atom_ids: set[int] = set()
     for raw_mark in marks:
         if not isinstance(raw_mark, Mapping):
             raise ValueError("Invalid Chemvas document state: mark entry is invalid.")
@@ -130,8 +142,21 @@ def _resolve_annotations(
             atom_id, {"formal_charge": 0, "radical_electrons": 0}
         )
         values["formal_charge"] += _CHARGE_MARKS.get(kind, 0)
+        if kind in _CHARGE_MARKS:
+            charge_marked_atom_ids.add(atom_id)
         if kind == "radical":
             values["radical_electrons"] += 1
+
+    # Native charge attributes own the electronic value. Their visible graphics
+    # are projections, not additional charges; do not manufacture canvas marks.
+    for atom_id, charge in native_charges.items():
+        values = mark_totals.setdefault(atom_id, {})
+        if atom_id in charge_marked_atom_ids and values["formal_charge"] != charge:
+            raise ValueError(
+                f"Conflicting native charge and marks for Chemvas atom {atom_id}."
+            )
+        values["formal_charge"] = charge
+        electronic_marked_atom_ids.add(atom_id)
 
     normalized_marks = {
         atom_id: _normalize_annotation(values)
