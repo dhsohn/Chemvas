@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.27.0] - 2026-10-24
+
 - Remove CDXML from desktop Figure Export; working documents use Save or Save As.
   Remove verbose inline export explanations and show all size limits directly.
 
