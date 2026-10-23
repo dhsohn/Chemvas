@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.26.3] - 2026-10-23
+
+### Changed
+
+- Update the release artifact upload and download actions to 7.0.2 and 8.0.2,
+  retaining SHA pins and the existing Trusted Publishing workflow.
+
 ## [0.26.2] - 2026-10-23
 
 ### Changed
