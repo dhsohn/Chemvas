@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.26.4] - 2026-10-23
+
+### Fixed
+
+- Include preserved native CDXML atom charges in document inspection without
+  adding duplicate charge graphics.
+- Keep native note bindings aligned when a patch adds notes to external CDXML.
+
 ## [0.26.3] - 2026-10-23
 
 ### Changed

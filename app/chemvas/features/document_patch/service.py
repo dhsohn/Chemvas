@@ -272,6 +272,9 @@ def _apply_note_operation(
         if note_index != len(notes):
             raise ValueError(f"note_index must equal next_note_index {len(notes)}")
         notes.append(_compose_note(operation["note"]))
+        source = state.get("cdxml_source")
+        if source is not None:
+            source["items"].setdefault("notes", [None] * note_index).append(None)
         return {"op": op, "note_index": note_index}
     if note_index >= len(notes):
         raise ValueError(f"note {note_index} does not exist")
