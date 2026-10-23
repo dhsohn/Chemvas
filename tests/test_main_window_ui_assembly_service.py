@@ -7,19 +7,21 @@ from tests.runtime_services import canvas_runtime_services
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from PyQt6.QtGui import QAction, QIcon, QKeySequence
+from PyQt6.QtGui import QAction, QKeySequence
 from PyQt6.QtWidgets import (
     QApplication,
     QMainWindow,
     QMenu,
 )
 
+from chemvas.shell.icon_factory import MainWindowIconFactory
 from chemvas.shell.theme import MAIN_WINDOW_STYLESHEET
 from chemvas.ui.window import main_window_menu_bar
 from chemvas.ui.window.main_window_panel_toolbar import MainWindowPanelToolbarCallbacks
 from chemvas.ui.window.main_window_ui_assembly_service import (
     MainWindowUIAssemblyService,
 )
+from chemvas.ui.window.main_window_ui_references import MainWindowUiReferences
 
 
 class _HarnessCanvas:
@@ -62,21 +64,9 @@ class _HarnessWindow(QMainWindow):
         self.setup_sheet = mock.Mock()
         self.apply_color_preset = mock.Mock()
         self.apply_ring_fill_preset = mock.Mock()
-        self._icon_factory = SimpleNamespace(
-            icon_flip_h=self._blank_icon,
-            icon_flip_v=self._blank_icon,
-            icon_rotate=self._blank_icon,
-            icon_color=self._blank_icon,
-            icon_ring_fill=self._blank_icon,
-            icon_orbital=self._blank_icon,
+        self.ui_references = MainWindowUiReferences(
+            icon_factory=MainWindowIconFactory(self)
         )
-        self.ui_references = SimpleNamespace(
-            require_icon_factory=lambda: self._icon_factory,
-            calculation_panel=None,
-        )
-
-    def _blank_icon(self) -> QIcon:
-        return QIcon()
 
 
 class MainWindowUIAssemblyServiceTest(unittest.TestCase):

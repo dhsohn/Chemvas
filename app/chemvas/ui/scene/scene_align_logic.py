@@ -2,9 +2,15 @@
 
 from __future__ import annotations
 
+from collections import Counter
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
+from chemvas.domain.document.schema import (
+    VALID_ARC_KINDS,
+    VALID_ARROW_KINDS,
+    VALID_LINE_KINDS,
+)
 from chemvas.ui.canvas.canvas_scene_items_state import require_scene_record_id
 
 if TYPE_CHECKING:
@@ -92,6 +98,7 @@ class AlignObject:
     """
 
     rect: QRectF
+    kind: str
     atom_ids: frozenset[int]
     items: tuple[object, ...]
 
@@ -120,7 +127,9 @@ def alignment_objects(
         rect = object_rect(group_atoms, group_items)
         if rect is None:
             continue
-        objects.append(AlignObject(rect, frozenset(group_atoms), tuple(group_items)))
+        objects.append(
+            AlignObject(rect, "group", frozenset(group_atoms), tuple(group_items))
+        )
         claimed_atoms |= group_atoms
         claimed_items |= {id(item) for item in group_items}
     for structure in structures:
@@ -128,14 +137,51 @@ def alignment_objects(
             continue
         rect = object_rect(structure, [])
         if rect is not None:
-            objects.append(AlignObject(rect, frozenset(structure), ()))
+            objects.append(AlignObject(rect, "molecule", frozenset(structure), ()))
     for item in items:
         if id(item) in claimed_items:
             continue
         rect = item.sceneBoundingRect()
         if rect.isValid():
-            objects.append(AlignObject(rect, frozenset(), (item,)))
+            objects.append(AlignObject(rect, str(item.data(0)), frozenset(), (item,)))
     return objects
+
+
+def alignment_selection_summary(objects: Sequence[AlignObject]) -> str:
+    """Describe the same independent objects that alignment will move."""
+    counts: Counter[str] = Counter()
+    for target in objects:
+        kind = target.kind
+        if kind in VALID_LINE_KINDS:
+            kind = "line"
+        elif kind in VALID_ARC_KINDS:
+            kind = "arc"
+        elif kind in VALID_ARROW_KINDS:
+            kind = "arrow"
+        else:
+            kind = {"note": "text", "ts_bracket": "bracket"}.get(kind, kind)
+        if kind not in {
+            "group",
+            "molecule",
+            "line",
+            "arc",
+            "arrow",
+            "text",
+            "bracket",
+            "image",
+            "orbital",
+            "mark",
+            "shape",
+        }:
+            kind = "object"
+        counts[kind] += 1
+    return (
+        ", ".join(
+            f"{count} {kind}{'s' if count != 1 and kind != 'text' else ''}"
+            for kind, count in sorted(counts.items())
+        )
+        or "None"
+    )
 
 
 __all__ = [
@@ -144,5 +190,6 @@ __all__ = [
     "AlignObject",
     "align_deltas",
     "alignment_objects",
+    "alignment_selection_summary",
     "distribute_deltas",
 ]

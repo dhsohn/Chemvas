@@ -9,17 +9,16 @@ from PyQt6.QtWidgets import (
     QComboBox,
     QDialog,
     QDoubleSpinBox,
-    QFileDialog,
     QFormLayout,
     QFrame,
     QGridLayout,
     QHBoxLayout,
     QLabel,
-    QLineEdit,
     QPushButton,
     QSizePolicy,
     QSpinBox,
     QVBoxLayout,
+    QWidget,
 )
 
 from chemvas.domain.document.sheet import (
@@ -46,6 +45,8 @@ from chemvas.ui.canvas.sheet_setup_logic import (
     SHEET_SETUP_TEXT,
     supported_sheet_sizes,
 )
+from chemvas.ui.dialogs.figure_export_preview import FigureExportPreview
+from chemvas.ui.window.main_window_ports import active_canvas_or_none_for_window
 
 if TYPE_CHECKING:
     from chemvas.ui.window.main_window_like import MainWindowLike
@@ -58,7 +59,6 @@ class FigureExportOptions:
     scope: str
     dpi: int
     background: str
-    editable_svg: bool = False
     target_width_mm: float | None = None
     max_height_mm: float | None = None
     min_font_pt: float | None = None
@@ -109,30 +109,20 @@ def _add_export_limits(layout: QVBoxLayout) -> _ExportLimitControls:
     width_label.setBuddy(width)
     controls_layout.addWidget(width_label, 0, 0, Qt.AlignmentFlag.AlignVCenter)
     controls_layout.addWidget(width, 0, 1)
-    height_check = QCheckBox("Limit exported height")
+    height_check = QCheckBox("Maximum height")
     height_check.setObjectName("exportMaxHeightCheck")
     height = _export_dimension_spin(
         "exportMaxHeightSpin", value=240.0, maximum=5080.0, suffix=" mm"
     )
     controls_layout.addWidget(height_check, 1, 0, Qt.AlignmentFlag.AlignVCenter)
     controls_layout.addWidget(height, 1, 1)
-    font_check = QCheckBox("Minimum exported font size")
+    font_check = QCheckBox("Minimum font size")
     font_check.setObjectName("exportMinFontCheck")
     font = _export_dimension_spin(
         "exportMinFontSpin", value=6.0, maximum=1000.0, suffix=" pt"
     )
     controls_layout.addWidget(font_check, 2, 0, Qt.AlignmentFlag.AlignVCenter)
     controls_layout.addWidget(font, 2, 1)
-    explanation = QLabel(
-        "Minimum font checking is available only for whole-canvas SVG and PNG. "
-        "It checks the exported text size; it does not resize text. "
-        "A failed limit check leaves the destination file unchanged."
-    )
-    explanation.setObjectName("exportLimitsExplanation")
-    explanation.setWordWrap(True)
-    layout.addWidget(explanation)
-    explanation.setMinimumWidth(340)
-    explanation.setMinimumHeight(explanation.heightForWidth(340))
     return _ExportLimitControls(width, height_check, height, font_check, font)
 
 
@@ -156,11 +146,28 @@ def _add_action_row(
     return accept_btn, cancel_btn
 
 
+def _export_columns(
+    dialog: QDialog,
+) -> tuple[QVBoxLayout, QVBoxLayout, FigureExportPreview]:
+    root = QVBoxLayout(dialog)
+    columns = QHBoxLayout()
+    root.addLayout(columns)
+    controls = QWidget()
+    controls.setMinimumWidth(390)
+    layout = QVBoxLayout(controls)
+    layout.setContentsMargins(0, 0, 0, 0)
+    columns.addWidget(controls)
+    preview_panel = FigureExportPreview()
+    columns.addWidget(preview_panel, 1)
+
+    return root, layout, preview_panel
+
+
 def prompt_export_options(window: MainWindowLike) -> FigureExportOptions | None:
     dialog = QDialog(window)
     dialog.setWindowTitle("Export Figure")
     dialog.setStyleSheet(window.styleSheet())
-    layout = QVBoxLayout(dialog)
+    root, layout, preview_panel = _export_columns(dialog)
 
     layout.addWidget(QLabel("Format:"))
     format_combo = QComboBox()
@@ -168,7 +175,7 @@ def prompt_export_options(window: MainWindowLike) -> FigureExportOptions | None:
     for label, fmt, _suffix in EXPORT_FORMATS:
         format_combo.addItem(label, fmt)
     format_combo.setCurrentIndex(
-        format_combo.findData(window.runtime_state.last_export_format)
+        max(0, format_combo.findData(window.runtime_state.last_export_format))
     )
     layout.addWidget(format_combo)
 
@@ -193,43 +200,6 @@ def prompt_export_options(window: MainWindowLike) -> FigureExportOptions | None:
         background_combo.addItem(label, value)
     layout.addWidget(background_combo)
 
-    editable_svg_check = QCheckBox("Editable Chemvas SVG")
-    editable_svg_check.setObjectName("exportEditableSvgCheck")
-    layout.addWidget(editable_svg_check)
-
-    editable_svg_warning = QLabel("Embeds Chemvas document data in SVG metadata.")
-    editable_svg_warning.setObjectName("exportEditableSvgWarning")
-    editable_svg_warning.setWordWrap(True)
-    layout.addWidget(editable_svg_warning)
-
-    bindings_label = QLabel("Reviewed CDXML label meanings (optional):")
-    layout.addWidget(bindings_label)
-    bindings_row = QHBoxLayout()
-    bindings_path = QLineEdit()
-    bindings_path.setObjectName("exportCdxmlBindingsPath")
-    bindings_label.setBuddy(bindings_path)
-    bindings_path.setPlaceholderText("Select the binding JSON for this saved drawing")
-    bindings_browse = QPushButton("Browse…")
-    bindings_browse.setObjectName("exportCdxmlBindingsBrowse")
-    bindings_row.addWidget(bindings_path)
-    bindings_row.addWidget(bindings_browse)
-    layout.addLayout(bindings_row)
-    bindings_help = QLabel(
-        "Label meanings are never guessed. The selected file must match the "
-        "saved drawing exactly; save edits and review its bindings before export."
-    )
-    bindings_help.setWordWrap(True)
-    layout.addWidget(bindings_help)
-
-    def browse_bindings() -> None:
-        path, _ = QFileDialog.getOpenFileName(
-            dialog, "Choose reviewed CDXML label meanings", "", "JSON (*.json)"
-        )
-        if path:
-            bindings_path.setText(path)
-
-    bindings_browse.clicked.connect(browse_bindings)
-
     dpi_label = QLabel("Resolution (DPI):")
     layout.addWidget(dpi_label)
     dpi_combo = QComboBox()
@@ -249,7 +219,6 @@ def prompt_export_options(window: MainWindowLike) -> FigureExportOptions | None:
             (dpi_combo, previous.dpi),
         ):
             combo.setCurrentIndex(combo.findData(previous_value))
-        editable_svg_check.setChecked(previous.editable_svg)
         if previous.target_width_mm is not None:
             limits.width.setValue(previous.target_width_mm)
         limits.height_check.setChecked(previous.max_height_mm is not None)
@@ -261,43 +230,48 @@ def prompt_export_options(window: MainWindowLike) -> FigureExportOptions | None:
 
     def sync_format_controls() -> None:
         fmt = format_combo.currentData()
-        for control in (bindings_label, bindings_path, bindings_browse, bindings_help):
-            control.setVisible(fmt == "cdxml")
         dpi_enabled = is_dpi_relevant(fmt)
         dpi_label.setEnabled(dpi_enabled)
         dpi_combo.setEnabled(dpi_enabled)
-        editable_enabled = fmt == "svg"
-        editable_svg_check.setEnabled(editable_enabled)
-        if not editable_enabled:
-            editable_svg_check.setChecked(False)
-        editable_svg_warning.setVisible(editable_enabled)
-        editable_svg_warning.setText(
-            "Plain SVG is for publication and viewing; it cannot be reopened "
-            "for editing in Chemvas. Keep the original .cdxml file, or "
-            "check Editable Chemvas SVG to reopen and edit the export."
-            if not editable_svg_check.isChecked()
-            else (
-                "Reopen and edit this SVG in Chemvas. Embeds selected objects, "
-                "fully selected groups and styles, not the whole sheet. "
-                "Reopens as a new drawing using the original sheet settings."
-                if scope_combo.currentData() == "selection"
-                else "Reopen and edit this SVG in Chemvas. Embeds the whole drawing "
-                "as Chemvas document data in SVG metadata."
-            )
-        )
         limits.sync(
             sizing=size_combo.currentData(), fmt=fmt, scope=scope_combo.currentData()
         )
 
     format_combo.currentIndexChanged.connect(sync_format_controls)
-    editable_svg_check.toggled.connect(sync_format_controls)
     size_combo.currentIndexChanged.connect(sync_format_controls)
     scope_combo.currentIndexChanged.connect(sync_format_controls)
     limits.height_check.toggled.connect(sync_format_controls)
     limits.font_check.toggled.connect(sync_format_controls)
     sync_format_controls()
 
-    export_btn, cancel_btn = _add_action_row(layout, accept_label="Export")
+    export_btn, cancel_btn = _add_action_row(root, accept_label="Export")
+
+    def update_preview() -> None:
+        export_btn.setEnabled(
+            preview_panel.update_options(
+                active_canvas_or_none_for_window(window),
+                fmt=format_combo.currentData(),
+                sizing=size_combo.currentData(),
+                scope=scope_combo.currentData(),
+                background=background_combo.currentData(),
+                dpi=int(dpi_combo.currentData()),
+                target_width_mm=limits.width.value()
+                if size_combo.currentData() == "custom"
+                else None,
+                max_height_mm=limits.height.value()
+                if limits.height_check.isChecked()
+                else None,
+                min_font_check=limits.font_check.isChecked(),
+            )
+        )
+
+    for combo in (format_combo, size_combo, scope_combo, background_combo, dpi_combo):
+        combo.currentIndexChanged.connect(update_preview)
+    for spin in (limits.width, limits.height):
+        spin.valueChanged.connect(update_preview)
+    for check in (limits.height_check, limits.font_check):
+        check.toggled.connect(update_preview)
+    update_preview()
     export_btn.clicked.connect(dialog.accept)
     cancel_btn.clicked.connect(dialog.reject)
 
@@ -310,8 +284,6 @@ def prompt_export_options(window: MainWindowLike) -> FigureExportOptions | None:
         scope=scope_combo.currentData(),
         dpi=int(dpi_combo.currentData()),
         background=background_combo.currentData(),
-        editable_svg=format_combo.currentData() == "svg"
-        and editable_svg_check.isChecked(),
         target_width_mm=limits.width.value()
         if size_combo.currentData() == "custom"
         else None,
@@ -319,9 +291,6 @@ def prompt_export_options(window: MainWindowLike) -> FigureExportOptions | None:
         if limits.height_check.isChecked()
         else None,
         min_font_pt=limits.font.value() if limits.font_check.isChecked() else None,
-        cdxml_label_bindings_path=(bindings_path.text().strip() or None)
-        if format_combo.currentData() == "cdxml"
-        else None,
     )
     window.runtime_state.last_export_options = options
     return options

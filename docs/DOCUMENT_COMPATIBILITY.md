@@ -22,7 +22,8 @@ objects outside the editable drawing projection. Unsupported destructive edits
 fail before replacing the destination file. Binary CDX and multipage CDXML are
 not supported.
 
-MOL and editable SVG remain import formats; their working copy is saved as CDXML.
+MOL remains an import format; its working copy is saved as CDXML. SVG is figure
+output only; embedded Chemvas editing metadata is no longer read or written.
 Plain SVG, PDF and PNG remain figure export formats. Internal JSON snapshots
 are used for undo, clipboard and crash recovery, not as user document files.
 

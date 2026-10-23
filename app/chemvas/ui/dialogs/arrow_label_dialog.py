@@ -1,84 +1,126 @@
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from PyQt6.QtCore import Qt
+from PyQt6.QtGui import QAction
 from PyQt6.QtWidgets import (
     QDialog,
     QHBoxLayout,
     QLabel,
-    QPlainTextEdit,
+    QMenu,
     QPushButton,
-    QScrollArea,
+    QToolButton,
     QVBoxLayout,
 )
 
 from chemvas.domain.document import MAX_ARROW_LABEL_CHARS
-from chemvas.features.annotations import (
-    ARROW_LABEL_PREVIEW_POINT_SIZE,
-    LABEL_SYNTAX_HINT,
-    arrow_label_html,
-)
 from chemvas.shell.palette import PALETTE
+from chemvas.ui.dialogs.arrow_label_editor import ArrowLabelEditor
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
+
+def _label_format_controls(
+    layout: QVBoxLayout, active_field: Callable[[], ArrowLabelEditor]
+) -> None:
+    format_row = QHBoxLayout()
+
+    def insert_symbol(symbol: str) -> None:
+        field = active_field()
+        field.insertPlainText(symbol)
+        field.setFocus(Qt.FocusReason.OtherFocusReason)
+
+    for title, role, key in (
+        ("Subscript x₂", "sub", "Subscript"),
+        ("Superscript x²", "super", "Superscript"),
+    ):
+        button = QToolButton()
+        button.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+        button.setText(title)
+        button.setObjectName(f"arrowLabel{key}")
+        button.setAccessibleName(f"Label {key.lower()}")
+        button.setToolTip(f"Toggle {key.lower()}")
+
+        def toggle(checked=False, role=role) -> None:
+            field = active_field()
+            field.toggle_script(role)
+            field.setFocus(Qt.FocusReason.OtherFocusReason)
+
+        button.clicked.connect(toggle)
+        format_row.addWidget(button)
+
+    symbols = QToolButton()
+    symbols.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+    symbols.setText("Symbols")
+    symbols.setObjectName("arrowLabelSymbols")
+    symbols.setAccessibleName("Label symbols")
+    symbols.setStyleSheet(
+        "QToolButton { padding-right: 22px; }"
+        "QToolButton::menu-indicator { subcontrol-origin: padding;"
+        " subcontrol-position: right center; right: 6px; }"
+    )
+    symbols.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
+    menu = QMenu(symbols)
+    for symbol, description in (
+        ("Δ", "Delta / heat"),
+        ("°", "Degree"),
+        ("±", "Plus or minus"),
+        ("‡", "Transition state"),
+        ("→", "Right arrow"),
+        ("⇌", "Equilibrium"),
+    ):
+        action = QAction(f"{symbol}  {description}", menu)
+        menu.addAction(action)
+        action.triggered.connect(
+            lambda checked=False, symbol=symbol: insert_symbol(symbol)
+        )
+    symbols.setMenu(menu)
+    format_row.addWidget(symbols)
+    format_row.addStretch(1)
+    layout.insertLayout(0, format_row)
 
 
 def _label_input(
     layout: QVBoxLayout, caption: str, name: str, text: str
-) -> QPlainTextEdit:
+) -> ArrowLabelEditor:
     caption_label = QLabel(caption)
     layout.addWidget(caption_label)
-    field = QPlainTextEdit()
+    field = ArrowLabelEditor(text)
+    field.setStyleSheet(
+        f"QTextEdit {{ background: {PALETTE['surface_input']};"
+        f" color: {PALETTE['text']}; border: 1px solid {PALETTE['border_strong']};"
+        " border-radius: 8px; padding: 4px 7px;"
+        f" selection-background-color: {PALETTE['checked_bg']};"
+        f" selection-color: {PALETTE['checked_text']}; }}"
+        f"QTextEdit:focus {{ border-color: {PALETTE['accent']}; }}"
+    )
+    field.setPlaceholderText(f"Up to {MAX_ARROW_LABEL_CHARS} characters")
     field.setObjectName(name)
     field.setAccessibleName(f"{caption.removesuffix(':')} label")
     caption_label.setBuddy(field)
     field.setTabChangesFocus(True)
-    field.setPlainText(text)
-    initial_text = field.toPlainText()
     field.setFixedHeight(field.fontMetrics().lineSpacing() * 3 + 20)
     layout.addWidget(field)
-    counter = QLabel()
-    counter.setObjectName(f"{name}Limit")
-    counter.setTextFormat(Qt.TextFormat.PlainText)
-    counter.setWordWrap(True)
-    layout.addWidget(counter)
+    validation_message = QLabel()
+    validation_message.setObjectName(f"{name}Limit")
+    validation_message.setTextFormat(Qt.TextFormat.PlainText)
+    validation_message.setWordWrap(True)
+    layout.addWidget(validation_message)
 
-    preview = QLabel()
-    preview.setObjectName(f"{name.removesuffix('Input')}Preview")
-    preview.setAccessibleName(f"{caption.removesuffix(':')} label preview")
-    preview.setTextFormat(Qt.TextFormat.RichText)
-    preview.setTextInteractionFlags(Qt.TextInteractionFlag.NoTextInteraction)
-    preview.setWordWrap(False)
-    preview.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop)
-    preview_font = preview.font()
-    preview_font.setPointSize(ARROW_LABEL_PREVIEW_POINT_SIZE)
-    preview.setFont(preview_font)
-    preview.setMargin(4)
-    preview.setMinimumHeight(preview.fontMetrics().height() + 8)
-    preview_area = QScrollArea()
-    # Preview the paper surface, independent of the operating system's theme.
-    preview.setStyleSheet(
-        f"background: {PALETTE['surface_canvas']}; color: {PALETTE['text']};"
-    )
-    viewport = preview_area.viewport()
-    if viewport is not None:
-        viewport.setStyleSheet(f"background: {PALETTE['surface_canvas']};")
-    preview_area.setWidget(preview)
-    preview_area.setWidgetResizable(False)
-    preview_area.setFocusPolicy(Qt.FocusPolicy.NoFocus)
-    preview_area.setFixedHeight(preview.fontMetrics().lineSpacing() * 2 + 16)
-    preview_row = QHBoxLayout()
-    preview_row.addWidget(QLabel("Preview:"))
-    preview_row.addWidget(preview_area, 1)
-    layout.addLayout(preview_row)
+    def update_validation() -> None:
+        error = ""
+        try:
+            if len(field.label_value()) > MAX_ARROW_LABEL_CHARS:
+                error = "Label is too long."
+        except ValueError as exc:
+            error = str(exc)
+        validation_message.setText(error)
+        validation_message.setVisible(bool(error))
 
-    def update_preview() -> None:
-        value = field.toPlainText()
-        count = len(text if value == initial_text else value)
-        suffix = " — shorten before OK" if count > MAX_ARROW_LABEL_CHARS else ""
-        counter.setText(f"{count}/{MAX_ARROW_LABEL_CHARS} characters{suffix}")
-        preview.setText(arrow_label_html(value) if value else "No label")
-        preview.adjustSize()
-
-    field.textChanged.connect(update_preview)
-    update_preview()
+    field.textChanged.connect(update_validation)
+    update_validation()
     return field
 
 
@@ -92,12 +134,16 @@ def prompt_arrow_labels(parent, *, above: str, below: str) -> dict[str, str] | N
 
     above_input = _label_input(layout, "Above:", "arrowLabelAboveInput", above)
     below_input = _label_input(layout, "Below:", "arrowLabelBelowInput", below)
-    initial_above = above_input.toPlainText()
-    initial_below = below_input.toPlainText()
-    hint = QLabel(LABEL_SYNTAX_HINT)
-    hint.setTextFormat(Qt.TextFormat.PlainText)
-    hint.setWordWrap(True)
-    layout.addWidget(hint)
+    active_input = above_input
+
+    def activate(field: ArrowLabelEditor) -> None:
+        nonlocal active_input
+        active_input = field
+
+    above_input.focused.connect(lambda: activate(above_input))
+    below_input.focused.connect(lambda: activate(below_input))
+    _label_format_controls(layout, lambda: active_input)
+    QDialog.setTabOrder(above_input, below_input)
 
     action_row = QHBoxLayout()
     action_row.addStretch(1)
@@ -110,21 +156,16 @@ def prompt_arrow_labels(parent, *, above: str, below: str) -> dict[str, str] | N
     cancel_btn.clicked.connect(dialog.reject)
 
     def label_values() -> dict[str, str]:
-        # Qt normalizes CRLF/CR while displaying plain text. An untouched label
-        # keeps its original document bytes instead of creating an incidental edit.
-        above_text = above_input.toPlainText()
-        below_text = below_input.toPlainText()
-        return {
-            "above": above if above_text == initial_above else above_text,
-            "below": below if below_text == initial_below else below_text,
-        }
+        return {"above": above_input.label_value(), "below": below_input.label_value()}
 
     def update_acceptance() -> None:
-        ok_btn.setEnabled(
-            all(
+        try:
+            valid = all(
                 len(value) <= MAX_ARROW_LABEL_CHARS for value in label_values().values()
             )
-        )
+        except ValueError:
+            valid = False
+        ok_btn.setEnabled(valid)
 
     above_input.textChanged.connect(update_acceptance)
     below_input.textChanged.connect(update_acceptance)
@@ -136,4 +177,4 @@ def prompt_arrow_labels(parent, *, above: str, below: str) -> dict[str, str] | N
     return label_values()
 
 
-__all__ = ["LABEL_SYNTAX_HINT", "prompt_arrow_labels"]
+__all__ = ["prompt_arrow_labels"]

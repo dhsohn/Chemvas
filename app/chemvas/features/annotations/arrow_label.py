@@ -15,7 +15,7 @@ from typing import TYPE_CHECKING
 from chemvas.domain.document import ARC_KIND_SWEEPS, ARROW_LABEL_SIDES
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping
+    from collections.abc import Iterable, Mapping
 
     from chemvas.domain.document import Arrow
 
@@ -143,6 +143,39 @@ def parse_arrow_label(text: str) -> tuple[LabelRun, ...]:
     return tuple(runs)
 
 
+def serialize_arrow_label(runs: Iterable[LabelRun]) -> str:
+    """Encode visual runs only when the legacy grammar preserves them exactly.
+
+    Old labels keep their existing interpretation: this does not add escaping
+    or reserve any new syntax. Unsupported literal markers remain a validation
+    error instead of silently changing the user's text or formatting.
+    """
+    error = "This label text cannot be stored with the selected formatting."
+    normalized: list[LabelRun] = []
+    for run in runs:
+        if run.role not in {"normal", "sub", "super"}:
+            raise ValueError(error)
+        _append_run(normalized, run.text, run.role)
+    parts: list[str] = []
+    for run in normalized:
+        if run.role == "normal":
+            parts.append(run.text)
+            continue
+        marker = "_" if run.role == "sub" else "^"
+        # Braced chunks preserve spaces and literal markers. Closing braces
+        # need an unbraced chunk of their own; the next marker ends it.
+        chunks = run.text.split("}")
+        for index, chunk in enumerate(chunks):
+            if index:
+                parts.append(marker + "}")
+            if chunk:
+                parts.append(marker + "{" + chunk + "}")
+    candidate = "".join(parts)
+    if parse_arrow_label(candidate) != tuple(normalized):
+        raise ValueError(error)
+    return candidate
+
+
 def arrow_label_html(text: str) -> str:
     parts: list[str] = []
     for run in parse_arrow_label(text):
@@ -169,4 +202,5 @@ __all__ = [
     "arrow_label_position",
     "cleaned_arrow_labels",
     "parse_arrow_label",
+    "serialize_arrow_label",
 ]

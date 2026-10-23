@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from PyQt6.QtGui import QAction
-    from PyQt6.QtWidgets import QLineEdit
+    from PyQt6.QtWidgets import QLineEdit, QToolButton
 
     from chemvas.shell.icon_factory import MainWindowIconFactory
     from chemvas.ui.window.main_window_menu_bar import MainWindowMenuBarAssembly
@@ -22,6 +22,9 @@ class MainWindowUiReferences:
     undo_action: QAction | None = None
     redo_action: QAction | None = None
     grid_snap_action: QAction | None = None
+    layout_controls: list[tuple[QAction | QToolButton, int, str]] = field(
+        default_factory=list
+    )
 
     def require_icon_factory(self) -> MainWindowIconFactory:
         if self.icon_factory is None:

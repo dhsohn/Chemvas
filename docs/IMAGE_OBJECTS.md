@@ -85,5 +85,4 @@ In `.cdxml` documents, each image is stored as an object within the `state.image
 ## Figure Export
 
 - **Vector Exports (SVG & PDF)**: Embedded images are included as high-fidelity rasters within the exported vector streams.
-- **Editable Chemvas SVG**: Preserves the complete `.cdxml` metadata payload, allowing full round-trip reopening in Chemvas.
 - **Raster Exports (PNG & TIFF)**: Images are rasterized at the chosen target DPI with full alpha transparency support.

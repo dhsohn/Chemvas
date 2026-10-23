@@ -34,8 +34,7 @@ Frozen UTF-8 file SHA-256 values (including the final newline):
 | `legacy-reviewed-precomplex.chemvas` | `3d14aeb67cdda436c23220ec960f5283fcb683dbb94319add177b076ca81bdf4` |
 
 The headless checks compare the complete normalized state after reading and
-writing, and after a declared color-only patch. Editable SVG tests wrap this
-literal v7 payload in the frozen SVG-source v1 envelope, not a newly generated
-native document. GUI round-trip tests separately exercise scene materialization.
+writing, and after a declared color-only patch. GUI round-trip tests separately
+exercise scene materialization.
 These are compatibility sentinels, not an exhaustive schema enumeration or a
 chemical-validity, font-rendering, or historical-reader compatibility guarantee.

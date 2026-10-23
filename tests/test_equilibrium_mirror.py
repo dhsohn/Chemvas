@@ -16,7 +16,6 @@ from PyQt6.QtTest import QTest
 from PyQt6.QtWidgets import QApplication
 
 from chemvas.bootstrap.main_window import build_main_window
-from chemvas.core.svg_roundtrip import extract_chemvas_document_from_svg
 from chemvas.domain.document import (
     CANVAS_FILE_VERSION,
     build_document_payload,
@@ -172,18 +171,6 @@ def test_mirror_survives_native_and_clipboard_roundtrip_with_same_ink(
         view.services.canvas_document_session_service.export_figure(
             str(tmp_path / f"{name}.png"), fmt="png"
         )
-    svg = tmp_path / "editable.svg"
-    canvas.services.canvas_document_session_service.export_figure(
-        str(svg), fmt="svg", editable_svg=True
-    )
-    svg_canvas = canvases()
-    svg_canvas.services.canvas_document_session_service.restore_state(
-        extract_chemvas_document_from_svg(svg).state
-    )
-    assert svg_canvas.services.canvas_document_session_service.snapshot_state() == state
-    assert _segments(svg_canvas.runtime_state.arrow_items()[0].path()) == _segments(
-        item.mapToScene(item.path())
-    )
     assert QImage(str(tmp_path / "live.png")) == QImage(str(tmp_path / "restored.png"))
     assert not QImage(str(tmp_path / "live.png")).isNull()
     payload = (

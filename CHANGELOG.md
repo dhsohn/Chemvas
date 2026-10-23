@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- Remove CDXML from desktop Figure Export; working documents use Save or Save As.
+  Remove verbose inline export explanations and show all size limits directly.
+
+### Changed
+
+- Remove editable Chemvas SVG export and reopening. SVG is figure output only;
+  use CDXML for editable working documents. Existing files are not modified.
+- Confirm replacement when Save As adds a CDXML extension to a name whose final
+  destination already exists.
+
+- Preview figures and their output dimensions before export; keep height and
+  minimum-font controls displayed directly in the dialog.
+- Edit arrow labels with visual subscript and superscript formatting, symbol
+  controls and undo/redo. Remove formatting help, example prose and duplicate previews; preserve
+  existing document label values when unchanged. Show the character limit only
+  as an empty-field placeholder.
+- Describe selected molecules, arrows and other layout objects in the status bar.
+  Enable alignment for two or more objects and distribution for three or more,
+  with explanations when unavailable.
+
 ## [0.26.4] - 2026-10-23
 
 ### Fixed

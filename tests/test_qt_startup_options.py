@@ -49,7 +49,7 @@ def test_current_qt_value_options_preserve_the_next_argument(
     prefix: str, option: str, value: str
 ) -> None:
     # Qt consumes the next token even when it looks like an option or document.
-    arguments = [prefix + option, value, "actual.svg"]
+    arguments = [prefix + option, value, "actual.cdxml"]
     original = list(arguments)
     application._validate_desktop_arguments(arguments)
     assert arguments == original
@@ -166,7 +166,7 @@ def test_real_qt_consumes_supported_options_before_document_selection(
     # Qt parses argv once, so one process checks a whole family of options: any
     # token Qt leaves behind is rejected or breaks the exact document arguments.
     options = [token for group in option_groups for token in group]
-    documents = ["./-그림 & OH.cdxml", "./--style=Fusion.svg"]
+    documents = ["./-그림 & OH.cdxml", "./--style=Fusion.cdxml"]
     result = _desktop_process(tmp_path, [*options, *documents], documents)
     assert result.returncode == 7, result.stderr
     assert "desktop reached with exact document arguments" in result.stdout

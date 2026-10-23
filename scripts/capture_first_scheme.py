@@ -178,7 +178,6 @@ class FirstScheme(Walkthrough):
             scope=options.scope,
             sizing=options.sizing,
             background=options.background,
-            editable_svg=options.editable_svg,
         )
         session.export_figure(
             str(self.output / "first-scheme.png"),

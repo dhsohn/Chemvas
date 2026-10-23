@@ -1,12 +1,10 @@
 from __future__ import annotations
 
-import base64
 import hashlib
 import json
 import os
 import subprocess
 import sys
-import zlib
 from copy import deepcopy
 from pathlib import Path
 
@@ -17,10 +15,6 @@ from chemvas.core.document_io import (
     parse_document,
     read_exact_snapshot,
     write_snapshot,
-)
-from chemvas.core.svg_roundtrip import (
-    extract_chemvas_document_from_svg,
-    extract_chemvas_svg_payload,
 )
 from chemvas.domain.document import CANVAS_FILE_VERSION
 from chemvas.features.document_files import read_exact_document as read_cdxml_exact
@@ -97,27 +91,6 @@ def _frozen_document(name: str) -> tuple[bytes, dict]:
     return raw, payload
 
 
-def _svg_bytes(document: dict, scope: str = "sheet") -> bytes:
-    # Intentionally do not call create_editable_svg_payload: the reader must
-    # consume the historical envelope even after writer defaults change.
-    envelope = {
-        "type": "chemvas-svg-source",
-        "version": 1,
-        "scope": scope,
-        "document": document,
-    }
-    encoded = base64.b64encode(
-        zlib.compress(json.dumps(envelope).encode("utf-8"))
-    ).decode("ascii")
-    return (
-        '<svg xmlns="http://www.w3.org/2000/svg" '
-        'xmlns:chemvas="https://chemvas.app/ns/svg-source/1">'
-        '<metadata><chemvas:source encoding="base64+zlib+json" '
-        'type="chemvas-svg-source" version="1">'
-        f"{encoded}</chemvas:source></metadata></svg>"
-    ).encode()
-
-
 @pytest.mark.parametrize("name", FROZEN_SHA256)
 def test_frozen_v7_native_read_write_preserves_complete_state(name, tmp_path):
     original_bytes, original = _frozen_document(name)
@@ -140,29 +113,6 @@ def test_frozen_v7_native_read_write_preserves_complete_state(name, tmp_path):
     assert document.state == before
     assert written.source_sha256 == hashlib.sha256(saved.source_bytes).hexdigest()
     assert path.read_bytes() == original_bytes
-
-
-@pytest.mark.parametrize("name", FROZEN_SHA256)
-@pytest.mark.parametrize("scope", ["sheet", "selection"])
-def test_literal_v7_editable_svg_readers_preserve_complete_state(name, scope, tmp_path):
-    original_bytes, original = _frozen_document(name)
-    path = tmp_path / "historical.svg"
-    svg_bytes = _svg_bytes(original, scope)
-    path.write_bytes(svg_bytes)
-
-    document = extract_chemvas_document_from_svg(path)
-    payload = extract_chemvas_svg_payload(path)
-
-    assert document.payload == original
-    assert document.state == original["state"]
-    assert payload == {
-        "type": "chemvas-svg-source",
-        "version": 1,
-        "scope": scope,
-        "document": original,
-    }
-    assert path.read_bytes() == svg_bytes
-    assert (FIXTURE_ROOT / f"{name}.json").read_bytes() == original_bytes
 
 
 @pytest.mark.parametrize("name", FROZEN_SHA256)
@@ -298,26 +248,18 @@ def test_graph_patch_moving_an_atom_keeps_legacy_reviewed_precomplex(tmp_path, c
 
 
 @pytest.mark.parametrize("version", [6, 999, 7.0, "7", True])
-def test_frozen_v7_reader_does_not_accept_unknown_or_invalid_versions(
-    version, tmp_path
-):
+def test_frozen_v7_reader_does_not_accept_unknown_or_invalid_versions(version):
     _, payload = _frozen_document("minimal")
     payload["version"] = version
     before = deepcopy(payload)
 
     with pytest.raises(ValueError):
         parse_document(payload)
-    path = tmp_path / "unsupported.svg"
-    svg_bytes = _svg_bytes(payload)
-    path.write_bytes(svg_bytes)
-    with pytest.raises(ValueError):
-        extract_chemvas_document_from_svg(path)
     assert payload == before
-    assert path.read_bytes() == svg_bytes
 
 
 @pytest.mark.parametrize("location", ["envelope", "state", "atom", "mark"])
-def test_frozen_v7_reader_still_rejects_unknown_fields(location, tmp_path):
+def test_frozen_v7_reader_still_rejects_unknown_fields(location):
     _, payload = _frozen_document("extended")
     target = {
         "envelope": payload,
@@ -330,8 +272,4 @@ def test_frozen_v7_reader_still_rejects_unknown_fields(location, tmp_path):
 
     with pytest.raises(ValueError):
         parse_document(payload)
-    path = tmp_path / "unknown-field.svg"
-    path.write_bytes(_svg_bytes(payload))
-    with pytest.raises(ValueError):
-        extract_chemvas_document_from_svg(path)
     assert payload == before

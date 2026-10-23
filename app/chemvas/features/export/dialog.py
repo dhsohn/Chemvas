@@ -18,7 +18,6 @@ EXPORT_FORMATS: tuple[tuple[str, str, str], ...] = (
     ("PDF - vector", "pdf", ".pdf"),
     ("PNG - raster", "png", ".png"),
     ("TIFF - raster", "tiff", ".tiff"),
-    ("CDXML - ChemDraw XML (not verified in ChemDraw)", "cdxml", ".cdxml"),
 )
 
 DPI_OPTIONS: tuple[int, ...] = (150, 300, 600, 1200)

@@ -469,7 +469,7 @@ class SceneTransformController:
             rect = item_rect if rect is None else rect.united(item_rect)
         return rect
 
-    def _alignment_objects(self) -> list[_AlignObject]:
+    def alignment_objects(self) -> list[_AlignObject]:
         selected_atoms = selected_atom_ids_for_transform_for(self.canvas)
         items = independent_selection_items(
             selected_items_for_transform_for(self.canvas), selected_atoms
@@ -523,7 +523,7 @@ class SceneTransformController:
 
     @_atomic_history_transform
     def align_selected_items(self, mode: str) -> bool:
-        objects = self._alignment_objects()
+        objects = self.alignment_objects()
         if len(objects) < 2:
             return False
         return self._apply_object_deltas(
@@ -532,7 +532,7 @@ class SceneTransformController:
 
     @_atomic_history_transform
     def distribute_selected_items(self, axis: str) -> bool:
-        objects = self._alignment_objects()
+        objects = self.alignment_objects()
         if len(objects) < 3:
             return False
         return self._apply_object_deltas(

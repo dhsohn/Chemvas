@@ -80,7 +80,7 @@ class MainWindowDialogActionsTest(unittest.TestCase):
             {
                 "tool": "Tool: Bond",
                 "sheet": "Canvas: Canvas 1",
-                "selection": "Selection: 0",
+                "selection": "Selection: None",
                 "zoom_caption": "Zoom",
                 "zoom": "100%",
             },

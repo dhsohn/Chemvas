@@ -197,6 +197,7 @@ def build_select_page(
     for mode, tooltip in ALIGN_SPECS:
         button = icon_button(icons.icon_align_objects(mode), tooltip)
         button.setObjectName(f"align_{mode}_button")
+        window.ui_references.layout_controls.append((button, 2, tooltip))
         button.setStatusTip(tooltip)
         button.clicked.connect(
             lambda _checked=False, m=mode: align_selection(window, m)
@@ -207,6 +208,7 @@ def build_select_page(
     for axis, tooltip in DISTRIBUTE_SPECS:
         button = icon_button(icons.icon_distribute(axis), tooltip)
         button.setObjectName(f"distribute_{axis}_button")
+        window.ui_references.layout_controls.append((button, 3, tooltip))
         button.setStatusTip(tooltip)
         button.clicked.connect(
             lambda _checked=False, a=axis: distribute_selection(window, a)

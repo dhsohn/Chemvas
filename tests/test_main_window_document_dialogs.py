@@ -12,7 +12,6 @@ from PyQt6.QtWidgets import (
     QComboBox,
     QDialog,
     QDoubleSpinBox,
-    QLabel,
     QPushButton,
 )
 
@@ -72,14 +71,11 @@ class MainWindowDocumentDialogsTest(unittest.TestCase):
             self.assertIsNotNone(scope_combo)
             self.assertIsNotNone(background_combo)
             self.assertIsNotNone(dpi_combo)
-            self.assertIsNotNone(editable_check)
+            self.assertIsNone(editable_check)
             self.assertFalse(dpi_combo.isEnabled())
-            self.assertTrue(editable_check.isEnabled())
-            self.assertFalse(editable_check.isChecked())
 
             format_combo.setCurrentIndex(format_combo.findData("png"))
             self.assertTrue(dpi_combo.isEnabled())
-            self.assertFalse(editable_check.isEnabled())
             size_combo.setCurrentIndex(size_combo.findData("col2"))
             scope_combo.setCurrentIndex(scope_combo.findData("selection"))
             background_combo.setCurrentIndex(background_combo.findData("white"))
@@ -163,11 +159,6 @@ class MainWindowDocumentDialogsTest(unittest.TestCase):
             scope = dialog.findChild(QComboBox, "exportScopeCombo")
             check = dialog.findChild(QCheckBox, "exportMinFontCheck")
             font = dialog.findChild(QDoubleSpinBox, "exportMinFontSpin")
-            explanation = dialog.findChild(QLabel, "exportLimitsExplanation")
-            self.assertIn("whole-canvas SVG and PNG", explanation.text())
-            self.assertGreaterEqual(
-                explanation.minimumHeight(), explanation.heightForWidth(340)
-            )
             for unsupported_fmt in ("pdf", "tiff"):
                 fmt.setCurrentIndex(fmt.findData("svg"))
                 check.setChecked(True)

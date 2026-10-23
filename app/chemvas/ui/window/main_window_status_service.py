@@ -22,6 +22,7 @@ from chemvas.ui.canvas.canvas_tool_settings_state import (
     GRID_STRENGTHS,
 )
 from chemvas.ui.scene.mark_ownership import mark_is_distant_for, mark_owner_text_for
+from chemvas.ui.scene.scene_align_logic import alignment_selection_summary
 from chemvas.ui.selection.selection_queries import (
     scene_selected_items_for,
     selection_status_count_for,
@@ -475,10 +476,14 @@ class MainWindowStatusService:
             self.sheet_label.setText(self.active_sheet_status_text(window))
 
     def update_selection_status_label(self, window: MainWindowLike) -> None:
-        selection_count = self.current_selection_count(window)
         if self.selection_label is not None:
-            text = f"Selection: {selection_count}"
             canvas = active_canvas_or_none_for_window(window)
+            objects = (
+                canvas.services.scene_transform_controller.alignment_objects()
+                if canvas is not None and self.current_selection_count(window)
+                else []
+            )
+            text = f"Selection: {alignment_selection_summary(objects)}"
             marks = (
                 []
                 if canvas is None

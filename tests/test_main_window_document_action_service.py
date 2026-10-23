@@ -759,6 +759,42 @@ class MainWindowDocumentActionServiceTest(unittest.TestCase):
                         self.window, str(existing), canvas=None
                     )
 
+    def test_save_as_cdxml_filter_confirms_extensionless_existing_target(self) -> None:
+        canvas = active_canvas_for_window(self.window)
+        before = canvas.services.canvas_document_session_service.snapshot_state()
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory) / "drawing.cdxml"
+            target.write_text("existing document")
+            file_dialog = mock.Mock()
+            file_dialog.getSaveFileName.return_value = (
+                str(target.with_suffix("")),
+                "ChemDraw XML (*.cdxml)",
+            )
+            message_box = mock.Mock()
+            message_box.question.return_value = QMessageBox.StandardButton.No
+            self.assertFalse(
+                self.service.save_canvas_as(
+                    self.window, file_dialog=file_dialog, message_box=message_box
+                )
+            )
+            self.assertEqual(target.read_text(), "existing document")
+            self.assertEqual(
+                canvas.services.canvas_document_session_service.snapshot_state(), before
+            )
+            self.assertIsNone(canvas.runtime_state.document_metadata_state.file_path)
+            message_box.question.assert_called_once()
+
+            message_box.question.return_value = QMessageBox.StandardButton.Yes
+            self.assertTrue(
+                self.service.save_canvas_as(
+                    self.window, file_dialog=file_dialog, message_box=message_box
+                )
+            )
+            self.assertNotEqual(target.read_text(), "existing document")
+            self.assertEqual(
+                canvas.runtime_state.document_metadata_state.file_path, str(target)
+            )
+
     def test_save_canvas_as_does_not_reprompt_a_dialog_confirmed_path(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             existing = Path(temp_dir) / "confirmed.cdxml"
@@ -943,7 +979,6 @@ class MainWindowDocumentActionServiceTest(unittest.TestCase):
                             dpi=300,
                             background="transparent",
                             sizing="bond",
-                            editable_svg=False,
                         ),
                     )
                 )
@@ -996,7 +1031,6 @@ class MainWindowDocumentActionServiceTest(unittest.TestCase):
                                         dpi=300,
                                         background="transparent",
                                         sizing="bond",
-                                        editable_svg=False,
                                     ),
                                 )
                             )
@@ -1049,7 +1083,6 @@ class MainWindowDocumentActionServiceTest(unittest.TestCase):
             dpi=300,
             background="transparent",
             sizing="custom",
-            editable_svg=False,
             target_width_mm=83.75,
             max_height_mm=120.25,
             min_font_pt=7.25,
@@ -1172,8 +1205,7 @@ class MainWindowDocumentActionServiceTest(unittest.TestCase):
         self.assertEqual(
             file_dialog.getOpenFileName.call_args.args[3],
             (
-                "CDXML / Editable SVG / MDL Molfile (*.cdxml *.svg *.mol);;ChemDraw XML (*.cdxml);;"
-                "Editable SVG (*.svg);;"
+                "CDXML / MDL Molfile (*.cdxml *.mol);;ChemDraw XML (*.cdxml);;"
                 "MDL Molfile (*.mol);;All Files (*)"
             ),
         )
@@ -1221,12 +1253,35 @@ class MainWindowDocumentActionServiceTest(unittest.TestCase):
         message_box.warning.assert_called_once_with(
             self.window,
             "Load Error",
-            "Unsupported file type. Open a .cdxml, .svg, or .mol file.",
+            "Unsupported file type. Open a .cdxml or .mol file.",
         )
         self.assertIsNone(
             active_canvas_for_window(
                 self.window
             ).runtime_state.document_metadata_state.file_path
+        )
+
+    def test_load_canvas_from_path_rejects_svg_without_changing_document(self) -> None:
+        message_box = mock.Mock()
+        canvas = active_canvas_for_window(self.window)
+        before = canvas.services.canvas_document_session_service.snapshot_state()
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "figure.svg"
+            contents = '<svg xmlns="http://www.w3.org/2000/svg"/>'
+            path.write_text(contents)
+            self.assertFalse(
+                self.service.load_canvas_from_path(
+                    self.window, str(path), message_box=message_box
+                )
+            )
+            self.assertEqual(path.read_text(), contents)
+        self.assertEqual(
+            canvas.services.canvas_document_session_service.snapshot_state(), before
+        )
+        message_box.warning.assert_called_once_with(
+            self.window,
+            "Load Error",
+            "Unsupported file type. Open a .cdxml or .mol file.",
         )
 
     def test_load_canvas_from_path_imports_mol_as_untitled_document(self) -> None:

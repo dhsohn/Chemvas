@@ -23,7 +23,6 @@ from PyQt6.QtWidgets import (
 )
 
 from chemvas.adapters.qt.renderer import Renderer
-from chemvas.core.svg_roundtrip import extract_chemvas_document_from_svg
 from chemvas.domain.document import (
     AnnotationCollection,
     MoleculeModel,
@@ -1194,9 +1193,6 @@ class CanvasDocumentSessionServiceTest(unittest.TestCase):
                         "<svg />", encoding="utf-8"
                     ),
                 ) as export_canvas_scene,
-                mock.patch.object(
-                    service, "_embed_editable_svg_payload"
-                ) as embed_editable_svg,
             ):
                 service.export_figure(
                     str(path),
@@ -1205,7 +1201,6 @@ class CanvasDocumentSessionServiceTest(unittest.TestCase):
                     dpi=144,
                     background="white",
                     sizing="bond",
-                    editable_svg=True,
                 )
 
             export_canvas_scene.assert_called_once()
@@ -1226,9 +1221,6 @@ class CanvasDocumentSessionServiceTest(unittest.TestCase):
                     "background": "white",
                     "title": "Chemvas drawing",
                 },
-            )
-            embed_editable_svg.assert_called_once_with(
-                str(tmp_path), fmt="svg", scope="selection"
             )
             self.assertEqual(path.read_text(encoding="utf-8"), "<svg />")
             self.assertFalse(tmp_path.exists())
@@ -1564,167 +1556,5 @@ class CanvasDocumentSessionServiceTest(unittest.TestCase):
             ):
                 service.export_figure(path, fmt="svg", scope="sheet")
 
-            with self.assertRaises(ValueError):
-                extract_chemvas_document_from_svg(path)
+            self.assertNotIn("chemvas:source", Path(path).read_text(encoding="utf-8"))
             service.snapshot_state.assert_not_called()
-
-    def test_export_figure_embeds_sheet_payload_in_editable_svg_file(self) -> None:
-        canvas = SimpleNamespace(
-            FILE_FORMAT_VERSION=7,
-            renderer=SimpleNamespace(
-                style=SimpleNamespace(
-                    bond_line_width=1.0,
-                    bond_length_px=30.0,
-                    bond_length_pt=15.0,
-                )
-            ),
-        )
-        _attach_history_service(canvas)
-        service = _session_service(canvas)
-        state = _canvas_state()
-        service.snapshot_state = mock.Mock(return_value=state)
-
-        def write_svg(_canvas, path, **_kwargs) -> None:
-            Path(path).write_text(
-                '<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" />',
-                encoding="utf-8",
-            )
-
-        with tempfile.TemporaryDirectory() as tmp:
-            path = str(Path(tmp) / "figure.svg")
-            with (
-                mock.patch.object(
-                    FigureExportService,
-                    "_resolve_figure_export",
-                    return_value=([], _EXPORT_PLAN),
-                ),
-                mock.patch(
-                    "chemvas.ui.export.figure_export_service.render_export_plan",
-                    side_effect=write_svg,
-                ),
-            ):
-                service.export_figure(path, fmt="svg", scope="sheet", editable_svg=True)
-
-            self.assertEqual(extract_chemvas_document_from_svg(path).state, state)
-
-    def test_export_figure_keeps_existing_svg_when_metadata_embedding_fails(
-        self,
-    ) -> None:
-        canvas = SimpleNamespace(
-            FILE_FORMAT_VERSION=7,
-            renderer=SimpleNamespace(
-                style=SimpleNamespace(
-                    bond_line_width=1.0,
-                    bond_length_px=30.0,
-                    bond_length_pt=15.0,
-                )
-            ),
-        )
-        _attach_history_service(canvas)
-        service = _session_service(canvas)
-
-        def write_svg(_canvas, path, **_kwargs) -> None:
-            Path(path).write_text(
-                '<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" />',
-                encoding="utf-8",
-            )
-
-        with tempfile.TemporaryDirectory() as tmp:
-            path = Path(tmp) / "figure.svg"
-            path.write_text("ORIGINAL", encoding="utf-8")
-            with (
-                mock.patch.object(
-                    FigureExportService,
-                    "_resolve_figure_export",
-                    return_value=([], _EXPORT_PLAN),
-                ),
-                mock.patch(
-                    "chemvas.ui.export.figure_export_service.render_export_plan",
-                    side_effect=write_svg,
-                ) as export_canvas_scene,
-                mock.patch.object(
-                    service,
-                    "_embed_editable_svg_payload",
-                    side_effect=RuntimeError("metadata"),
-                ),
-                self.assertRaisesRegex(RuntimeError, "metadata"),
-            ):
-                service.export_figure(
-                    str(path), fmt="svg", scope="sheet", editable_svg=True
-                )
-
-            export_canvas_scene.assert_called_once()
-            export_args, _export_kwargs = export_canvas_scene.call_args
-            tmp_path = Path(export_args[1])
-            self.assertEqual(tmp_path.parent.resolve(), path.parent.resolve())
-            self.assertTrue(tmp_path.name.startswith(".chemvas-"))
-            self.assertTrue(tmp_path.name.isascii())
-            self.assertTrue(tmp_path.name.endswith(".tmp"))
-            self.assertEqual(path.read_text(encoding="utf-8"), "ORIGINAL")
-            self.assertFalse(tmp_path.exists())
-
-    def test_embed_editable_svg_payload_uses_sheet_state_for_svg_only(self) -> None:
-        state = {
-            "model": {"atoms": {}, "bonds": [], "next_atom_id": 0},
-            "ring_fills": [],
-            "notes": [],
-            "marks": [],
-            "arrows": [],
-            "ts_brackets": [],
-            "shapes": [],
-            "orbitals": [],
-            "settings": {},
-            "last_smiles_input": None,
-        }
-        canvas = SimpleNamespace(FILE_FORMAT_VERSION=7)
-        _attach_history_service(canvas)
-        service = _session_service(canvas)
-        service.snapshot_state = mock.Mock(return_value=state)
-
-        with (
-            mock.patch(
-                "chemvas.ui.canvas.canvas_document_session_service.create_editable_svg_payload",
-                return_value={"payload": 1},
-            ) as create_payload,
-            mock.patch(
-                "chemvas.ui.canvas.canvas_document_session_service.embed_chemvas_document_in_svg"
-            ) as embed_svg,
-        ):
-            service._embed_editable_svg_payload(
-                "/tmp/out.svg", fmt="svg", scope="sheet"
-            )
-            service._embed_editable_svg_payload(
-                "/tmp/out.png", fmt="png", scope="sheet"
-            )
-
-        create_payload.assert_called_once_with(state, document_version=7, scope="sheet")
-        embed_svg.assert_called_once_with("/tmp/out.svg", {"payload": 1})
-        service.snapshot_state.assert_called_once_with()
-
-    def test_embed_editable_svg_payload_uses_selection_state_for_selection_scope(
-        self,
-    ) -> None:
-        state = {"selection": "state"}
-        canvas = SimpleNamespace(FILE_FORMAT_VERSION=7)
-        _attach_history_service(canvas)
-        service = _session_service(canvas)
-        service._selection_document_state = mock.Mock(return_value=state)
-
-        with (
-            mock.patch(
-                "chemvas.ui.canvas.canvas_document_session_service.create_editable_svg_payload",
-                return_value={"payload": 1},
-            ) as create_payload,
-            mock.patch(
-                "chemvas.ui.canvas.canvas_document_session_service.embed_chemvas_document_in_svg"
-            ) as embed_svg,
-        ):
-            service._embed_editable_svg_payload(
-                "/tmp/out.svg", fmt="svg", scope="selection"
-            )
-
-        create_payload.assert_called_once_with(
-            state, document_version=7, scope="selection"
-        )
-        embed_svg.assert_called_once_with("/tmp/out.svg", {"payload": 1})
-        service._selection_document_state.assert_called_once_with()
