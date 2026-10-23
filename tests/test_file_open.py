@@ -225,7 +225,7 @@ class OpenDocumentRoutingTest(unittest.TestCase):
             ]
         )
 
-    def test_missing_svg_open_routes_show_filesystem_reason_without_mutation(
+    def test_missing_cdxml_open_routes_show_filesystem_reason_without_mutation(
         self,
     ) -> None:
         from PyQt6.QtWidgets import QFileDialog, QMessageBox
@@ -253,10 +253,10 @@ class OpenDocumentRoutingTest(unittest.TestCase):
             if action.text() == "File"
         )
         with tempfile.TemporaryDirectory() as tmp:
-            path = Path(tmp) / "moved-그림.svg"
+            path = Path(tmp) / "moved-그림.cdxml"
             for route in ("Open...", "Open Recent", "startup"):
                 with self.subTest(route=route):
-                    path.write_text('<svg xmlns="http://www.w3.org/2000/svg"/>')
+                    path.write_text("placeholder")
                     if route == "Open Recent":
                         record_recent(str(path))
                         recent = next(
@@ -313,12 +313,7 @@ class OpenDocumentRoutingTest(unittest.TestCase):
 
         from chemvas.bootstrap.window_registry import open_new_window
         from chemvas.core.molfile import write_molfile
-        from chemvas.core.svg_roundtrip import (
-            CHEMVAS_SVG_SCOPE_SHEET,
-            create_editable_svg_payload,
-            embed_chemvas_document_in_svg,
-        )
-        from chemvas.domain.document import CANVAS_FILE_VERSION, deserialize_model_state
+        from chemvas.domain.document import deserialize_model_state
         from chemvas.features.document_composition import compose_document_state
         from chemvas.shell.window_registry import open_windows
         from chemvas.ui.window.main_window_ports import active_canvas_for_window
@@ -331,64 +326,45 @@ class OpenDocumentRoutingTest(unittest.TestCase):
                 "bonds": [],
             }
         )
-        for suffix in (".mol", ".svg"):
-            with (
-                self.subTest(suffix=suffix),
-                tempfile.TemporaryDirectory() as directory,
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "imported.mol"
+            path.write_text(write_molfile(deserialize_model_state(state["model"])))
+            window = open_new_window()
+            menu = next(
+                action.menu()
+                for action in window.menuBar().actions()
+                if action.text() == "File"
+            )
+            action = next(
+                action for action in menu.actions() if action.text() == "Open..."
+            )
+            with mock.patch.object(
+                QFileDialog, "getOpenFileName", return_value=(str(path), "")
             ):
-                path = Path(directory) / ("imported" + suffix)
-                if suffix == ".mol":
-                    path.write_text(
-                        write_molfile(deserialize_model_state(state["model"]))
-                    )
-                else:
-                    path.write_text('<svg xmlns="http://www.w3.org/2000/svg"/>')
-                    embed_chemvas_document_in_svg(
-                        path,
-                        create_editable_svg_payload(
-                            state,
-                            document_version=CANVAS_FILE_VERSION,
-                            scope=CHEMVAS_SVG_SCOPE_SHEET,
-                        ),
-                    )
-                window = open_new_window()
-                menu = next(
-                    action.menu()
-                    for action in window.menuBar().actions()
-                    if action.text() == "File"
-                )
-                action = next(
-                    action for action in menu.actions() if action.text() == "Open..."
-                )
-                with mock.patch.object(
-                    QFileDialog, "getOpenFileName", return_value=(str(path), "")
-                ):
-                    action.trigger()
-                canvas = active_canvas_for_window(window)
-                documents = window.services.canvas_document_service
-                self.assertFalse(documents.is_dirty(canvas))
-                self.assertIsNone(documents.file_path(canvas))
-                before = (
-                    canvas.services.canvas_document_session_service.snapshot_state()
-                )
-                self.assertTrue(before["model"]["atoms"])
-                with mock.patch.object(
-                    QFileDialog, "getOpenFileName", return_value=("", "")
-                ):
-                    action.trigger()
-                self.assertEqual(open_windows(), (window,))
-                with mock.patch.object(
-                    QFileDialog, "getOpenFileName", return_value=(self.example, "")
-                ):
-                    action.trigger()
-                self.assertEqual(len(open_windows()), 2)
-                self.assertEqual(
-                    canvas.services.canvas_document_session_service.snapshot_state(),
-                    before,
-                )
-                for opened in open_windows():
-                    opened.close()
-                self.app.processEvents()
+                action.trigger()
+            canvas = active_canvas_for_window(window)
+            documents = window.services.canvas_document_service
+            self.assertFalse(documents.is_dirty(canvas))
+            self.assertIsNone(documents.file_path(canvas))
+            before = canvas.services.canvas_document_session_service.snapshot_state()
+            self.assertTrue(before["model"]["atoms"])
+            with mock.patch.object(
+                QFileDialog, "getOpenFileName", return_value=("", "")
+            ):
+                action.trigger()
+            self.assertEqual(open_windows(), (window,))
+            with mock.patch.object(
+                QFileDialog, "getOpenFileName", return_value=(self.example, "")
+            ):
+                action.trigger()
+            self.assertEqual(len(open_windows()), 2)
+            self.assertEqual(
+                canvas.services.canvas_document_session_service.snapshot_state(),
+                before,
+            )
+            for opened in open_windows():
+                opened.close()
+            self.app.processEvents()
 
     def test_opens_new_window_when_current_holds_a_document(self) -> None:
         from chemvas.bootstrap.window_registry import open_new_window
@@ -410,20 +386,12 @@ class OpenDocumentRoutingTest(unittest.TestCase):
     def test_new_chemvas_window_keeps_its_ui_callbacks(self) -> None:
         self._assert_new_document_window_keeps_its_ui_callbacks(".cdxml")
 
-    def test_new_editable_svg_window_keeps_its_ui_callbacks(self) -> None:
-        self._assert_new_document_window_keeps_its_ui_callbacks(".svg")
-
     def test_new_mol_window_keeps_its_ui_callbacks(self) -> None:
         self._assert_new_document_window_keeps_its_ui_callbacks(".mol")
 
     def _assert_new_document_window_keeps_its_ui_callbacks(self, suffix: str) -> None:
         from chemvas.bootstrap.window_registry import open_new_window
         from chemvas.core.molfile import write_molfile
-        from chemvas.core.svg_roundtrip import (
-            CHEMVAS_SVG_SCOPE_SHEET,
-            create_editable_svg_payload,
-            embed_chemvas_document_in_svg,
-        )
         from chemvas.domain.document import CANVAS_FILE_VERSION
         from chemvas.shell.window_registry import open_windows
         from chemvas.ui.molecule.structure_mutation_access import (
@@ -451,18 +419,6 @@ class OpenDocumentRoutingTest(unittest.TestCase):
             path = Path(temp_dir) / f"opened{suffix}"
             if suffix == ".mol":
                 path.write_text(write_molfile(reference_canvas.model), encoding="utf-8")
-            elif suffix == ".svg":
-                path.write_text(
-                    '<svg xmlns="http://www.w3.org/2000/svg"/>', encoding="utf-8"
-                )
-                embed_chemvas_document_in_svg(
-                    path,
-                    create_editable_svg_payload(
-                        state,
-                        document_version=CANVAS_FILE_VERSION,
-                        scope=CHEMVAS_SVG_SCOPE_SHEET,
-                    ),
-                )
             else:
                 write_document(path, state, version=CANVAS_FILE_VERSION)
             tool_mode_controller_for_window(reference).set_tool("line")
@@ -491,7 +447,7 @@ class OpenDocumentRoutingTest(unittest.TestCase):
 
             target_status = target_services.status_service.status_context_texts()
             self.assertEqual(target_status["tool"], "Tool: Arrow")
-            self.assertEqual(target_status["selection"], "Selection: 1")
+            self.assertEqual(target_status["selection"], "Selection: 1 arrow")
             self.assertEqual(target_status["zoom"], "150%")
             self.assertTrue(
                 target.ui_references.tool_action_for_key("arrow").isChecked()

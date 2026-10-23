@@ -156,7 +156,7 @@ class MainWindowCanvasDocumentService:
         state = canvas.services.canvas_document_session_service.snapshot_state()
         if document_is_dirty_for(canvas, state):
             return None
-        # Imported MOL/editable SVG documents can be clean but unbound. Only
+        # Imported MOL documents can be clean but unbound. Only
         # an actually empty canvas may be replaced without keeping its window.
         # Ignore settings and the allocation counter, not scene/model content.
         if any(

@@ -8,7 +8,6 @@ from PyQt6.QtGui import QColor
 from PyQt6.QtWidgets import QApplication, QGraphicsTextItem
 
 from chemvas.core.document_io import create_document
-from chemvas.core.svg_roundtrip import extract_chemvas_document_from_svg
 from chemvas.domain.document import (
     CANVAS_FILE_VERSION,
     CLIPBOARD_SELECTION_VERSION,
@@ -221,12 +220,9 @@ def test_colored_copy_paste_and_selection_svg_preserve_color(
     stacks = canvas.services.history_service.capture_stack_snapshot()
     output = tmp_path / "selected.svg"
     canvas.services.canvas_document_session_service.export_figure(
-        str(output), fmt="svg", scope="selection", editable_svg=True
+        str(output), fmt="svg", scope="selection"
     )
-    assert (
-        extract_chemvas_document_from_svg(output).state["marks"][0]["color"]
-        == "#1582ba"
-    )
+    assert "#1582ba" in output.read_text(encoding="utf-8")
     assert canvas.services.canvas_document_session_service.snapshot_state() == before
     assert canvas.services.history_service.capture_stack_snapshot() == stacks
     assert clip.paste_selection_from_clipboard(

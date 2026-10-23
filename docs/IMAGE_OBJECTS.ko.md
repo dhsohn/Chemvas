@@ -85,5 +85,4 @@ chemvas render-document figure.cdxml --output figure.png
 ## 그림 출력
 
 - **벡터 출력 (SVG, PDF)**: 내장된 이미지는 고해상도 래스터 형태로 벡터 스트림 내에 포함되어 출력됩니다.
-- **편집 가능한 SVG (Editable Chemvas SVG)**: `.cdxml` 메타데이터가 함께 내장되어, 내보낸 SVG 파일을 Chemvas에서 다시 열어 언제든 계속 편집할 수 있습니다.
 - **래스터 출력 (PNG, TIFF)**: 지정된 DPI에 맞춰 렌더링되며, 알파 투명 배경을 온전히 지원합니다.

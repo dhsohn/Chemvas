@@ -12,7 +12,6 @@ from PyQt6.QtWidgets import (
     QDialog,
     QDoubleSpinBox,
     QLabel,
-    QScrollArea,
     QToolButton,
     QVBoxLayout,
 )
@@ -187,29 +186,24 @@ def test_zoom_hints_follow_native_shortcuts_and_survive_refresh(drawing):
         assert "double-click or Enter" in status.zoom_label.statusTip()
 
 
-def test_arrow_preview_uses_paper_colors_with_dark_system_palette(app):
+def test_arrow_editor_uses_app_colors_with_dark_system_palette(app):
     dialog = QDialog()
     dark = QPalette(dialog.palette())
     dark.setColor(QPalette.ColorRole.Window, QColor("#202020"))
     dark.setColor(QPalette.ColorRole.WindowText, QColor("#eeeeee"))
     dialog.setPalette(dark)
-    _label_input(
+    editor = _label_input(
         QVBoxLayout(dialog), "Above:", "arrowLabelAboveInput", "K_{2}CO_{3}\nΔG^{‡}"
     )
     dialog.show()
     app.processEvents()
-    preview = dialog.findChild(QLabel, "arrowLabelAbovePreview")
-    viewport = dialog.findChild(QScrollArea).viewport()
-    assert preview.palette().color(QPalette.ColorRole.WindowText) == QColor(
-        PALETTE["text"]
+    assert editor.palette().color(QPalette.ColorRole.Text) == QColor(PALETTE["text"])
+    assert editor.palette().color(QPalette.ColorRole.Base) == QColor(
+        PALETTE["surface_input"]
     )
-    assert preview.palette().color(QPalette.ColorRole.Window) == QColor(
-        PALETTE["surface_canvas"]
-    )
-    assert viewport.palette().color(QPalette.ColorRole.Window) == QColor(
-        PALETTE["surface_canvas"]
-    )
-    assert "<sub>2</sub>" in preview.text()
+    assert editor.toPlainText() == "K2CO3\nΔG‡"
+    assert editor.label_runs()[1].role == "sub"
+    assert dialog.findChild(QLabel, "arrowLabelAbovePreview") is None
     dialog.close()
 
 

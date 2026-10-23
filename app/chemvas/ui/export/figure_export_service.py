@@ -20,8 +20,9 @@ from chemvas.ui.export.export_render_service import (
 )
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Mapping, Sequence
+    from collections.abc import Mapping, Sequence
 
+    from PyQt6.QtGui import QImage
     from PyQt6.QtWidgets import QGraphicsItem
 
     from chemvas.domain.document.groups import SceneGroup
@@ -158,6 +159,43 @@ class FigureExportService:
             target_width_mm=target_width_mm,
         )[1]
 
+    def preview_figure_export(
+        self,
+        *,
+        scope: str = "sheet",
+        selection: Sequence[QGraphicsItem] | None = None,
+        sizing: str = "bond",
+        target_width_mm: float | None = None,
+        background: str = "transparent",
+    ) -> tuple[QImage, ExportPlan]:
+        """Render a bounded in-memory preview through the figure painting path."""
+        from PyQt6.QtCore import Qt
+        from PyQt6.QtGui import QImage, QPainter
+
+        from chemvas.ui.export.export_painting import paint_scene_region
+        from chemvas.ui.export.export_scope import exported_scene
+
+        items, plan = self._resolve_figure_export(
+            scope=scope,
+            selection=selection,
+            sizing=sizing,
+            target_width_mm=target_width_mm,
+        )
+        scale = min(720 / plan.out_w_pt, 480 / plan.out_h_pt)
+        width = max(1, round(plan.out_w_pt * scale))
+        height = max(1, round(plan.out_h_pt * scale))
+        image = QImage(width, height, QImage.Format.Format_ARGB32_Premultiplied)
+        image.fill(Qt.GlobalColor.transparent)
+        with exported_scene(self.context.scene, items):
+            painter = QPainter(image)
+            try:
+                paint_scene_region(
+                    painter, self.context.scene, plan, width, height, background
+                )
+            finally:
+                painter.end()
+        return image, plan
+
     def export_figure(
         self,
         path: str,
@@ -171,7 +209,6 @@ class FigureExportService:
         target_width_mm: float | None = None,
         max_height_mm: float | None = None,
         min_font_pt: float | None = None,
-        after_render: Callable[[Path], None] | None = None,
         label_bindings: CdxmlLabelBindings | None = None,
         layout_reference: CdxmlTextLayoutReference | None = None,
     ) -> ExportPlan:
@@ -244,8 +281,6 @@ class FigureExportService:
 
             def write_cdxml(tmp: Path) -> None:
                 tmp.write_bytes(cdxml_bytes)
-                if after_render is not None:
-                    after_render(tmp)
 
             atomic_write_via_temp(Path(path), write_cdxml)
             return plan
@@ -297,8 +332,6 @@ class FigureExportService:
                     width_pixels=width_pixels,
                     height_pixels=height_pixels,
                 )
-            if after_render is not None:
-                after_render(tmp)
 
         atomic_write_via_temp(Path(path), render_to_temp)
         return plan

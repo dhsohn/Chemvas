@@ -13,7 +13,6 @@ from PyQt6.QtGui import QImage, QPen
 from PyQt6.QtWidgets import QApplication, QGraphicsScene
 
 from chemvas.bootstrap.document_cli_shared import offscreen_canvas
-from chemvas.core.svg_roundtrip import extract_chemvas_document_from_svg
 from chemvas.domain.document import AnnotationCollection, image_state_from_bytes
 from chemvas.features.document_composition import compose_document_state
 from chemvas.features.export import ExportPlan
@@ -45,7 +44,7 @@ def _state(atoms=()):
 
 
 @pytest.mark.parametrize("image_format", ["PNG", "JPEG"])
-@pytest.mark.parametrize("sink", ["clipboard", "plain", "editable"])
+@pytest.mark.parametrize("sink", ["clipboard", "plain"])
 def test_svg_render_strips_image_text_but_keeps_pixels_and_document_source(
     tmp_path, image_format, sink
 ):
@@ -76,11 +75,8 @@ def test_svg_render_strips_image_text_but_keeps_pixels_and_document_source(
             )
         else:
             path = tmp_path / "figure.svg"
-            service.export_figure(str(path), editable_svg=sink == "editable")
+            service.export_figure(str(path))
             svg = path.read_bytes()
-            if sink == "editable":
-                restored = extract_chemvas_document_from_svg(path)
-                assert restored.state["images"] == state["images"]
         assert service.snapshot_state()["images"] == state["images"]
     embedded = ET.fromstring(svg).find(".//{http://www.w3.org/2000/svg}image")
     assert embedded is not None

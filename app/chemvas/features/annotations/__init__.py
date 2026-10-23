@@ -10,6 +10,7 @@ from .arrow_label import (
     arrow_label_position,
     cleaned_arrow_labels,
     parse_arrow_label,
+    serialize_arrow_label,
 )
 from .brackets import (
     BRACKET_MENU_SPECS,
@@ -151,6 +152,7 @@ __all__ = [
     "reversed_display_text",
     "rotate_annotation",
     "sanitize_note_html",
+    "serialize_arrow_label",
     "split_hydride_label",
     "uses_compact_label_hit_shape",
 ]

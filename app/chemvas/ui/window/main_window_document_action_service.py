@@ -8,9 +8,6 @@ from typing import TYPE_CHECKING
 from PyQt6.QtWidgets import QFileDialog, QMessageBox
 
 from chemvas.core.molfile import fit_molfile_model, read_molfile
-from chemvas.core.svg_roundtrip import (
-    extract_chemvas_document_from_svg as default_read_editable_svg,
-)
 from chemvas.domain.document import (
     MoleculeModel,
     serialize_model_state,
@@ -299,13 +296,14 @@ class MainWindowDocumentActionService:
             self.default_save_dialog_path(window, canvas=canvas),
             "ChemDraw XML (*.cdxml);;All Files (*)",
         )
+        candidate_path = dialog_path
         if (
-            dialog_path
-            and not Path(dialog_path).suffix
+            candidate_path
+            and not Path(candidate_path).suffix
             and "*.cdxml" in selected_filter
         ):
-            dialog_path += ".cdxml"
-        path = resolve_save_as_path(dialog_path)
+            candidate_path += ".cdxml"
+        path = resolve_save_as_path(candidate_path)
         if path is None:
             return False
         if not self._confirm_normalized_overwrite(
@@ -408,7 +406,6 @@ class MainWindowDocumentActionService:
                 dpi=options.dpi,
                 background=options.background,
                 sizing=options.sizing,
-                editable_svg=options.editable_svg,
                 target_width_mm=options.target_width_mm,
                 max_height_mm=options.max_height_mm,
                 min_font_pt=options.min_font_pt,
@@ -471,7 +468,6 @@ class MainWindowDocumentActionService:
         file_dialog=None,
         message_box=None,
         read_document=None,
-        read_editable_svg=None,
         resolve_load_path=None,
         target_provider=None,
     ) -> bool:
@@ -480,7 +476,7 @@ class MainWindowDocumentActionService:
             window,
             "Load Drawing",
             "",
-            "CDXML / Editable SVG / MDL Molfile (*.cdxml *.svg *.mol);;ChemDraw XML (*.cdxml);;Editable SVG (*.svg);;MDL Molfile (*.mol);;All Files (*)",
+            "CDXML / MDL Molfile (*.cdxml *.mol);;ChemDraw XML (*.cdxml);;MDL Molfile (*.mol);;All Files (*)",
         )
         path = (
             resolve_load_path(dialog_path)
@@ -494,7 +490,6 @@ class MainWindowDocumentActionService:
             path,
             message_box=message_box,
             read_document=read_document,
-            read_editable_svg=read_editable_svg,
             target_provider=target_provider,
         )
 
@@ -505,7 +500,6 @@ class MainWindowDocumentActionService:
         *,
         message_box=None,
         read_document=None,
-        read_editable_svg=None,
         target_provider=None,
     ) -> bool:
         message_box = QMessageBox if message_box is None else message_box
@@ -513,16 +507,11 @@ class MainWindowDocumentActionService:
             message_box.warning(
                 window,
                 "Load Error",
-                "Unsupported file type. Open a .cdxml, .svg, or .mol file.",
+                "Unsupported file type. Open a .cdxml or .mol file.",
             )
             return False
         read_document = (
             default_read_document if read_document is None else read_document
-        )
-        read_editable_svg = (
-            default_read_editable_svg
-            if read_editable_svg is None
-            else read_editable_svg
         )
         # Bind the document to an absolute path up front: a relative path (e.g. a
         # CLI "chemvas ./file.cdxml") would otherwise be stored as the file
@@ -530,8 +519,7 @@ class MainWindowDocumentActionService:
         # from a different working directory.
         path = os.path.abspath(path)
         # If this exact file is already open, switch to that window instead of
-        # spawning a second, independently-editable copy. (Editable SVGs open
-        # unbound to their path, so this only matches real .cdxml documents.)
+        # spawning a second, independently-editable copy.
         already_open = find_open_document(path)
         if already_open is not None:
             open_window, open_canvas = already_open
@@ -558,20 +546,6 @@ class MainWindowDocumentActionService:
                 )
                 state_opened = True
                 status_bar_for(target).showMessage(f"Imported MOL: {path}", 4000)
-                request_snapshot()
-                return True
-            if Path(path).suffix.lower() == ".svg":
-                document = read_editable_svg(path)
-                target = target_provider() if target_provider is not None else window
-                target.services.canvas_document_service.open_state(
-                    target,
-                    state=document.state,
-                    file_path=None,
-                    display_name=Path(path).name,
-                )
-                state_opened = True
-                status_bar_for(target).showMessage(f"Loaded editable SVG: {path}", 4000)
-                record_recent(path)
                 request_snapshot()
                 return True
             document = read_document(path)

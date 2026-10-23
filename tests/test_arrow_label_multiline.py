@@ -2,19 +2,19 @@
 
 import pytest
 from PyQt6.QtCore import QPointF, Qt, QTimer
-from PyQt6.QtGui import QImage
+from PyQt6.QtGui import QImage, QTextCursor
 from PyQt6.QtTest import QTest
 from PyQt6.QtWidgets import (
     QApplication,
     QDialog,
     QLabel,
-    QPlainTextEdit,
     QPushButton,
-    QScrollArea,
+    QTextEdit,
+    QToolButton,
 )
 
 from chemvas.domain.document import CANVAS_FILE_VERSION
-from chemvas.features.annotations import arrow_label_html
+from chemvas.features.annotations import LabelRun, arrow_label_html, parse_arrow_label
 from chemvas.ui.canvas.graphics_items import ArrowLabelItem
 from chemvas.ui.dialogs.arrow_label_dialog import prompt_arrow_labels
 from tests.document_file_helpers import read_document, write_document
@@ -84,8 +84,8 @@ def _drive_modal(action, drive):
 
 
 def _fields(dialog):
-    above = dialog.findChild(QPlainTextEdit, "arrowLabelAboveInput")
-    below = dialog.findChild(QPlainTextEdit, "arrowLabelBelowInput")
+    above = dialog.findChild(QTextEdit, "arrowLabelAboveInput")
+    below = dialog.findChild(QTextEdit, "arrowLabelBelowInput")
     assert above is not None and below is not None
     return above, below
 
@@ -97,7 +97,7 @@ def test_dialog_enter_tab_backtab_and_explicit_ok(drawing):
         above, below = _fields(dialog)
         above.setFocus()
         assert above.hasFocus(), QApplication.focusWidget()
-        QTest.keyClicks(above, "K_{2}CO_{3}")
+        QTest.keyClicks(above, "K2CO3")
         QTest.keyClick(above, Qt.Key.Key_Return)
         assert dialog.isVisible()
         QTest.keyClicks(above, "DMSO")
@@ -107,13 +107,12 @@ def test_dialog_enter_tab_backtab_and_explicit_ok(drawing):
         QTest.keyClicks(below, "68%, 96% ee")
         QTest.keyClick(below, Qt.Key.Key_Tab, Qt.KeyboardModifier.ShiftModifier)
         assert above.hasFocus()
-        preview = dialog.findChild(QLabel, "arrowLabelAbovePreview")
-        assert preview.text() == "K<sub>2</sub>CO<sub>3</sub><br>DMSO"
+        assert above.label_runs() == (LabelRun("K2CO3\nDMSO", "normal"),)
         QTest.mouseClick(_buttons(dialog)["OK"], Qt.MouseButton.LeftButton)
 
     assert _drive_modal(
         lambda: prompt_arrow_labels(canvas, above="", below=""), drive
-    ) == {"above": "K_{2}CO_{3}\nDMSO", "below": "68%, 96% ee"}
+    ) == {"above": "K2CO3\nDMSO", "below": "68%, 96% ee"}
 
 
 @pytest.mark.parametrize("character,side", [("x", 0), ("😀", 1), ("\n", 1)])
@@ -128,12 +127,13 @@ def test_over_limit_input_is_retained_and_blocks_ok_until_shortened(
         field.insertPlainText(raw)
         assert field.toPlainText() == raw
         counter = dialog.findChild(QLabel, f"{field.objectName()}Limit")
-        assert "201/200" in counter.text()
+        assert "too long" in counter.text()
+        assert not counter.isHidden()
         assert not _buttons(dialog)["OK"].isEnabled()
         dialog.adjustSize()
         assert dialog.height() <= dialog.screen().availableGeometry().height()
         field.setPlainText(character * 200)
-        assert "200/200" in counter.text()
+        assert counter.isHidden()
         assert _buttons(dialog)["OK"].isEnabled()
         QTest.mouseClick(_buttons(dialog)["OK"], Qt.MouseButton.LeftButton)
 
@@ -144,37 +144,20 @@ def test_over_limit_input_is_retained_and_blocks_ok_until_shortened(
 
 
 @pytest.mark.parametrize(
-    "raw,axis",
-    [("W" * 200, "horizontal"), ("\n" * 199 + "Z", "vertical")],
-    ids=["wide", "many-lines"],
+    "raw", ["W" * 200, "\n" * 199 + "Z"], ids=["wide", "many-lines"]
 )
-def test_preview_can_scroll_to_last_character(drawing, raw, axis):
+def test_editor_can_scroll_to_last_character(drawing, raw):
     _window, canvas = drawing
 
     def drive(dialog):
         above, _below = _fields(dialog)
         above.setPlainText(raw)
-        preview = dialog.findChild(QLabel, "arrowLabelAbovePreview")
-        preview.setStyleSheet("color: rgb(12, 34, 56); background: white;")
-        area = preview.parentWidget().parentWidget()
-        assert isinstance(area, QScrollArea)
+        above.moveCursor(QTextCursor.MoveOperation.End)
+        above.ensureCursorVisible()
         QApplication.processEvents()
-        scrollbar = (
-            area.horizontalScrollBar()
-            if axis == "horizontal"
-            else area.verticalScrollBar()
-        )
-        assert scrollbar.maximum() > 0
-        scrollbar.setValue(scrollbar.maximum())
-        QApplication.processEvents()
-        image = area.viewport().grab().toImage()
-        painted = sum(
-            1
-            for y in range(image.height())
-            for x in range(image.width())
-            if max(image.pixelColor(x, y).getRgb()[:3]) < 180
-        )
-        assert painted > 10  # The final W/Z is reachable, not a blank clipped area.
+        assert above.verticalScrollBar().maximum() > 0
+        assert above.viewport().rect().intersects(above.cursorRect())
+        assert above.textCursor().position() == len(raw)
         assert dialog.height() <= dialog.screen().availableGeometry().height()
         QTest.mouseClick(_buttons(dialog)["OK"], Qt.MouseButton.LeftButton)
 
@@ -195,7 +178,7 @@ def test_original_crlf_counts_toward_character_limit(drawing, count):
         above, _below = _fields(dialog)
         assert len(above.toPlainText()) == count - 1
         counter = dialog.findChild(QLabel, "arrowLabelAboveInputLimit")
-        assert f"{count}/200" in counter.text()
+        assert counter.isHidden() == (count <= 200)
         assert _buttons(dialog)["OK"].isEnabled() == (count <= 200)
         if count > 200:
             above.setPlainText("shortened\nlabel")
@@ -240,7 +223,7 @@ def test_untouched_old_newlines_and_cancel_preserve_document_and_history(
     history.verify_stack_snapshot(stacks)
 
 
-@pytest.mark.parametrize("raw", ["A\nB\n", " A\r\nB ", "A\rB\r"])
+@pytest.mark.parametrize("raw", ["A\nB\n", " A\r\nB ", "A\rB\r", " K_{2}\r\nCO_{3} "])
 @pytest.mark.parametrize("edit_other", [False, True])
 def test_loaded_label_preserves_edge_whitespace_when_only_other_side_changes(
     drawing, tmp_path, raw, edit_other
@@ -346,7 +329,15 @@ def test_actual_arrow_double_click_multiline_export_save_reopen_and_undo(
 
     def drive(dialog):
         above, below = _fields(dialog)
-        above.setPlainText("K_{2}CO_{3}\nDMSO")
+        above.setPlainText("K2CO3\nDMSO")
+        above.setFocus()
+        subscript = dialog.findChild(QToolButton, "arrowLabelSubscript")
+        for start in (1, 4):
+            cursor = above.textCursor()
+            cursor.setPosition(start)
+            cursor.setPosition(start + 1, QTextCursor.MoveMode.KeepAnchor)
+            above.setTextCursor(cursor)
+            QTest.mouseClick(subscript, Qt.MouseButton.LeftButton)
         below.setFocus()
         QTest.keyClicks(below, "68%, 96% ee")
         QTest.keyClick(below, Qt.Key.Key_Return)
@@ -362,10 +353,15 @@ def test_actual_arrow_double_click_multiline_export_save_reopen_and_undo(
         drive,
     )
     after = canvas.services.canvas_document_session_service.snapshot_state()
-    assert after["arrows"][0]["labels"] == {
-        "above": "K_{2}CO_{3}\nDMSO",
-        "below": "68%, 96% ee\nrt",
-    }
+    labels = after["arrows"][0]["labels"]
+    assert parse_arrow_label(labels["above"]) == (
+        LabelRun("K", "normal"),
+        LabelRun("2", "sub"),
+        LabelRun("CO", "normal"),
+        LabelRun("3", "sub"),
+        LabelRun("\nDMSO", "normal"),
+    )
+    assert labels["below"] == "68%, 96% ee\nrt"
     for child in arrow.childItems():
         assert child.toPlainText().count("\n") == 1
         assert child.document().firstBlock().layout().lineCount() == 2

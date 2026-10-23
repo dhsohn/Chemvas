@@ -23,8 +23,8 @@ from PyQt6.QtWidgets import (
     QGraphicsItem,
     QGraphicsScene,
     QLabel,
-    QPlainTextEdit,
     QPushButton,
+    QTextEdit,
 )
 
 from chemvas.bootstrap.main_window import build_main_window
@@ -547,23 +547,26 @@ class ArrowLabelDialogTest(unittest.TestCase):
 
     def test_dialog_prefills_and_returns_edited_text(self) -> None:
         def drive_dialog(dialog: QDialog):
-            above = dialog.findChild(QPlainTextEdit, "arrowLabelAboveInput")
-            below = dialog.findChild(QPlainTextEdit, "arrowLabelBelowInput")
-            self.assertEqual(above.toPlainText(), "k_1")
+            above = dialog.findChild(QTextEdit, "arrowLabelAboveInput")
+            below = dialog.findChild(QTextEdit, "arrowLabelBelowInput")
+            self.assertEqual(above.toPlainText(), "k1")
             self.assertEqual(below.toPlainText(), "")
             counter = dialog.findChild(QLabel, "arrowLabelAboveInputLimit")
             self.assertIsNotNone(counter)
-            self.assertIn("3/200", counter.text())
+            self.assertTrue(counter.isHidden())
+            self.assertEqual(below.placeholderText(), "Up to 200 characters")
+            self.assertEqual(above.placeholderText(), "Up to 200 characters")
             above.insertPlainText("x" * 250)
-            self.assertIn("253/200", counter.text())
-            self.assertEqual(len(above.toPlainText()), 253)
+            self.assertIn("too long", counter.text())
+            self.assertFalse(counter.isHidden())
+            self.assertEqual(len(above.toPlainText()), 252)
             self.assertFalse(
                 next(
                     b for b in dialog.findChildren(QPushButton) if b.text() == "OK"
                 ).isEnabled()
             )
-            above.setPlainText("k_1")
-            below.setPlainText("k_-1")
+            above.setPlainText("H2O")
+            below.setPlainText("MeOH")
             next(
                 b for b in dialog.findChildren(QPushButton) if b.text() == "OK"
             ).click()
@@ -575,27 +578,27 @@ class ArrowLabelDialogTest(unittest.TestCase):
             result = prompt_arrow_labels(
                 active_canvas_for_window(self.window), above="k_1", below=""
             )
-        self.assertEqual(result, {"above": "k_1", "below": "k_-1"})
+        self.assertEqual(result, {"above": "H2O", "below": "MeOH"})
 
-    def test_live_previews_show_initial_scope_and_follow_each_input(self) -> None:
+    def test_editors_show_initial_formatting_and_edit_independently(self) -> None:
         def drive_dialog(dialog: QDialog):
-            above = dialog.findChild(QPlainTextEdit, "arrowLabelAboveInput")
-            below = dialog.findChild(QPlainTextEdit, "arrowLabelBelowInput")
-            above_preview = dialog.findChild(QLabel, "arrowLabelAbovePreview")
-            below_preview = dialog.findChild(QLabel, "arrowLabelBelowPreview")
-            self.assertIsNotNone(above_preview)
-            self.assertIsNotNone(below_preview)
-            self.assertEqual(above_preview.textFormat(), Qt.TextFormat.RichText)
-            self.assertEqual(above_preview.text(), "MeI, K<sub>2CO3</sub>")
-            self.assertEqual(below_preview.text(), "k<sub>-1</sub>")
-
-            above.selectAll()
-            QTest.keyClicks(above, "MeI, K_{2}CO_{3}")
-            self.assertEqual(above_preview.text(), "MeI, K<sub>2</sub>CO<sub>3</sub>")
-            self.assertEqual(below_preview.text(), "k<sub>-1</sub>")
+            above = dialog.findChild(QTextEdit, "arrowLabelAboveInput")
+            below = dialog.findChild(QTextEdit, "arrowLabelBelowInput")
+            self.assertEqual(
+                above.label_runs(),
+                (LabelRun("MeI, K", "normal"), LabelRun("2CO3", "sub")),
+            )
+            self.assertEqual(
+                below.label_runs(), (LabelRun("k", "normal"), LabelRun("-1", "sub"))
+            )
+            above.setPlainText("MeI, K2CO3")
+            self.assertEqual(above.label_runs(), (LabelRun("MeI, K2CO3", "normal"),))
+            self.assertEqual(
+                below.label_runs(), (LabelRun("k", "normal"), LabelRun("-1", "sub"))
+            )
             below.clear()
-            self.assertEqual(below_preview.text(), "No label")
-            self.assertEqual(above.toPlainText(), "MeI, K_{2}CO_{3}")
+            self.assertEqual(below.label_runs(), ())
+            self.assertEqual(above.toPlainText(), "MeI, K2CO3")
             self.assertEqual(below.toPlainText(), "")
             return QDialog.DialogCode.Accepted
 
@@ -607,30 +610,44 @@ class ArrowLabelDialogTest(unittest.TestCase):
                 above="MeI, K_2CO_3",
                 below="k_-1",
             )
-        self.assertEqual(result, {"above": "MeI, K_{2}CO_{3}", "below": ""})
+        self.assertEqual(result, {"above": "MeI, K2CO3", "below": ""})
 
-    def test_preview_escapes_markup_and_cancel_keeps_the_document_unchanged(self):
+    def test_typed_syntax_stays_literal_and_unsupported_storage_blocks_ok(self):
+        def drive_dialog(dialog: QDialog):
+            above = dialog.findChild(QTextEdit, "arrowLabelAboveInput")
+            ok = next(b for b in dialog.findChildren(QPushButton) if b.text() == "OK")
+            QTest.keyClicks(above, "H_{2}O")
+            self.assertEqual(above.toPlainText(), "H_{2}O")
+            self.assertEqual(above.label_runs(), (LabelRun("H_{2}O", "normal"),))
+            self.assertFalse(ok.isEnabled())
+            above.setPlainText("H2O")
+            self.assertTrue(ok.isEnabled())
+            return QDialog.DialogCode.Accepted
+
+        with mock.patch(
+            "chemvas.ui.dialogs.arrow_label_dialog.QDialog.exec", new=drive_dialog
+        ):
+            result = prompt_arrow_labels(
+                active_canvas_for_window(self.window), above="", below=""
+            )
+        self.assertEqual(result, {"above": "H2O", "below": ""})
+
+    def test_editor_keeps_html_literal_and_cancel_keeps_the_document_unchanged(self):
         canvas = active_canvas_for_window(self.window)
         before = canvas.services.canvas_document_session_service.snapshot_state()
 
         def drive_dialog(dialog: QDialog):
-            above = dialog.findChild(QPlainTextEdit, "arrowLabelAboveInput")
-            below = dialog.findChild(QPlainTextEdit, "arrowLabelBelowInput")
-            preview = dialog.findChild(QLabel, "arrowLabelAbovePreview")
-            self.assertIsNotNone(preview)
-            above.setPlainText("<b>실온 & 산화</b>^‡")
+            above = dialog.findChild(QTextEdit, "arrowLabelAboveInput")
+            below = dialog.findChild(QTextEdit, "arrowLabelBelowInput")
+            above.setPlainText("<b>실온 & 산화</b>‡")
             self.assertEqual(
-                preview.text(), "&lt;b&gt;실온 &amp; 산화&lt;/b&gt;<sup>‡</sup>"
+                above.label_runs(), (LabelRun("<b>실온 & 산화</b>‡", "normal"),)
             )
-            self.assertEqual(above.toPlainText(), "<b>실온 & 산화</b>^‡")
+            self.assertEqual(above.toPlainText(), "<b>실온 & 산화</b>‡")
             below.setPlainText("x" * (MAX_ARROW_LABEL_CHARS + 1))
             self.assertEqual(len(below.toPlainText()), MAX_ARROW_LABEL_CHARS + 1)
-            self.assertEqual(
-                dialog.findChild(QLabel, "arrowLabelBelowPreview").text(),
-                "x" * (MAX_ARROW_LABEL_CHARS + 1),
-            )
             above.setPlainText("&" * MAX_ARROW_LABEL_CHARS)
-            self.assertEqual(preview.text(), "&amp;" * MAX_ARROW_LABEL_CHARS)
+            self.assertEqual(above.toPlainText(), "&" * MAX_ARROW_LABEL_CHARS)
             dialog.adjustSize()
             available = dialog.screen().availableGeometry()
             self.assertLessEqual(dialog.width(), min(640, available.width()))

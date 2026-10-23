@@ -38,7 +38,10 @@ def test_update_action_availability_sets_history_actions(
     active_canvas_or_none_for_window = mock.Mock(return_value=canvas)
     window = SimpleNamespace(
         ui_references=SimpleNamespace(
-            undo_action=undo_action, redo_action=redo_action, grid_snap_action=None
+            undo_action=undo_action,
+            redo_action=redo_action,
+            grid_snap_action=None,
+            layout_controls=[],
         )
     )
     _patch_ports(
@@ -63,7 +66,10 @@ def test_update_action_availability_handles_missing_canvas_and_actions(
     active_canvas_or_none_for_window = mock.Mock(return_value=None)
     window = SimpleNamespace(
         ui_references=SimpleNamespace(
-            undo_action=None, redo_action=None, grid_snap_action=None
+            undo_action=None,
+            redo_action=None,
+            grid_snap_action=None,
+            layout_controls=[],
         )
     )
     _patch_ports(

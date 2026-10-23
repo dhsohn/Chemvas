@@ -3,8 +3,8 @@ from __future__ import annotations
 from pathlib import Path
 
 CANONICAL_SAVED_DOCUMENT_SUFFIX = ".cdxml"
-DESKTOP_DOCUMENT_SUFFIXES = frozenset((".mol", ".svg", ".cdxml"))
-RECENT_DOCUMENT_SUFFIXES = frozenset((".svg", ".cdxml"))
+DESKTOP_DOCUMENT_SUFFIXES = frozenset((".mol", ".cdxml"))
+RECENT_DOCUMENT_SUFFIXES = frozenset((".cdxml",))
 
 
 def _has_suffix(path: str, suffixes: frozenset[str]) -> bool:

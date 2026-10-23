@@ -377,3 +377,7 @@ ADR을 언제 쓰는지, 작성 규칙과 템플릿은 [ADR 안내](adr/README.m
 
 - [ADR 0060: Editable native CDXML straight annotations](adr/0060-editable-native-arrows-and-local-platform-gates.md)
 - [ADR 0061: Run platform validation locally](adr/0061-local-platform-validation.md)
+
+- [ADR 0062: Publication-only figure export dialog](adr/0062-publication-only-figure-export-dialog.md)
+
+- [ADR 0063: Retire editable SVG](adr/0063-retire-editable-svg.md)

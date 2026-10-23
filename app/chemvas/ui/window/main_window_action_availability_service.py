@@ -14,11 +14,11 @@ if TYPE_CHECKING:
 
 class MainWindowActionAvailabilityService:
     def update_action_availability(self, window: MainWindowLike) -> None:
+        canvas = active_canvas_or_none_for_window(window)
         text_history = text_history_availability_for_window(window)
         if text_history is not None:
             can_undo, can_redo = text_history
         else:
-            canvas = active_canvas_or_none_for_window(window)
             history_service = (
                 history_service_for_window(window) if canvas is not None else None
             )
@@ -35,6 +35,24 @@ class MainWindowActionAvailabilityService:
         ):
             if action is not None:
                 action.setEnabled(enabled)
+
+        controls = window.ui_references.layout_controls
+        if controls:
+            count = (
+                len(canvas.services.scene_transform_controller.alignment_objects())
+                if canvas is not None
+                else 0
+            )
+            for control, minimum, hint in controls:
+                enabled = count >= minimum
+                control.setEnabled(enabled)
+                tooltip = (
+                    hint
+                    if enabled
+                    else f"{hint} — Select at least {minimum} objects ({count} selected). Molecules and groups each count as one."
+                )
+                control.setToolTip(tooltip)
+                control.setStatusTip(tooltip)
 
     def sync_grid_snap_action(self, window: MainWindowLike) -> None:
         """Show the grid state of the canvas the user is actually looking at."""

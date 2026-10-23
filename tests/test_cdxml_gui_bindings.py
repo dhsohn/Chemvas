@@ -8,7 +8,7 @@ import xml.etree.ElementTree as ET
 from unittest.mock import Mock
 
 import pytest
-from PyQt6.QtWidgets import QComboBox, QDialog, QLineEdit, QPushButton
+from PyQt6.QtWidgets import QComboBox, QDialog, QLineEdit
 
 from chemvas.bootstrap.main_window import build_main_window
 from chemvas.domain.document import CANVAS_FILE_VERSION
@@ -148,30 +148,26 @@ def test_cancel_leaves_destination_and_binding_unread(
     dialog.getSaveFileName.assert_not_called()
 
 
-def test_binding_dialog_browse_is_explicit_and_not_reused(saved_window, monkeypatch):
-    window, _, _, sidecar, _ = saved_window
-    calls = 0
+def test_dialog_omits_cdxml_and_recovers_previous_format(saved_window, monkeypatch):
+    window, _, _, _, _ = saved_window
+    window.runtime_state.last_export_format = "cdxml"
 
     def drive(dialog):
-        nonlocal calls
-        field = dialog.findChild(QLineEdit, "exportCdxmlBindingsPath")
         fmt = dialog.findChild(QComboBox, "exportFormatCombo")
-        assert field.text() == ""
-        fmt.setCurrentIndex(fmt.findData("cdxml"))
-        if calls == 0:
-            dialog.findChild(QPushButton, "exportCdxmlBindingsBrowse").click()
-            assert field.text() == str(sidecar)
-        calls += 1
+        assert [fmt.itemData(i) for i in range(fmt.count())] == [
+            "svg",
+            "pdf",
+            "png",
+            "tiff",
+        ]
+        assert fmt.currentData() == "svg"
+        assert dialog.findChild(QLineEdit, "exportCdxmlBindingsPath") is None
         return QDialog.DialogCode.Accepted
 
     monkeypatch.setattr(QDialog, "exec", drive)
-    monkeypatch.setattr(
-        dialogs.QFileDialog, "getOpenFileName", lambda *a: (str(sidecar), "")
-    )
-    assert dialogs.prompt_export_options(window).cdxml_label_bindings_path == str(
-        sidecar
-    )
-    assert dialogs.prompt_export_options(window).cdxml_label_bindings_path is None
+    options = dialogs.prompt_export_options(window)
+    assert options.fmt == "svg"
+    assert options.cdxml_label_bindings_path is None
 
 
 @pytest.mark.parametrize(

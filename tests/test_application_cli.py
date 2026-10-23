@@ -221,7 +221,7 @@ def test_template_command_dispatches_to_headless_runner(
     [
         ("drawing.cdxml", "drawing.cdxml"),
         ("drawing.CDXML", "drawing.CDXML"),
-        ("drawing.svg", "drawing.svg"),
+        ("drawing.svg", None),
         ("structure.mol", "structure.mol"),
         ("structure.MOL", "structure.MOL"),
         ("legacy.json", None),
@@ -248,7 +248,7 @@ def test_startup_document_path_preserves_first_supported_path() -> None:
                 "Fusion",
                 "legacy.json",
                 "my structure.mol",
-                "next.svg",
+                "next.cdxml",
             ]
         )
         == "my structure.mol"
@@ -356,7 +356,7 @@ def test_unknown_command_never_loads_qt_in_a_fresh_process(tmp_path: Path) -> No
 
 
 # Both DPIs run with no document and a spaced MOL path; one more run starts
-# with an SVG, so a start path that drops that suffix fails.
+# with CDXML, so a start path that drops that suffix fails.
 @pytest.mark.parametrize(
     ("document", "logical_dpi"),
     [
@@ -364,7 +364,7 @@ def test_unknown_command_never_loads_qt_in_a_fresh_process(tmp_path: Path) -> No
         (None, 96),
         ("그림 폴더/OH & OMe.MOL", 72),
         ("그림 폴더/OH & OMe.MOL", 96),
-        ("drawing.svg", 96),
+        ("drawing.cdxml", 96),
     ],
 )
 @pytest.mark.parametrize(

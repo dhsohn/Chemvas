@@ -44,9 +44,10 @@ chemvas --version     # package version without starting Qt
   - **Endpoint Snapping**: Arrow and line endpoints snap to nearby endpoints within 12 pixels.
 
 - **Arrow labels**
+  - The shared toolbar applies to the last focused label field. Select text and choose **Subscript** or **Superscript** to apply formatting directly in the input. Click the same button again to return to normal text. **Symbols** inserts Δ, °, ±, ‡ and reaction arrows at the cursor.
   - **Editing**: Double-click an arrow or line to edit conditions above and below.
-  - **Formatting**: Use `_` for subscripts (`MnO_2` → MnO₂) and `^` for superscripts (`\Delta G^\ddagger`). Use braces `{}` for multi-character groups (e.g., `K_{2}CO_{3}`).
-  - **Multiline**: Supports multiline text with real-time preview. Labels automatically inherit document font settings and move with the arrow.
+  - **Formatting**: Existing labels appear with their subscript/superscript formatting. Use the buttons instead of typing markup.
+  - **Multiline**: Supports multiline text with formatting visible directly in the input. Labels automatically inherit document font settings and move with the arrow.
 
 - **Lines**
   - Draw non-bond lines (solid, dashed, wavy, bold) for energy-level profiles or connectors.
@@ -86,6 +87,7 @@ chemvas --version     # package version without starting Qt
   - **Valence Checking**: Toggle **View ▸ Valence Checking** to highlight questionable valences for common main-group elements (H, B, C, N, O, F).
 
 - **Editing & transformation**
+  - **Selection feedback**: The status bar counts layout objects by kind. A molecule or group counts as one; partial molecular selections follow the same units as alignment. Align requires at least two objects, and Distribute at least three. Disabled controls explain the required count.
   - **Selection**: Click individual atoms/bonds or drag a marquee box. Group/ungroup elements using `Ctrl+G` / `Ctrl+Shift+G`.
   - **Transformation**: Flip horizontally (`Ctrl+Shift+H`), flip vertically (`Ctrl+Shift+V`), or rotate (`Alt+Up/Down` for 15°, `Alt+Left/Right` for 1°).
   - **Eraser**: Click or drag over elements to delete. Deleting all bonds connected to an unlabeled carbon cleanly removes the residual atom.
@@ -113,11 +115,17 @@ limits of editing the same file in another application.
 
 ## Figure export
 
+The export dialog previews the chosen scope and background and shows the final
+physical dimensions (plus pixels for raster output). SVG and PDF dimensions
+include whole-point rounding. The preview is fitted to the panel, not actual size.
+Width, height and minimum-font controls are always visible. Empty selections
+and invalid dimensions disable Export; minimum-font checks run when exporting.
+CDXML working documents use Save or Save As rather than Figure Export.
+
 Export publication-grade figures in plain SVG, PDF, PNG, or TIFF formats:
 
 - **Vector Outlines**: Atom and arrow labels are rendered as vector glyph outlines in SVG and PDF, ensuring perfect typography across all platforms without requiring local font installations.
 - **Physical Column Presets**: Match standard publication column widths (e.g., 84 mm for 1-column, 174 mm for 2-column) at explicit target DPIs (up to 600 DPI).
-- **Editable Chemvas SVG**: Check **Editable Chemvas SVG** to embed full Chemvas editing state inside the SVG file, allowing the figure to be reopened and edited in Chemvas anytime.
 - **Lossless TIFF**: Exports with lossless LZW compression and full transparency support.
 
 ## Chemistry I/O

@@ -10,25 +10,13 @@ from chemvas.core.document_io import (
     atomic_write_text,
 )
 from chemvas.core.molfile import export_molfile_block
-from chemvas.core.svg_roundtrip import (
-    CHEMVAS_SVG_SCOPE_SELECTION,
-    CHEMVAS_SVG_SCOPE_SHEET,
-    create_editable_svg_payload,
-    embed_chemvas_document_in_svg,
-)
 from chemvas.domain.document import (
     deserialize_model_state,
-    selection_payload_to_canvas_state,
 )
 from chemvas.domain.transactions import add_recovery_error_note
 from chemvas.ui.annotations.records import (
     clear_shape_records_for,
     clear_ts_bracket_records_for,
-)
-from chemvas.ui.annotations.state import (
-    atom_state_dict_for,
-    bond_state_dict,
-    scene_item_state_for,
 )
 from chemvas.ui.canvas.canvas_calculation_plan_state import set_calculation_plan_for
 from chemvas.ui.canvas.canvas_document_state import (
@@ -36,10 +24,6 @@ from chemvas.ui.canvas.canvas_document_state import (
     restore_document_groups,
     snapshot_canvas_document_state,
     snapshot_canvas_document_state_with_warnings,
-)
-from chemvas.ui.canvas.canvas_format_access import (
-    clipboard_selection_version_for,
-    file_format_version_for,
 )
 from chemvas.ui.canvas.canvas_scene_items_state import DOCUMENT_COLLECTION_STATES
 from chemvas.ui.canvas.canvas_scene_state import scene_if_present_for
@@ -57,12 +41,8 @@ from chemvas.ui.molecule.structure_payload_access import (
     build_selected_mol_export_payload_for,
 )
 from chemvas.ui.scene.note_item_access import new_note_item_for
-from chemvas.ui.scene.scene_clipboard_access import (
-    build_selection_clipboard_payload_for_canvas,
-)
 from chemvas.ui.scene.scene_signal_blocking import blocked_scene_signals
 from chemvas.ui.selection.selection_queries import (
-    selected_ids_for,
     selection_items_for_copy_for,
 )
 from chemvas.ui.transactions.document import runtime_state_object_for
@@ -622,7 +602,6 @@ class CanvasDocumentSessionService:
         background: str = "transparent",
         sizing: str = "bond",
         target_width_mm: float | None = None,
-        editable_svg: bool = False,
         max_height_mm: float | None = None,
         min_font_pt: float | None = None,
         reviewed_cdxml_snapshot: ReviewedCdxmlSnapshot | None = None,
@@ -641,9 +620,6 @@ class CanvasDocumentSessionService:
                 max_height_mm=max_height_mm,
                 min_font_pt=min_font_pt,
             )
-        if fmt.lower() == "svg" and editable_svg and scope != "selection":
-            # The embedded whole-sheet document must not drop an existing plan.
-            require_preserved_calculation_plan_for(self.canvas)
         exporter = FigureExportService(
             self.canvas.render_context,
             groups=self.canvas.runtime_state.group_state.groups,
@@ -663,13 +639,6 @@ class CanvasDocumentSessionService:
             target_width_mm=target_width_mm,
             max_height_mm=max_height_mm,
             min_font_pt=min_font_pt,
-            after_render=(
-                lambda tmp: self._embed_editable_svg_payload(
-                    str(tmp), fmt=fmt, scope=scope
-                )
-            )
-            if fmt.lower() == "svg" and editable_svg
-            else None,
         )
 
     def plan_figure_export(
@@ -688,45 +657,6 @@ class CanvasDocumentSessionService:
             ),
             sizing=sizing,
             target_width_mm=target_width_mm,
-        )
-
-    def _embed_editable_svg_payload(self, path: str, *, fmt: str, scope: str) -> None:
-        if fmt.lower() != "svg":
-            return
-        if scope == "selection":
-            state = self._selection_document_state()
-            svg_scope = CHEMVAS_SVG_SCOPE_SELECTION
-        else:
-            state = self.snapshot_state()
-            svg_scope = CHEMVAS_SVG_SCOPE_SHEET
-        payload = create_editable_svg_payload(
-            state,
-            document_version=file_format_version_for(self.canvas),
-            scope=svg_scope,
-        )
-        embed_chemvas_document_in_svg(path, payload)
-
-    def _selection_document_state(self) -> dict:
-        selected_items = selection_items_for_copy_for(self.canvas)
-        explicit_atom_ids, bond_ids = selected_ids_for(self.canvas)
-        selection_payload = build_selection_clipboard_payload_for_canvas(
-            self.canvas,
-            selected_items=selected_items,
-            explicit_atom_ids=explicit_atom_ids,
-            selected_bond_ids=bond_ids,
-            bonds=self.canvas.model.bonds,
-            atom_state_getter=lambda atom_id: atom_state_dict_for(self.canvas, atom_id),
-            bond_state_getter=bond_state_dict,
-            scene_item_state_getter=lambda item: scene_item_state_for(
-                self.canvas, item
-            ),
-            version=clipboard_selection_version_for(self.canvas),
-        )
-        if selection_payload is None:
-            raise ValueError("Select something to export, or choose Whole canvas.")
-        return selection_payload_to_canvas_state(
-            selection_payload,
-            self.snapshot_state()["settings"],
         )
 
 

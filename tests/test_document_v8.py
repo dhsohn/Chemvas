@@ -7,12 +7,10 @@ import pytest
 
 from chemvas.bootstrap import document_patch as patch_cli
 from chemvas.core.document_io import parse_document, read_snapshot, write_snapshot
-from chemvas.core.svg_roundtrip import extract_chemvas_document_from_svg
 from chemvas.domain.document import CANVAS_FILE_VERSION, build_document_payload
 from chemvas.domain.document.schema import DOCUMENT_SCHEMA_READERS
 from chemvas.features.document_files import read_document as read_cdxml
 from tests.document_file_helpers import encode_payload
-from tests.test_document_compatibility import _svg_bytes
 
 FIXTURE = Path(__file__).parent / "fixtures/document-v8/extended.json"
 
@@ -48,9 +46,6 @@ def test_v8_frozen_roundtrip_and_writer_table(tmp_path):
         **original["state"],
         "last_smiles_input": None,
     }
-    svg = tmp_path / "editable.svg"
-    svg.write_bytes(_svg_bytes(original))
-    assert extract_chemvas_document_from_svg(svg).payload == original
 
 
 @pytest.mark.parametrize(

@@ -1077,7 +1077,7 @@ def test_gui_format_entry():
     )
 
     fmt_keys = {f[1] for f in EXPORT_FORMATS}
-    assert "cdxml" in fmt_keys
+    assert fmt_keys == {"svg", "pdf", "png", "tiff"}
 
     assert suffix_for_format("cdxml") == ".cdxml"
     assert "*.cdxml" in file_filter_for_format("cdxml")
@@ -1855,7 +1855,7 @@ def test_attached_mark_text_box_margin_does_not_count_as_ink_contact():
         assert b"chemvasMark" in serialize_cdxml(context, items, plan)
 
 
-# ── Service: max_height_mm budget and overwrite+after_render ─────────
+# ── Service: max_height_mm budget and overwrite ─────────
 
 
 def test_service_max_height_mm_budget(tmp_path):
@@ -1877,14 +1877,10 @@ def test_service_max_height_mm_budget(tmp_path):
     assert not dest.exists()
 
 
-def test_service_overwrite_with_after_render(tmp_path):
+def test_service_overwrites_existing_export(tmp_path):
     state = _simple_state()
     dest = tmp_path / "export.cdxml"
     dest.write_bytes(b"old content")
-    rendered_sizes: list[int] = []
-
-    def after_render(tmp_path_arg):
-        rendered_sizes.append(tmp_path_arg.stat().st_size)
 
     with offscreen_document_scene(state, command="test-cdxml") as context:
         service = FigureExportService(context)
@@ -1894,12 +1890,10 @@ def test_service_overwrite_with_after_render(tmp_path):
             scope="sheet",
             sizing="custom",
             target_width_mm=170.0,
-            after_render=after_render,
         )
     assert dest.exists()
     assert dest.read_bytes() != b"old content"
-    assert len(rendered_sizes) == 1
-    assert rendered_sizes[0] > 0
+    assert ET.fromstring(dest.read_bytes()).tag == "CDXML"
 
 
 # ── Source state unchanged: bytes, model, scene ──────────────────────

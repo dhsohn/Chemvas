@@ -338,22 +338,24 @@ def _build_edit_menu(
         )
     align_menu = edit_menu.addMenu("Align")
     for text, mode in ALIGN_MENU_SPECS:
-        _add_action(
+        action = _add_action(
             align_menu,
             window,
             text,
             status_tip=f"Align the selected structures and objects by their {text.lower()}",
             triggered=lambda mode=mode: align_selection_for_window(window, mode),
         )
+        window.ui_references.layout_controls.append((action, 2, action.statusTip()))
     distribute_menu = edit_menu.addMenu("Distribute")
     for text, axis in DISTRIBUTE_MENU_SPECS:
-        _add_action(
+        action = _add_action(
             distribute_menu,
             window,
             text,
             status_tip=f"Spread the selected structures and objects {text.lower()} with equal gaps",
             triggered=lambda axis=axis: distribute_selection_for_window(window, axis),
         )
+        window.ui_references.layout_controls.append((action, 3, action.statusTip()))
     return undo_action, redo_action
 
 

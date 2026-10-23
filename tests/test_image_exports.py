@@ -19,7 +19,6 @@ from chemvas.bootstrap.document_cli_shared import (
     graphics_record_count,
     offscreen_canvas,
 )
-from chemvas.core import svg_roundtrip
 from chemvas.domain.document import (
     CANVAS_FILE_VERSION,
     AnnotationCollection,
@@ -253,21 +252,13 @@ def test_fully_transparent_pixels_keep_frame_at_positive_object_opacity():
     assert base64.b64decode(item.image_state()["data_base64"]) == data
 
 
-def test_zero_opacity_image_survives_native_and_mixed_editable_svg(tmp_path):
+def test_zero_opacity_image_survives_native_document(tmp_path):
     data = _source_bytes(image_format="JPEG")
     state = _state(data, x=200_000, y=200_000, opacity=0)
     state["images"].append(image_state_from_bytes(_source_bytes(), x=50, y=70))
     native = tmp_path / "hidden-image.cdxml"
     write_document(native, state, CANVAS_FILE_VERSION)
     assert read_document(native).state["images"] == state["images"]
-
-    with offscreen_canvas(state, command="image-opacity-test") as (_canvas, service):
-        path = tmp_path / "hidden-image.svg"
-        service.export_figure(str(path), fmt="svg", scope="sheet", editable_svg=True)
-
-    restored = svg_roundtrip.extract_chemvas_document_from_svg(path)
-    assert restored.state["images"] == state["images"]
-    assert base64.b64decode(restored.state["images"][0]["data_base64"]) == data
 
 
 def _pdf_image_streams(data):
@@ -358,22 +349,7 @@ def test_sixteen_bit_png_source_survives_native_and_svg_export(tmp_path):
     assert b"/Width 64" in header and b"/Height 48" in header
 
 
-@pytest.mark.parametrize("image_format", ["PNG", "JPEG"])
-def test_native_editable_svg_roundtrip_keeps_original_encoded_bytes(
-    tmp_path, image_format
-):
-    data = _source_bytes(image_format=image_format)
-    state = _state(data, x=50, y=70, width=128, height=80, lock_aspect=False)
-    with offscreen_canvas(state, command="image-export-test") as (_canvas, service):
-        path = tmp_path / "editable.svg"
-        service.export_figure(str(path), fmt="svg", scope="sheet", editable_svg=True)
-
-    restored = svg_roundtrip.extract_chemvas_document_from_svg(path)
-    assert restored.state["images"] == state["images"]
-    assert base64.b64decode(restored.state["images"][0]["data_base64"]) == data
-
-
-def test_cli_render_and_editable_svg_support_image_larger_than_old_envelopes(tmp_path):
+def test_cli_render_supports_image_larger_than_old_envelopes(tmp_path):
     data = _source_bytes(size=(1500, 1500))
     state = _state(data, x=50, y=70, width=200, height=200)
     path = tmp_path / "source.cdxml"
@@ -387,15 +363,7 @@ def test_cli_render_and_editable_svg_support_image_larger_than_old_envelopes(tmp
     )
 
     assert report["graphics_records"] == 1
-    payload = svg_roundtrip.create_editable_svg_payload(
-        state, document_version=CANVAS_FILE_VERSION, scope="sheet"
-    )
-    svg_roundtrip.embed_chemvas_document_in_svg(output, payload)
-    root = ET.parse(output).getroot()
-    source = root.find(".//{https://chemvas.app/ns/svg-source/1}source")
-    assert source is not None and len(source.text) > 8 * 1024 * 1024
-    restored = svg_roundtrip.extract_chemvas_document_from_svg(output)
-    assert base64.b64decode(restored.state["images"][0]["data_base64"]) == data
+    assert _svg_image(output.read_bytes()).size() == QImage.fromData(data).size()
 
 
 def test_image_full_rectangle_is_counted_and_checked_against_sheet():
@@ -434,31 +402,11 @@ def test_graph_patch_retains_embedded_image_bytes_and_geometry():
     assert result.payload["state"]["images"] == state["images"]
 
 
-def test_document_and_svg_envelope_limits_fail_before_parsing(tmp_path, monkeypatch):
+def test_document_envelope_limit_fails_before_parsing(tmp_path):
     path = tmp_path / "oversized.cdxml"
     path.write_bytes(b" " * 65)
     with pytest.raises(ValueError, match="64-byte limit"):
         read_exact_document(path, max_bytes=64)
-    monkeypatch.setattr(svg_roundtrip, "_MAX_SVG_FILE_BYTES", 64)
-    svg = tmp_path / "oversized.svg"
-    svg.write_bytes(b" " * 65)
-    with pytest.raises(ValueError, match="Invalid editable Chemvas metadata"):
-        svg_roundtrip.extract_chemvas_document_from_svg(svg)
-
-
-def test_editable_svg_writer_rejects_unreadable_metadata_without_overwrite(
-    tmp_path, monkeypatch
-):
-    path = tmp_path / "figure.svg"
-    original = b'<svg xmlns="http://www.w3.org/2000/svg"/>'
-    path.write_bytes(original)
-    payload = svg_roundtrip.create_editable_svg_payload(
-        _state(_source_bytes()), document_version=CANVAS_FILE_VERSION, scope="sheet"
-    )
-    monkeypatch.setattr(svg_roundtrip, "_MAX_SVG_PAYLOAD_BYTES", 64)
-    with pytest.raises(ValueError, match="metadata exceeds"):
-        svg_roundtrip.embed_chemvas_document_in_svg(path, payload)
-    assert path.read_bytes() == original
 
 
 def test_native_writer_rejects_unreadable_document_without_overwrite(

@@ -14,7 +14,6 @@ from PyQt6.QtWidgets import QApplication
 
 from chemvas.bootstrap.main_window import build_main_window
 from chemvas.core.molfile import parse_molfile, write_molfile
-from chemvas.core.svg_roundtrip import extract_chemvas_document_from_svg
 from chemvas.domain.document import (
     CANVAS_FILE_VERSION,
     Atom,
@@ -155,7 +154,7 @@ def _lines(canvas):
     ]
 
 
-def test_native_editable_svg_clipboard_and_history_preserve_unknown(canvas, tmp_path):
+def test_native_clipboard_and_history_preserve_unknown(canvas, tmp_path):
     documents = canvas.services.canvas_document_session_service
     documents.apply_state(compose_document_state(_composition()))
     before = documents.snapshot_state()
@@ -167,13 +166,6 @@ def test_native_editable_svg_clipboard_and_history_preserve_unknown(canvas, tmp_
     assert restored["model"]["bonds"][0]["style"] == "double_either"
     documents.apply_state(restored)
     assert documents.snapshot_state() == before
-    assert _lines(canvas) == expected_lines
-
-    svg = tmp_path / "editable.svg"
-    documents.export_figure(str(svg), fmt="svg", editable_svg=True)
-    svg_state = extract_chemvas_document_from_svg(svg).state
-    assert svg_state == json.loads(json.dumps(before))
-    documents.apply_state(svg_state)
     assert _lines(canvas) == expected_lines
 
     canvas.services.selection.select_all()

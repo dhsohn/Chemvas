@@ -398,3 +398,7 @@ process locking and envelope storage ([ADR 0032](adr/0032-browser-clipboard-and-
 
 - [ADR 0060: Editable native CDXML straight annotations](adr/0060-editable-native-arrows-and-local-platform-gates.md)
 - [ADR 0061: Run platform validation locally](adr/0061-local-platform-validation.md)
+
+- [ADR 0062: Publication-only figure export dialog](adr/0062-publication-only-figure-export-dialog.md)
+
+- [ADR 0063: Retire editable SVG](adr/0063-retire-editable-svg.md)
