@@ -55,7 +55,6 @@ chemvas
 | Size | Fit 2-column (174 mm) | 일반 논문 2단 너비(174 mm)에 맞춤 |
 | Scope | Whole canvas | 캔버스 전체 영역 내보내기 |
 | Background | White | 흰색 불투명 배경 |
-| Editable Chemvas SVG | 체크 해제 | 표준 벡터 그래픽 출력 |
 
 `first-scheme.svg`로 저장합니다. 라벨 텍스트는 글꼴 깨짐이 없도록 벡터 아웃라인으로 변환됩니다. 나중에 다시 편집할 수 있도록 `.cdxml` 원본 파일을 보관하세요.
 
@@ -75,4 +74,4 @@ chemvas render-document first-scheme.cdxml --output first-scheme-rendered.svg
 - `check-layout`: 요소 간의 겹침이나 화면 경계 초과 경고를 검사합니다.
 - `render-document`: GUI 창을 띄우지 않고 명령줄에서 바로 SVG/PDF 그림을 생성합니다.
 
-자세한 CLI 사용법은 [에이전트 CLI 안내](AGENT_CLI.ko.md)를 참고하세요.
+자세한 CLI 사용법은 [CLI 안내](AGENT_CLI.ko.md)를 참고하세요.

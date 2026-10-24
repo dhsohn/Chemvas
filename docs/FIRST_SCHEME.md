@@ -2,7 +2,7 @@
 
 [한국어](FIRST_SCHEME.ko.md) · [Back to the introduction](../README.md)
 
-Learn how to draw a reaction scheme, save the editable `.cdxml` document, and export a publication-ready vector figure. This tutorial walks through creating a simple benzyl alcohol oxidation scheme.
+Draw a benzyl alcohol oxidation scheme, save its editable `.cdxml` source, and export a vector figure for your manuscript.
 
 ![The completed scheme, exported from Chemvas](../examples/first-scheme.png)
 
@@ -55,9 +55,8 @@ Choose **File ▸ Export Figure…**:
 | Size | Fit 2-column (174 mm) | Fits standard 2-column journal layouts |
 | Scope | Whole canvas | Exports the full scheme |
 | Background | White | Opaque white background |
-| Editable Chemvas SVG | Unchecked | Standard vector graphics |
 
-Click **Export** and save as `first-scheme.svg`. Arrow and atom labels are exported as vector outlines to preserve formatting across any viewer. Keep the `.cdxml` file for future editing.
+Click **Export** and save as `first-scheme.svg`. Arrow and atom labels are exported as vector outlines to preserve the drawn letter shapes. Keep the `.cdxml` file for future editing.
 
 You can also download the pre-exported [SVG](https://raw.githubusercontent.com/dhsohn/Chemvas/main/examples/first-scheme.svg) and [300 DPI PNG](https://raw.githubusercontent.com/dhsohn/Chemvas/main/examples/first-scheme.png).
 
@@ -72,7 +71,7 @@ chemvas render-document first-scheme.cdxml --output first-scheme-rendered.svg
 ```
 
 - `inspect-document`: Summarizes atoms, bonds, labels, and document metadata as JSON.
-- `check-layout`: Validates element boundaries and reports warnings (overlaps, out-of-bounds text).
+- `check-layout`: Reports selected label collisions and content outside the sheet.
 - `render-document`: Renders the document directly to SVG or PDF without launching the graphical desktop app.
 
-For further CLI options, see the [Agent CLI guide](AGENT_CLI.md).
+For further CLI options, see the [CLI guide](AGENT_CLI.md).
