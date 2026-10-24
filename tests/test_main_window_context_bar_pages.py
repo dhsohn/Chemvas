@@ -313,6 +313,12 @@ class MainWindowContextBarPagesTest(unittest.TestCase):
     def test_select_page_wires_flip_rotate_align_and_distribute(self) -> None:
         pages = self.builder.build(self.window)
         page = pages.pages["select"]
+        rotation_tool = page.findChild(QToolButton, "toolButton_perspective")
+        self.assertIs(
+            rotation_tool.defaultAction(),
+            self.window.ui_references.tool_actions["perspective"],
+        )
+        self.assertFalse(rotation_tool.icon().isNull())
 
         page.findChild(QToolButton, "flip_horizontal_button").click()
         page.findChild(QToolButton, "flip_vertical_button").click()

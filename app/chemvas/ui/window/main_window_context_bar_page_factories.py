@@ -167,6 +167,11 @@ def build_select_page(
     icons = window.ui_references.require_icon_factory()
     page, layout = new_context_page()
     layout.addWidget(hint_label(CONTEXT_PAGE_CAPTIONS["select"]))
+    rotation_action = window.ui_references.tool_actions["perspective"]
+    rotation_button = icon_button(rotation_action.icon(), rotation_action.toolTip())
+    rotation_button.setObjectName("toolButton_perspective")
+    rotation_button.setDefaultAction(rotation_action)
+    layout.addWidget(rotation_button)
     for object_name, icon_name, label, shortcut, horizontal in FLIP_ACTION_SPECS:
         icon = getattr(icons, icon_name)()
         tooltip = f"{label} ({QKeySequence(shortcut).toString(QKeySequence.SequenceFormat.NativeText)})"

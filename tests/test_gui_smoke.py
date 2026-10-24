@@ -529,22 +529,8 @@ class GuiShortcutSmokeTest(unittest.TestCase):
             "select",
         )
 
-    def test_eraser_toolbar_button_activates_delete_tool(self) -> None:
-        button = self.window.findChild(QToolButton, "toolButton_delete")
-        self.assertIsNotNone(button)
-        assert button is not None
-
-        QTest.mouseClick(
-            button,
-            Qt.MouseButton.LeftButton,
-            Qt.KeyboardModifier.NoModifier,
-        )
-        self.app.processEvents()
-
-        self.assertEqual(
-            active_canvas_for_window(self.window).services.tool_controller.active.name,
-            "delete",
-        )
+    def test_toolbar_omits_eraser_button(self) -> None:
+        self.assertIsNone(self.window.findChild(QToolButton, "toolButton_delete"))
 
     def test_new_canvas_menu_action_opens_a_separate_window(self) -> None:
         from chemvas.shell.window_registry import open_windows

@@ -7,7 +7,7 @@ from tests.runtime_services import canvas_runtime_services
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from PyQt6.QtCore import QSize
+from PyQt6.QtCore import QSize, Qt
 from PyQt6.QtGui import QAction, QIcon
 from PyQt6.QtWidgets import (
     QApplication,
@@ -124,23 +124,11 @@ class MainWindowPanelToolbarTest(unittest.TestCase):
         self.app.processEvents()
 
     def _toolbar_widgets(self, toolbar):
-        names = []
-        for action in toolbar.actions():
-            if action.isSeparator():
-                continue
-            widget = (
-                action.defaultWidget()
-                if hasattr(action, "defaultWidget")
-                else toolbar.widgetForAction(action)
-            )
-            if widget is None:
-                continue
-            self.assertNotEqual(widget.objectName(), "toolbarGroupGap")
-            if isinstance(widget, QLineEdit):
-                names.append(widget.placeholderText())
-            elif isinstance(widget, QToolButton):
-                names.append(widget.objectName() or widget.toolTip())
-        return names
+        return [
+            button.objectName()
+            for button in toolbar.findChildren(QToolButton)
+            if button.objectName().startswith("toolButton_")
+        ]
 
     def test_build_panel_toolbar_wires_actions_inputs_and_buttons(self) -> None:
         window = _HarnessWindow()
@@ -173,12 +161,11 @@ class MainWindowPanelToolbarTest(unittest.TestCase):
                 assembly.panel_bar.findChild(QToolButton, removed_name),
                 removed_name,
             )
-        self.assertEqual(sum(a.isSeparator() for a in assembly.panel_bar.actions()), 4)
+        self.assertEqual(sum(a.isSeparator() for a in assembly.panel_bar.actions()), 0)
         self.assertEqual(
             self._toolbar_widgets(assembly.panel_bar),
             [
                 "toolButton_select",
-                "toolButton_perspective",
                 "toolButton_bond",
                 "toolButton_benzene",
                 "toolButton_text",
@@ -191,12 +178,10 @@ class MainWindowPanelToolbarTest(unittest.TestCase):
                 "toolButton_shape",
                 "toolButton_color",
                 "toolButton_ring_fill",
-                "toolButton_delete",
             ],
         )
         primary_button_names = (
             "toolButton_select",
-            "toolButton_perspective",
             "toolButton_text",
             "toolButton_bond",
             "toolButton_benzene",
@@ -209,10 +194,14 @@ class MainWindowPanelToolbarTest(unittest.TestCase):
         ]
         self.assertEqual(
             [button.text() for button in primary_buttons],
-            [""] * len(primary_button_names),
+            ["select", "text", "bond", "benzene", "arrow", "ts_bracket"],
         )
         self.assertTrue(
-            all(button.width() == button.height() for button in primary_buttons)
+            all(
+                button.toolButtonStyle() == Qt.ToolButtonStyle.ToolButtonTextUnderIcon
+                and button.height() == 42
+                for button in primary_buttons
+            )
         )
         note_button = assembly.panel_bar.findChild(QToolButton, "toolButton_note")
         self.assertIsNotNone(note_button.menu())

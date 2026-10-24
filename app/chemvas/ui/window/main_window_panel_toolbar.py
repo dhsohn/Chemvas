@@ -1,36 +1,44 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, override
 
 from PyQt6.QtCore import QSize, Qt
 from PyQt6.QtGui import QAction, QActionGroup, QFont
 from PyQt6.QtWidgets import (
     QMenu,
+    QSizePolicy,
     QToolBar,
     QToolButton,
+    QWidget,
 )
 
 from chemvas.shell.theme import (
-    TOOLBAR_BUTTON_SIZE,
     TOOLBAR_BUTTON_STYLE,
     TOOLBAR_ICON_SIZE,
-    TOOLBAR_THICKNESS,
 )
 from chemvas.shell.toolbar_buttons import CornerMenuToolButton
 from chemvas.ui.window.main_window_config import (
     TEXT_FONT_FAMILY_CHOICES,
-    TOOLBAR_PRIMARY_TOOL_GROUP,
-    TOOLBAR_TOOL_GROUPS,
+    TOOLBAR_TOOL_ACTION_ORDER,
 )
 
 if TYPE_CHECKING:
     from collections.abc import Callable
 
+    from PyQt6.QtGui import QResizeEvent
+
     from chemvas.ui.window.main_window_like import MainWindowLike
 
-_NOTE_TOOL_MENU_BUTTON_STYLE = (
+_LABELED_TOOLBAR_STYLE = (
     TOOLBAR_BUTTON_STYLE
+    + "QToolBar#topRoleToolbar { spacing: 2px; padding: 1px 4px; }"
+    + "QToolBar::separator { margin: 7px 3px; }"
+    + "QToolButton { padding: 0px 2px; font-size: 11px; font-weight: 400; }"
+)
+
+_NOTE_TOOL_MENU_BUTTON_STYLE = (
+    _LABELED_TOOLBAR_STYLE
     + "QToolButton::menu-indicator { image: none; width: 0px; height: 0px; }"
 )
 
@@ -54,24 +62,43 @@ class MainWindowPanelToolbarCallbacks:
     open_recent_path: Callable[[MainWindowLike, str], Any]
 
 
-def _normalize_tool_action_button(
+class _ToolButtonRow(QWidget):
+    def __init__(self, buttons: list[QToolButton]) -> None:
+        super().__init__()
+        self._buttons = buttons
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        self.setMinimumWidth(len(buttons) * 26 - 2)
+        self.setFixedHeight(42)
+        for button in buttons:
+            button.setParent(self)
+
+    @override
+    def sizeHint(self) -> QSize:
+        return QSize(self.minimumWidth(), 42)
+
+    @override
+    def resizeEvent(self, event: QResizeEvent | None) -> None:
+        super().resizeEvent(event)
+        count = len(self._buttons)
+        width = min(80, (self.width() - 2 * (count - 1)) // count)
+        for index, button in enumerate(self._buttons):
+            button.setGeometry(index * (width + 2), 0, width, 42)
+
+
+def _build_tool_action_button(
     panel_bar: QToolBar,
     action: QAction,
     action_key: str,
-) -> None:
-    widget = panel_bar.widgetForAction(action)
-    if not isinstance(widget, QToolButton):
-        return
-    widget.setObjectName(f"toolButton_{action_key}")
-    widget.setIcon(action.icon())
-    widget.setIconSize(panel_bar.iconSize())
-    widget.setAutoRaise(True)
-    widget.setFocusPolicy(Qt.FocusPolicy.NoFocus)
-    widget.setFixedHeight(TOOLBAR_BUTTON_SIZE)
-    widget.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonIconOnly)
-    widget.setText("")
-    widget.setProperty("iconOnly", True)
-    widget.setFixedWidth(TOOLBAR_BUTTON_SIZE)
+) -> QToolButton:
+    button = QToolButton()
+    button.setDefaultAction(action)
+    button.setObjectName(f"toolButton_{action_key}")
+    button.setIconSize(panel_bar.iconSize())
+    button.setAutoRaise(True)
+    button.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+    button.setFixedHeight(42)
+    button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextUnderIcon)
+    return button
 
 
 def _build_note_font_menu_button(
@@ -99,15 +126,13 @@ def _build_note_font_menu_button(
     button.setObjectName("toolButton_note")
     button.setIcon(action.icon())
     button.setIconSize(panel_bar.iconSize())
-    button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonIconOnly)
-    button.setText("")
+    button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextUnderIcon)
     button.setToolTip(action.toolTip())
     button.setStatusTip(action.statusTip() or action.toolTip())
     button.setAutoRaise(True)
     button.setFocusPolicy(Qt.FocusPolicy.NoFocus)
     button.setStyleSheet(_NOTE_TOOL_MENU_BUTTON_STYLE)
-    button.setFixedSize(TOOLBAR_BUTTON_SIZE, TOOLBAR_BUTTON_SIZE)
-    button.setProperty("primaryTool", True)
+    button.setFixedHeight(42)
     return button
 
 
@@ -120,31 +145,22 @@ def build_panel_toolbar(
     panel_bar = QToolBar("Panels", window)
     panel_bar.setObjectName("topRoleToolbar")
     panel_bar.setMovable(False)
-    panel_bar.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonIconOnly)
+    panel_bar.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextUnderIcon)
     panel_bar.setIconSize(QSize(TOOLBAR_ICON_SIZE, TOOLBAR_ICON_SIZE))
-    panel_bar.setStyleSheet(TOOLBAR_BUTTON_STYLE)
-    panel_bar.setFixedHeight(TOOLBAR_THICKNESS)
+    panel_bar.setStyleSheet(_LABELED_TOOLBAR_STYLE)
+    panel_bar.setMinimumHeight(48)
     tool_group = QActionGroup(window)
     tool_group.setExclusive(True)
     tool_actions = build_tool_actions(window, tool_group)
     tool_actions["bond"].setChecked(True)
 
-    def add_tool(action_key: str) -> None:
-        action = tool_actions[action_key]
-        if action_key == "note":
-            panel_bar.addWidget(
-                _build_note_font_menu_button(panel_bar, window, action, callbacks)
-            )
-            return
-        panel_bar.addAction(action)
-        _normalize_tool_action_button(panel_bar, action, action_key)
-
-    for action_key in TOOLBAR_PRIMARY_TOOL_GROUP:
-        add_tool(action_key)
-    for action_keys in TOOLBAR_TOOL_GROUPS[1:]:
-        panel_bar.addSeparator()
-        for action_key in action_keys:
-            add_tool(action_key)
+    buttons = [
+        _build_note_font_menu_button(panel_bar, window, tool_actions[key], callbacks)
+        if key == "note"
+        else _build_tool_action_button(panel_bar, tool_actions[key], key)
+        for key in TOOLBAR_TOOL_ACTION_ORDER
+    ]
+    panel_bar.addWidget(_ToolButtonRow(buttons))
 
     return MainWindowPanelToolbarAssembly(
         panel_bar=panel_bar,

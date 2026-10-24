@@ -50,6 +50,10 @@ def drawing(app):
 
 def _tool(window, name):
     action = window.ui_references.tool_action_for_key(name)
+    if name == "delete":
+        action.trigger()
+        QApplication.processEvents()
+        return
     button = next(
         item
         for item in window.findChildren(QToolButton)
