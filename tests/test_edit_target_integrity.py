@@ -20,6 +20,10 @@ from tests.gui_workflow_support import drawing as drawing
 
 def _tool(window, name):
     action = window.ui_references.tool_action_for_key(name)
+    if name == "delete":
+        action.trigger()
+        QApplication.processEvents()
+        return
     button = next(
         button
         for button in window.findChildren(QToolButton)

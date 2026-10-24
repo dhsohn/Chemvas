@@ -5,10 +5,11 @@ from unittest import mock
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from PyQt6.QtCore import QSize
+from PyQt6.QtCore import QPoint, QSize
 from PyQt6.QtGui import QIcon
 from PyQt6.QtWidgets import (
     QApplication,
+    QLabel,
     QMainWindow,
     QToolBar,
     QToolButton,
@@ -108,7 +109,7 @@ class MainWindowToolbarActionsTest(unittest.TestCase):
                 )
 
     def test_toolbar_rows_respect_minimum_toolbar_thickness(self) -> None:
-        self.window.resize(900, 560)
+        self.window.resize(1320, 560)
         self.window.show()
         self.app.processEvents()
 
@@ -126,7 +127,7 @@ class MainWindowToolbarActionsTest(unittest.TestCase):
         self.assertCountEqual(
             self.window.findChildren(QToolBar), [panel_bar, options_bar]
         )
-        self.assertEqual(panel_bar.height(), TOOLBAR_THICKNESS)
+        self.assertLessEqual(panel_bar.height(), 50)
         # Options must be allowed to grow for Qt's overflow extension rows.
         self.assertGreaterEqual(options_bar.height(), TOOLBAR_THICKNESS)
         self.assertGreater(options_bar.maximumHeight(), options_bar.height())
@@ -144,9 +145,17 @@ class MainWindowToolbarActionsTest(unittest.TestCase):
             "Tools",
             [toolbar.windowTitle() for toolbar in self.window.findChildren(QToolBar)],
         )
-        self.assertIn("Color", [action.text() for action in panel_bar.actions()])
-        self.assertIn("Ring Fill", [action.text() for action in panel_bar.actions()])
-        self.assertNotIn("Template", [action.text() for action in panel_bar.actions()])
+        self.assertIn(
+            "Color", [button.text() for button in panel_bar.findChildren(QToolButton)]
+        )
+        self.assertIn(
+            "Ring Fill",
+            [button.text() for button in panel_bar.findChildren(QToolButton)],
+        )
+        self.assertNotIn(
+            "Template",
+            [button.text() for button in panel_bar.findChildren(QToolButton)],
+        )
         self.assertNotIn(
             "Bond Length",
             [button.toolTip() for button in panel_bar.findChildren(QToolButton)],
@@ -194,7 +203,7 @@ class MainWindowToolbarActionsTest(unittest.TestCase):
         )
         self.assertIsNotNone(ring_fill_button)
 
-    def test_top_toolbar_renders_select_and_perspective_button_glyphs(self) -> None:
+    def test_top_toolbar_renders_select_button_glyph(self) -> None:
         self.window.resize(800, 420)
         self.window.show()
         self.app.processEvents()
@@ -211,51 +220,59 @@ class MainWindowToolbarActionsTest(unittest.TestCase):
         # The visible toolbar uses 18px Lucide-style line icons, so the
         # move/select glyph has fewer dark pixels than the previous label
         # button while the native-size guard above still catches blank icons.
-        for text, min_dark_pixels in (("Select", 24), ("Perspective", 20)):
+        for text, min_dark_pixels in (("Select", 24),):
             with self.subTest(text=text):
-                action = next(
-                    action for action in panel_bar.actions() if action.text() == text
+                widget = next(
+                    button
+                    for button in panel_bar.findChildren(QToolButton)
+                    if button.text() == text
                 )
-                widget = panel_bar.widgetForAction(action)
                 self.assertIsNotNone(widget)
                 self.assertTrue(widget.isVisible())
                 self.assertFalse(widget.icon().isNull())
                 self.assertEqual(widget.iconSize(), panel_bar.iconSize())
-                rect = widget.geometry().intersected(image.rect())
+                rect = (
+                    widget.rect()
+                    .translated(widget.mapTo(panel_bar, QPoint()))
+                    .intersected(image.rect())
+                )
                 self.assertGreaterEqual(
                     self._dark_pixel_count_in_rect(image, rect), min_dark_pixels
                 )
 
-    def test_top_toolbar_renders_select_and_perspective_glyphs_when_checked(
+    def test_rotation_tool_lives_in_select_options_and_retains_checked_state(
         self,
     ) -> None:
         self.window.resize(900, 560)
         self.window.show()
         self.app.processEvents()
-        panel_bar = next(
-            toolbar
-            for toolbar in self.window.findChildren(QToolBar)
-            if toolbar.windowTitle() == "Panels"
+        panel_bar = self.window.findChild(QToolBar, "topRoleToolbar")
+        options_bar = self.window.findChild(QToolBar, "contextOptionsBar")
+        self.assertIsNone(panel_bar.findChild(QToolButton, "toolButton_perspective"))
+        rotation_button = options_bar.findChild(QToolButton, "toolButton_perspective")
+        for key in ("select", "perspective", "select"):
+            self.window.ui_references.tool_actions[key].trigger()
+            self.app.processEvents()
+            self.assertTrue(rotation_button.isVisible())
+            self.assertEqual(rotation_button.isChecked(), key == "perspective")
+            self.assertEqual(
+                [
+                    label.text()
+                    for label in options_bar.findChildren(QLabel, "toolbarSectionLabel")
+                    if label.isVisible()
+                ],
+                ["Select"],
+            )
+        rotation_button.click()
+        self.app.processEvents()
+        self.assertEqual(
+            active_canvas_for_window(self.window).services.tool_controller.active.name,
+            "perspective",
         )
+        self.assertTrue(rotation_button.isChecked())
 
-        for action_key, min_dark_pixels in (("select", 24), ("perspective", 20)):
-            with self.subTest(action_key=action_key):
-                action = self.window.ui_references.tool_actions[action_key]
-                action.trigger()
-                self.app.processEvents()
-                image = panel_bar.grab().toImage()
-                widget = panel_bar.widgetForAction(action)
-                self.assertIsNotNone(widget)
-                self.assertTrue(widget.isVisible())
-                self.assertFalse(widget.icon().isNull())
-                self.assertEqual(widget.iconSize(), panel_bar.iconSize())
-                rect = widget.geometry().intersected(image.rect())
-                self.assertGreaterEqual(
-                    self._dark_pixel_count_in_rect(image, rect), min_dark_pixels
-                )
-
-    def test_top_toolbar_keeps_all_tool_actions_visible_in_compact_window(self) -> None:
-        self.window.resize(800, 420)
+    def test_top_toolbar_keeps_all_tool_actions_visible_in_wide_window(self) -> None:
+        self.window.resize(1320, 560)
         self.window.show()
         self.app.processEvents()
         panel_bar = next(
@@ -264,27 +281,37 @@ class MainWindowToolbarActionsTest(unittest.TestCase):
             if toolbar.windowTitle() == "Panels"
         )
 
-        tool_action_texts = {
-            "Select",
-            "Bond",
-            "Atom",
-            "Mark",
-            "Ring",
-            "Color",
-            "Ring Fill",
-            "Arrow",
-            "Brackets",
-            "Perspective",
-        }
-        for action in panel_bar.actions():
-            if action.isSeparator():
-                continue
-            if action.text() not in tool_action_texts:
-                continue
-            with self.subTest(action=action.text()):
-                widget = panel_bar.widgetForAction(action)
-                self.assertIsNotNone(widget)
-                self.assertTrue(widget.isVisible())
+        buttons = [
+            button
+            for button in panel_bar.findChildren(QToolButton)
+            if button.objectName().startswith("toolButton_")
+        ]
+        self.assertEqual(len(buttons), 13)
+        self.assertTrue(all(button.isVisible() for button in buttons))
+
+    def test_toolbar_stays_in_one_equal_width_row_without_hiding_tools(self) -> None:
+        self.window.show()
+        bar = self.window.findChild(QToolBar, "topRoleToolbar")
+        for width in (800, 520, 1320):
+            self.window.resize(width, 560)
+            for _ in range(3):
+                self.app.processEvents()
+            extension = bar.findChild(QToolButton, "qt_toolbar_ext_button")
+            self.assertFalse(extension.isVisible())
+            buttons = [
+                button
+                for button in bar.findChildren(QToolButton)
+                if button.objectName().startswith("toolButton_")
+            ]
+            self.assertEqual(len(buttons), 13)
+            self.assertIsNone(bar.findChild(QToolButton, "toolButton_delete"))
+            for button in buttons:
+                self.assertTrue(button.isVisible())
+                rect = button.rect().translated(button.mapTo(bar, QPoint()))
+                self.assertTrue(bar.rect().contains(rect))
+            self.assertEqual({button.y() for button in buttons}, {0})
+            self.assertEqual(len({button.width() for button in buttons}), 1)
+            self.assertLessEqual(bar.height(), 50)
 
     def test_ring_action_shows_template_icon_buttons_and_routes_current_canvas(
         self,

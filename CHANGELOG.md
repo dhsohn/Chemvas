@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.27.1] - 2026-10-24
+
+### Changed
+
+- Show drawing tool names below icons in equal-width buttons. Keep all tools in
+  one compact row that fits the window without overflow controls.
+- Move the perspective rotation tool into Select options alongside angle rotation,
+  flipping and alignment. Keep its shortcut and checked state.
+- Remove the toolbar eraser button; use Backspace to delete the selection.
+
 ## [0.27.0] - 2026-10-24
 
 - Remove CDXML from desktop Figure Export; working documents use Save or Save As.

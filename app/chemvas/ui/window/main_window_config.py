@@ -304,7 +304,7 @@ TOOL_ACTION_SPECS: list[tuple[str, str, str, str, str]] = [
     ),
     (
         "perspective",
-        "Perspective",
+        "Rotate",
         "perspective",
         "icon_perspective",
         "Perspective Rotation (Shortcut: Alt+D, Shift+drag locks X/Y)",
@@ -346,10 +346,7 @@ MARK_TOOL_ACTION_SPECS: list[tuple[str, str, str, str, str]] = [
     ("mark_radical", "Radical", "radical", "icon_mark_radical", "Radical"),
 ]
 
-TOOLBAR_PRIMARY_TOOL_GROUP: tuple[str, ...] = (
-    "select",
-    "perspective",
-)
+TOOLBAR_PRIMARY_TOOL_GROUP: tuple[str, ...] = ("select",)
 
 # "note" is the tool labelled "Text" in the UI; "shape" sits to its right.
 TOOLBAR_TOOL_GROUPS: list[tuple[str, ...]] = [
@@ -357,7 +354,6 @@ TOOLBAR_TOOL_GROUPS: list[tuple[str, ...]] = [
     ("bond", "benzene", "text", "arrow"),
     ("line", "ts_bracket", "mark", "orbital"),
     ("note", "shape", "color", "ring_fill"),
-    ("delete",),
 ]
 
 TOOLBAR_TOOL_ACTION_ORDER: list[str] = [
