@@ -2,11 +2,11 @@
 
 [한국어](CONTRIBUTING.ko.md)
 
-This guide covers setting up the development environment, running verification tests, and understanding the architectural conventions.
+Contributions can improve drawing tools, file compatibility, examples or documentation. Start with the setup below, then run the checks for your change.
 
-Review the architecture guidelines before modifying modules: package boundaries are strictly enforced by automated tests.
+For module changes, read the architecture guidelines below; tests check package boundaries.
 
-All contributors are expected to adhere to the [Code of Conduct](CODE_OF_CONDUCT.md).
+Follow the [Code of Conduct](CODE_OF_CONDUCT.md).
 
 ## Development Setup
 
@@ -20,8 +20,6 @@ cd Chemvas
 python -m venv .venv && source .venv/bin/activate   # optional but recommended
 python -m pip install -e ".[dev]"                    # dev tooling
 ```
-
-Chemvas does not ship a chemistry extra or a `machine.json` validator.
 
 Launch the app from source:
 
@@ -96,9 +94,8 @@ editing through real Qt events, Undo/Redo, save/reopen, formatting focus, cancel
 window close, and reconstruction from an unclean session. Recovery uses temporary
 session files and a simulated dead process, not a killed application.
 
-The command rejects Linux/WSL rather than silently running offscreen. It is a
-small regression check, not the full platform suite or a substitute for manual
-interaction with the affected feature. Before a release, run local `make check` and record its platform and coverage.
+This focused check runs on macOS and native Windows. Use the full platform suite
+and try the affected feature in the app before release. Before a release, run local `make check` and record its platform and coverage.
 GitHub does not run Linux, macOS or Windows test suites.
 
 ## Architecture Conventions
