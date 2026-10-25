@@ -15,6 +15,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Keep longer drawing-tool names readable in compact windows by allocating
+  button widths from their labels. Separate related tool groups when space
+  permits, increase options-bar heading contrast, and use the same teal
+  selection cue for option buttons and drawing tools.
 - Refresh all six walkthrough GIFs from the current editor, including visual
   subscript controls, figure export preview and supported MOL import/export.
   Capture scripts now isolate recent files and recovery data on macOS as well.
