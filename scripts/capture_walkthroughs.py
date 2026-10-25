@@ -21,8 +21,15 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from PyQt6.QtCore import QPointF, Qt
+from PyQt6.QtGui import QKeySequence, QTextCursor
 from PyQt6.QtTest import QTest
-from PyQt6.QtWidgets import QApplication, QDialog, QLineEdit, QPushButton
+from PyQt6.QtWidgets import (
+    QApplication,
+    QDialog,
+    QPushButton,
+    QTextEdit,
+    QToolButton,
+)
 from walkthrough_capture import Walkthrough, run_with_profile
 
 from chemvas.core.molfile import write_molfile
@@ -97,7 +104,11 @@ def drawing(w: Walkthrough) -> None:
         title, "Hover an atom and type its element: o for oxygen, n for nitrogen.", 1500
     )
     w.key(Qt.Key.Key_Minus)
-    w.capture(title, "Press - or + to add a charge to the hovered atom.", 1400)
+    w.capture(
+        title, "Press - to add charge; the red underline flags unusual valence.", 1600
+    )
+    w.key(Qt.Key.Key_Plus)
+    w.capture(title, "Press + to return this oxygen to its neutral state.", 1200)
 
     w.set_tool("benzene")
     state = w.canvas.runtime_state.insert_state
@@ -110,7 +121,7 @@ def drawing(w: Walkthrough) -> None:
         raise RuntimeError("the ring template was not fused")
     w.set_tool("select")
     w.move(0.0, 60.0)
-    w.capture(title, "Click to fuse it. Esc leaves the Ring tool.", 2200)
+    w.capture(title, "Click to fuse the ring, then return to Select.", 2200)
 
 
 # --- arrows -----------------------------------------------------------------
@@ -129,22 +140,59 @@ def arrows(w: Walkthrough) -> None:
     )
 
     def fill(dialog: QDialog) -> None:
-        for name, text in (
-            ("arrowLabelAboveInput", "k_1"),
-            ("arrowLabelBelowInput", "25 °C"),
-        ):
-            field = dialog.findChild(QLineEdit, name)
-            if field is None:
-                raise RuntimeError(f"Missing {name}")
-            field.setFocus()
-            QTest.keyClicks(field, text)
+        above = dialog.findChild(QTextEdit, "arrowLabelAboveInput")
+        if above is None:
+            raise RuntimeError("Missing arrowLabelAboveInput")
+        subscript = dialog.findChild(QToolButton, "arrowLabelSubscript")
+        if subscript is None:
+            raise RuntimeError("Missing arrowLabelSubscript")
+        above.setFocus()
+        QTest.keyClicks(above, "k1")
+        cursor = above.textCursor()
+        cursor.setPosition(1)
+        cursor.setPosition(2, QTextCursor.MoveMode.KeepAnchor)
+        above.setTextCursor(cursor)
         w.capture(
-            title, "Double-click the arrow: _ makes a subscript, ^ a superscript.", 2400
+            title,
+            "Double-click the arrow. Select text, then Subscript or Superscript.",
+            2400,
         )
-        next(b for b in dialog.findChildren(QPushButton) if b.text() == "OK").click()
+        QTest.mouseClick(subscript, Qt.MouseButton.LeftButton)
+        w.capture(
+            title,
+            "Formatting applies to the selection.",
+            2400,
+        )
+        below = dialog.findChild(QTextEdit, "arrowLabelBelowInput")
+        if below is None:
+            raise RuntimeError("Missing arrowLabelBelowInput")
+        symbols = dialog.findChild(QToolButton, "arrowLabelSymbols")
+        if symbols is None:
+            raise RuntimeError("Missing arrowLabelSymbols")
+        menu = symbols.menu()
+        if menu is None:
+            raise RuntimeError("Missing symbols menu")
+        below.setFocus()
+        QTest.keyClicks(below, "25 ")
+        next(
+            action for action in menu.actions() if action.text().startswith("°")
+        ).trigger()
+        QTest.keyClicks(below, "C")
+        w.capture(
+            title, "Use Symbols to insert °, then finish the temperature label.", 1800
+        )
+        ok = next(b for b in dialog.findChildren(QPushButton) if b.text() == "OK")
+        if not ok.isEnabled():
+            raise RuntimeError("OK must be enabled with valid labels")
+        ok.click()
 
     w.set_tool("select")
     w.dialog(lambda: w.double_click(-50.0, -20.0), "Arrow Labels", fill)
+    first_arrow = w.canvas.runtime_state.arrow_items()[0]
+    assert arrow_state_dict_for(w.canvas, first_arrow)["labels"] == {
+        "above": "k_{1}",
+        "below": "25 °C",
+    }
     w.move(-50.0, 10.0)
     w.capture(title, "Labels belong to the arrow and move with it.", 1600)
 
@@ -228,7 +276,7 @@ def editing(w: Walkthrough) -> None:
     w.canvas.services.selection.update_selection_outline()
     w.app.processEvents()
     w.capture(
-        title, "Ctrl+A selects everything; the frame carries a rotation knob.", 1500
+        title, "Select All selects everything; the frame carries a rotation knob.", 1500
     )
     w.rotate_selection(
         25.0,
@@ -236,7 +284,10 @@ def editing(w: Walkthrough) -> None:
         detail="Drag the knob to rotate the selection (Shift snaps to 15°).",
     )
     w.capture(title, "One drag, one undo step.", 1200)
-    w.click_context_button("Flip Horizontal (Ctrl+Shift+H)")
+    shortcut = QKeySequence("Ctrl+Shift+H").toString(
+        QKeySequence.SequenceFormat.NativeText
+    )
+    w.click_context_button(f"Flip Horizontal ({shortcut})")
     w.capture(title, "Flip Horizontal / Flip Vertical act on the selection.", 1500)
     w.action("Middle").trigger()
     w.app.processEvents()
@@ -264,7 +315,8 @@ def chemistry(w: Walkthrough) -> None:
     title = "MOL import and export"
     model = MoleculeModel()
     atom_ids = [
-        model.add_atom(element, 30.0 * i, 0.0) for i, element in enumerate("CCO")
+        model.add_atom(element, x, y)
+        for element, x, y in (("C", 0, 0), ("C", 30, -17.32), ("O", 60, 0))
     ]
     for first, second in pairwise(atom_ids):
         model.add_bond(first, second)

@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CDXML BondLength="30" LineWidth="0.8" BoldWidth="2.4" BondSpacing="18" LabelFont="3" LabelSize="12" CaptionFont="3" CaptionSize="12">
+ <fonttable><font id="3" charset="utf-8" name="Arial"/></fonttable>
+ <colortable><color r="1" g="1" b="1"/><color r="0" g="0" b="0"/><color r="0.1" g="0.35" b="0.65"/></colortable>
+ <page id="1" Width="600" Height="400" BoundingBox="0 0 600 400">
+  <fragment id="10" LineWidth="1.2" BondSpacing="22">
+   <n id="11" p="140 160"/>
+   <n id="12" p="166 145"/>
+   <n id="13" p="192 160" Element="8"><t p="186 164"><s font="3" size="12">O</s></t></n>
+   <b id="14" B="11" E="12" Order="1"/>
+   <b id="15" B="12" E="13" Order="2" DoublePosition="Center"/>
+  </fragment>
+  <t id="20" p="130 205"><s font="3" size="12" face="1" color="4">Native sample</s></t>
+  <arrow id="21" Tail3D="260 160 0" Head3D="350 160 0" ArrowheadHead="Full"/>
+  <t id="22" p="270 138"><s font="3" size="12">native XML</s></t>
+ </page>
+</CDXML>

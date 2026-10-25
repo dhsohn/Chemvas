@@ -21,7 +21,12 @@ py -3.13 -m venv .venv-windows
 
 - `chemvas.exe`: 콘솔 창 없는 데스크톱 GUI 애플리케이션
 - `chemvas-cli.exe`: 터미널 스크립팅 및 문서 조작용 명령줄 실행 파일
-- 설치 프로그램 실행 파일 (`Output/Chemvas-Setup-*.exe`)
+- 실행할 때마다 `dist/windows-<guid>/` 디렉터리를 새로 만듭니다. 실행 파일 두 개는 그 안의 `chemvas/`에 있습니다.
+- 설치 프로그램: `dist/windows-<guid>/installer/Chemvas-<version>-windows-x64-setup.exe`
+- 빌드 기록: `dist/windows-<guid>/build-receipt.json`. 실행 로그는 `build/windows-<guid>/`에 남으며, 스크립트가 정확한 경로를 출력합니다.
+
+빌드 성공은 설치나 GUI 검증 완료를 뜻하지 않습니다. 설치 프로그램을 게시하기 전에
+[데스크톱 출시 검증](../../docs/RELEASE_ACCEPTANCE.ko.md)을 진행합니다.
 
 ## 설치 및 파일 연결
 

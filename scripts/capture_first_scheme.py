@@ -18,6 +18,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from PyQt6.QtCore import QPointF, Qt
+from PyQt6.QtGui import QTextCursor
 from PyQt6.QtTest import QTest
 from PyQt6.QtWidgets import (
     QApplication,
@@ -25,85 +26,104 @@ from PyQt6.QtWidgets import (
     QDialog,
     QLineEdit,
     QPushButton,
+    QTextEdit,
+    QToolButton,
 )
 from walkthrough_capture import LEFT_BUTTON, NO_MODIFIER, Walkthrough, run_with_profile
 
 from chemvas.ui.annotations.state import arrow_state_dict_for
-from chemvas.ui.canvas.canvas_atom_graphics_state import visible_atom_item_for
-from chemvas.ui.molecule.structure_mutation_access import add_bond_for
 from chemvas.ui.window.main_window_document_dialogs import prompt_export_options
 from chemvas.ui.window.main_window_ports import document_session_service_for_window
 
 
 class FirstScheme(Walkthrough):
-    def insert(self, *, carbonyl: bool, x: float, y: float, title: str) -> None:
-        """Prepare explicit atoms and bonds with native drawing owners."""
+    def insert(self, *, carbonyl: bool, x: float, y: float, title: str) -> int:
+        """Draw a ring and its two-bond side chain through the visible tools."""
         previous_ids = set(self.canvas.model.atoms)
-        atom_service = self.canvas.services.canvas_atom_mutation_service
-        points = [
-            (-60, 0),
-            (-40, 0),
-            (-20, 0),
-            (-10, 17.32),
-            (10, 17.32),
-            (20, 0),
-            (10, -17.32),
-            (-10, -17.32),
-        ]
-
-        def build():
-            ids = [
-                atom_service.add_atom("O" if i == 0 else "C", x + dx, y + dy)
-                for i, (dx, dy) in enumerate(points)
-            ]
-            add_bond_for(self.canvas, ids[0], ids[1], 2 if carbonyl else 1)
-            add_bond_for(self.canvas, ids[1], ids[2])
-            for i in range(6):
-                add_bond_for(
-                    self.canvas,
-                    ids[2 + i],
-                    ids[2 + (i + 1) % 6],
-                    2 if i % 2 == 0 else 1,
-                )
-            return []
-
-        self.canvas.services.structure_build_service.run_recorded_build(build)
-        self.app.processEvents()
-        self.capture(
-            title, "Explicit atoms and bonds remain editable on the canvas.", 1200
+        self.set_tool("benzene")
+        self.click(x, y)
+        ring_ids = set(self.canvas.model.atoms) - previous_ids
+        assert len(ring_ids) == 6
+        self.capture(title, "Ring: click to place a benzene ring.", 1200)
+        current = max(
+            ring_ids,
+            key=lambda i: (
+                self.canvas.model.atoms[i].x,
+                -self.canvas.model.atoms[i].y,
+            ),
         )
-        self.canvas.scene().clearSelection()
-        for atom_id in set(self.canvas.model.atoms) - previous_ids:
-            item = visible_atom_item_for(self.canvas, atom_id)
-            if item is not None:
-                item.setSelected(True)
-        self.canvas.setFocus()
-        for _ in range(3):
-            QTest.keyClick(self.canvas, Qt.Key.Key_Up, Qt.KeyboardModifier.AltModifier)
+        self.set_tool("bond")
+        for dx, dy in ((30.31, -17.5), (30.31, 17.5)):
+            atom = self.canvas.model.atoms[current]
+            before = set(self.canvas.model.atoms)
+            self.drag(
+                (atom.x, atom.y),
+                (atom.x + dx, atom.y + dy),
+                title=title,
+                detail="Bond: extend from the upper-right ring atom with a 30° zigzag.",
+                steps=3,
+                frame_duration=160,
+            )
+            added = set(self.canvas.model.atoms) - before
+            assert len(added) == 1
+            current = added.pop()
+        if carbonyl:
+            bond = self.canvas.model.bonds[-1]
+            a, b = self.canvas.model.atoms[bond.a], self.canvas.model.atoms[bond.b]
+            self.hover((a.x + b.x) / 2, (a.y + b.y) / 2)
+            self.key(Qt.Key.Key_2)
+            assert bond.order == 2
+        atom = self.canvas.model.atoms[current]
+        self.hover(atom.x, atom.y)
+        self.key(Qt.Key.Key_O)
+        assert self.canvas.model.atoms[current].element == "O"
+        self.capture(title, "Hover the terminal atom and type O for oxygen.", 1200)
+        self.set_tool("select")
         self.canvas.scene().clearSelection()
         self.capture(
-            title, "Select the molecule; Alt + Up rotates it in 15° steps.", 1000
+            title, "Keep both rings upright and use matching side-chain angles.", 1000
         )
+        return current
 
     def label_arrow(self) -> None:
         def fill(dialog: QDialog) -> None:
-            for name, text in (
-                ("arrowLabelAboveInput", "MnO_2"),
-                ("arrowLabelBelowInput", "oxidation"),
-            ):
-                field = dialog.findChild(QLineEdit, name)
-                if field is None:
-                    raise RuntimeError(f"Missing {name}")
-                field.setFocus()
-                QTest.keyClicks(field, text)
+            above = dialog.findChild(QTextEdit, "arrowLabelAboveInput")
+            if above is None:
+                raise RuntimeError("Missing arrowLabelAboveInput")
+            subscript = dialog.findChild(QToolButton, "arrowLabelSubscript")
+            if subscript is None:
+                raise RuntimeError("Missing arrowLabelSubscript")
+            above.setFocus()
+            QTest.keyClicks(above, "MnO2")
+            cursor = above.textCursor()
+            cursor.setPosition(3)
+            cursor.setPosition(4, QTextCursor.MoveMode.KeepAnchor)
+            above.setTextCursor(cursor)
             self.capture(
                 "02 / Add reaction labels",
-                "Double-click the arrow. An underscore formats a subscript.",
+                "Double-click the arrow. Select text, then Subscript or Superscript.",
                 2400,
             )
-            next(
-                b for b in dialog.findChildren(QPushButton) if b.text() == "OK"
-            ).click()
+            QTest.mouseClick(subscript, Qt.MouseButton.LeftButton)
+            self.capture(
+                "02 / Add reaction labels",
+                "Formatting applies to the selection.",
+                2400,
+            )
+            below = dialog.findChild(QTextEdit, "arrowLabelBelowInput")
+            if below is None:
+                raise RuntimeError("Missing arrowLabelBelowInput")
+            below.setFocus()
+            QTest.keyClicks(below, "oxidation")
+            self.capture(
+                "02 / Add reaction labels",
+                "Above: MnO₂. Below: oxidation. Click OK to apply both labels.",
+                1800,
+            )
+            ok = next(b for b in dialog.findChildren(QPushButton) if b.text() == "OK")
+            if not ok.isEnabled():
+                raise RuntimeError("OK must be enabled with valid labels")
+            ok.click()
 
         def open_dialog() -> None:
             QTest.mouseDClick(
@@ -116,12 +136,12 @@ class FirstScheme(Walkthrough):
         self.dialog(open_dialog, "Arrow Labels", fill)
         (arrow,) = self.canvas.runtime_state.arrow_items()
         assert arrow_state_dict_for(self.canvas, arrow)["labels"] == {
-            "above": "MnO_2",
+            "above": "MnO_{2}",
             "below": "oxidation",
         }
 
-    def label_hydroxyl(self) -> None:
-        atom = self.canvas.model.atoms[0]
+    def label_hydroxyl(self, atom_id: int) -> None:
+        atom = self.canvas.model.atoms[atom_id]
         self.move(atom.x, atom.y)
         self.canvas.services.hover.update_hover_highlight(QPointF(atom.x, atom.y))
 
@@ -139,11 +159,11 @@ class FirstScheme(Walkthrough):
             dialog.accept()
 
         self.dialog(
-            lambda: self.canvas.services.atom_label_service.prompt_atom_label(0),
+            lambda: self.canvas.services.atom_label_service.prompt_atom_label(atom_id),
             "Atom Label",
             fill,
         )
-        assert self.canvas.model.atoms[0].element == "OH"
+        assert self.canvas.model.atoms[atom_id].element == "OH"
 
     def export(self) -> None:
         def fill(dialog: QDialog) -> None:
@@ -205,11 +225,18 @@ class FirstScheme(Walkthrough):
             "Draw interactively. Automate safely. Export exactly.",
             1200,
         )
-        self.insert(carbonyl=False, x=-118, y=-22, title="01 / Draw a structure")
-        self.label_hydroxyl()
-        self.insert(carbonyl=True, x=118, y=22, title="01 / Add the product")
+        alcohol = self.insert(
+            carbonyl=False, x=-145, y=-20, title="01 / Draw a structure"
+        )
+        self.label_hydroxyl(alcohol)
+        self.insert(carbonyl=True, x=105, y=20, title="01 / Add the product")
         assert len(self.canvas.model.atoms) == 16
         assert len(self.canvas.model.bonds) == 16
+        graphics = self.canvas.runtime_state.bond_graphics_state.bond_items
+        assert set(graphics) == set(range(16))
+        assert all(
+            any(item.isVisible() for item in items) for items in graphics.values()
+        )
 
         self.window.ui_references.tool_action_for_key("arrow").trigger()
         QTest.mousePress(
@@ -230,7 +257,9 @@ class FirstScheme(Walkthrough):
         self.canvas.setFocus()
         QTest.keyClick(self.canvas, Qt.Key.Key_A, Qt.KeyboardModifier.ControlModifier)
         self.capture(
-            "03 / Align the scheme", "Select all, then Edit → Align → Middle.", 1400
+            "03 / Align the scheme",
+            "Select everything, then Edit → Align → Middle.",
+            1400,
         )
         before = [(atom.x, atom.y) for atom in self.canvas.model.atoms.values()]
         self.action("Middle").trigger()
@@ -254,8 +283,8 @@ class FirstScheme(Walkthrough):
         self.export()
         self.window.statusBar().showMessage("Exported first-scheme.svg · 174 mm")
         self.capture(
-            "Saved as SVG / Keep the editable drawing",
-            "Open first-scheme.cdxml to keep editing. Use the SVG in your manuscript.",
+            "Saved as CDXML / Exported SVG",
+            "Open first-scheme.cdxml to keep editing. Use the exported SVG in your manuscript.",
             2500,
         )
         self.save_gif("demo.gif")

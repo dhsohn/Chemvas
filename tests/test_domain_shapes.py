@@ -16,6 +16,7 @@ from chemvas.domain.document import (
     shape_from_state,
     shape_to_state,
 )
+from chemvas.features.document_files import read_document
 from tests.document_file_helpers import read_payload
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -78,15 +79,20 @@ def _document_shape_states() -> list[dict]:
         *sorted((REPO_ROOT / "tests" / "fixtures").rglob("*.cdxml")),
         *sorted((REPO_ROOT / "examples").rglob("*.cdxml")),
     ]:
-        document = read_payload(path.read_text(encoding="utf-8"))
-        state = document.get("state", document)
+        raw = path.read_text(encoding="utf-8")
+        if "<!-- ChemvasDocument:" in raw:
+            # Preserve the exact saved values in snapshot-backed fixtures.
+            document = read_payload(raw)
+            state = document.get("state", document)
+        else:
+            state = read_document(path).state
         states.extend(state.get("shapes", []))
     return states
 
 
 def test_the_repository_documents_contain_shapes_to_check() -> None:
-    # Only one tracked document carries a shape today; the hand-written cases
-    # below are what cover the optional keys and number types.
+    # Repository fixtures exercise saved shapes; the hand-written cases below
+    # cover the optional keys and number types.
     assert _document_shape_states()
 
 

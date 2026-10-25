@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Define equal desktop release acceptance for Windows, macOS and Linux, with
+  public CDXML documents for repeatable editing and export checks. Native bundle
+  installation acceptance remains pending.
+
+### Fixed
+
+- Refresh all six walkthrough GIFs from the current editor, including visual
+  subscript controls, figure export preview and supported MOL import/export.
+  Capture scripts now isolate recent files and recovery data on macOS as well.
+  Keep the first-scheme rings upright with matching side-chain angles and a
+  horizontal hydroxyl label in the walkthrough and exported example.
+- Match the first-scheme tutorial to visual subscript controls, distinguish the
+  CDXML working format from internal schema versions, and correct Windows build
+  output paths.
+
 ## [0.27.1] - 2026-10-24
 
 ### Changed

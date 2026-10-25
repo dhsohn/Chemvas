@@ -8,6 +8,14 @@ Built distribution artifacts (wheels and sdist) contain the desktop Qt applicati
 
 Version number is sourced from `chemvas.__version__` in [`app/chemvas/__init__.py`](app/chemvas/__init__.py). The unpublished candidate may be `0.25.0.dev0`. A Windows bundle and a `v*` tag require a numeric `major.minor.patch` value; `packaging/chemvas.spec` rejects any other form on Windows. Setting that number and moving the changelog section prepares a release. Tagging and publishing are a later step.
 
+## Stable desktop release gate
+
+Before publishing the first stable desktop bundles, complete every target in
+[desktop release acceptance](docs/RELEASE_ACCEPTANCE.md) using the
+[public validation documents](examples/release-validation/README.md). The matrix
+defines planned support, not completed installation validation. Keep the tested
+artifact hashes and native results with the release.
+
 ## Release Steps
 
 1. Update `__version__` in `app/chemvas/__init__.py`.

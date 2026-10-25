@@ -220,6 +220,14 @@ class Walkthrough:
             try:
                 if not isinstance(dialog, QDialog) or dialog.windowTitle() != title:
                     raise RuntimeError(f"Expected the {title!r} dialog")
+                dialog.move(
+                    self.window.mapToGlobal(
+                        QPoint(
+                            (self.window.width() - dialog.width()) // 2,
+                            (self.window.height() - dialog.height()) // 2,
+                        )
+                    )
+                )
                 fill(dialog)
             except Exception as exc:
                 errors.append(exc)
@@ -296,14 +304,28 @@ def run_with_profile(
     session is touched."""
     import os
     import tempfile
+    from unittest.mock import patch
+
+    from chemvas.ui.session import app_data_paths
 
     with tempfile.TemporaryDirectory(prefix=f"chemvas-{command}-profile-") as profile:
-        for kind in ("DATA", "CONFIG", "CACHE", "STATE"):
-            os.environ[f"XDG_{kind}_HOME"] = str(Path(profile) / kind.lower())
-        app = QApplication([])
-        app.setApplicationName("Chemvas")
-        app.setQuitOnLastWindowClosed(False)
-        run(app)
+        environment = {
+            f"XDG_{kind}_HOME": str(Path(profile) / kind.lower())
+            for kind in ("DATA", "CONFIG", "CACHE", "STATE")
+        }
+        # QStandardPaths ignores XDG on macOS and Windows. Use the same single
+        # path boundary as the test suite, including recovery-root discovery.
+        with (
+            patch.dict(os.environ, environment),
+            patch.object(
+                app_data_paths, "_candidate_dirs", return_value=[Path(profile) / "data"]
+            ),
+        ):
+            QApplication.setAttribute(Qt.ApplicationAttribute.AA_DontUseNativeMenuBar)
+            app = QApplication([])
+            app.setApplicationName("Chemvas")
+            app.setQuitOnLastWindowClosed(False)
+            run(app)
     return 0
 
 
