@@ -404,3 +404,4 @@ process locking and envelope storage ([ADR 0032](adr/0032-browser-clipboard-and-
 - [ADR 0063: Retire editable SVG](adr/0063-retire-editable-svg.md)
 
 - [ADR 0065: Three-platform desktop release acceptance](adr/0065-three-platform-release-acceptance.md)
+- [ADR 0066: Linux per-user frozen installation](adr/0066-linux-user-installation.md)

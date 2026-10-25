@@ -383,3 +383,4 @@ ADR을 언제 쓰는지, 작성 규칙과 템플릿은 [ADR 안내](adr/README.m
 - [ADR 0063: Retire editable SVG](adr/0063-retire-editable-svg.md)
 
 - [ADR 0065: Three-platform desktop release acceptance](adr/0065-three-platform-release-acceptance.md)
+- [ADR 0066: Linux per-user frozen installation](adr/0066-linux-user-installation.md)

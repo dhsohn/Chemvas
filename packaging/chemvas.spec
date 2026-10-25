@@ -31,6 +31,11 @@ SOURCE_CHECKOUT_ONLY_MODULES = [
     "chemvas.bootstrap.web_adapter",
     "chemvas.bootstrap.web_drafts",
 ]
+# Include wheel-supplied notices on every platform, including transitive Qt/sip.
+# This preserves upstream texts; release licensing review remains separate.
+for distribution in ("PyQt6", "Pillow"):
+    bundle_data.extend(copy_metadata(distribution, recursive=True))
+
 windows_version = {}
 if sys.platform == "win32":
     from PyInstaller.utils.win32.versioninfo import (
@@ -59,10 +64,6 @@ if sys.platform == "win32":
             VarFileInfo([VarStruct("Translation", [0x0409, 1200])]),
         ],
     )
-    # Preserve notices provided by the installed distributions; this is not a
-    # substitute for reviewing the redistribution terms of the resulting bundle.
-    for distribution in ("PyQt6", "Pillow"):
-        bundle_data.extend(copy_metadata(distribution, recursive=True))
 
 a = Analysis(
     [str(APP_DIR / "main.py")],
