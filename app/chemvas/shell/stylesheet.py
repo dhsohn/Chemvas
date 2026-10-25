@@ -37,10 +37,10 @@ def main_window_chrome_stylesheet(palette: Mapping[str, str]) -> str:
             QToolBar QLabel#toolbarSectionLabel {{
                 background: transparent;
                 border: none;
-                color: {palette["text_faint"]};
-                font-size: 10px;
+                color: {palette["text_muted"]};
+                font-size: 11px;
                 font-weight: 600;
-                letter-spacing: 0.8px;
+                letter-spacing: 0.4px;
                 margin: 0 2px;
                 padding: 2px 4px;
                 text-transform: uppercase;

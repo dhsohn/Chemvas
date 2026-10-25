@@ -1,5 +1,6 @@
 import os
 import unittest
+from itertools import pairwise
 from types import SimpleNamespace
 from unittest import mock
 
@@ -23,6 +24,7 @@ from chemvas.ui.window.main_window_panel_toolbar import (
     MainWindowPanelToolbarCallbacks,
     build_panel_toolbar,
 )
+from chemvas.ui.window.main_window_toolbar_logic import tool_display_name
 from chemvas.ui.window.main_window_ui_assembly_service import (
     MainWindowUIAssemblyService,
 )
@@ -129,6 +131,56 @@ class MainWindowPanelToolbarTest(unittest.TestCase):
             for button in toolbar.findChildren(QToolButton)
             if button.objectName().startswith("toolButton_")
         ]
+
+    def test_tool_labels_fit_compact_windows_and_buttons_stay_bounded(self) -> None:
+        window = _HarnessWindow()
+        self.addCleanup(window.close)
+        assembly = build_panel_toolbar(
+            window,
+            build_tool_actions=self.build_tool_actions,
+            callbacks=self.panel_callbacks,
+        )
+        for key, action in assembly.tool_actions.items():
+            action.setText(tool_display_name(key))
+        window.addToolBar(assembly.panel_bar)
+        window.resize(700, 400)
+        window.show()
+        self.app.processEvents()
+        buttons = [
+            assembly.panel_bar.findChild(QToolButton, f"toolButton_{key}")
+            for key in TOOLBAR_TOOL_ACTION_ORDER
+        ]
+        for width in (700, 1100, 1600, 700):
+            with self.subTest(width=width):
+                window.resize(width, 400)
+                self.app.processEvents()
+                for button in buttons:
+                    self.assertTrue(button.isVisible())
+                    self.assertGreaterEqual(button.width(), button.sizeHint().width())
+                    self.assertLessEqual(button.width(), 80)
+                    self.assertEqual(button.height(), 42)
+                for left, right in pairwise(buttons):
+                    self.assertLess(left.geometry().right(), right.x())
+                self.assertLessEqual(
+                    buttons[-1].geometry().right(),
+                    buttons[-1].parentWidget().width() - 1,
+                )
+
+        # A later label change must be measured again when the row resizes.
+        assembly.tool_actions["line"].setText("Brackets")
+        window.resize(701, 400)
+        self.app.processEvents()
+        line_button = assembly.panel_bar.findChild(QToolButton, "toolButton_line")
+        self.assertGreaterEqual(line_button.width(), line_button.sizeHint().width())
+
+        # At the narrowest supported row width every tool remains reachable.
+        row = buttons[0].parentWidget()
+        window.resize(row.minimumWidth(), 400)
+        self.app.processEvents()
+        for button in buttons:
+            self.assertTrue(button.isVisible())
+            self.assertGreaterEqual(button.width(), 26)
+            self.assertTrue(row.rect().contains(button.geometry()))
 
     def test_build_panel_toolbar_wires_actions_inputs_and_buttons(self) -> None:
         window = _HarnessWindow()

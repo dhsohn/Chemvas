@@ -1,5 +1,6 @@
 import os
 import unittest
+from itertools import pairwise
 from types import SimpleNamespace
 from unittest import mock
 
@@ -289,7 +290,7 @@ class MainWindowToolbarActionsTest(unittest.TestCase):
         self.assertEqual(len(buttons), 13)
         self.assertTrue(all(button.isVisible() for button in buttons))
 
-    def test_toolbar_stays_in_one_equal_width_row_without_hiding_tools(self) -> None:
+    def test_toolbar_stays_in_one_row_without_hiding_tools(self) -> None:
         self.window.show()
         bar = self.window.findChild(QToolBar, "topRoleToolbar")
         for width in (800, 520, 1320):
@@ -310,7 +311,9 @@ class MainWindowToolbarActionsTest(unittest.TestCase):
                 rect = button.rect().translated(button.mapTo(bar, QPoint()))
                 self.assertTrue(bar.rect().contains(rect))
             self.assertEqual({button.y() for button in buttons}, {0})
-            self.assertEqual(len({button.width() for button in buttons}), 1)
+            self.assertTrue(all(button.width() >= 26 for button in buttons))
+            for left, right in pairwise(buttons):
+                self.assertLess(left.geometry().right(), right.x())
             self.assertLessEqual(bar.height(), 50)
 
     def test_ring_action_shows_template_icon_buttons_and_routes_current_canvas(

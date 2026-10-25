@@ -225,8 +225,10 @@ class SegmentedButtonGroup(QFrame):
             _ICON_BUTTON_STYLE
             + "QToolButton { background: transparent; border: 1px solid transparent; border-radius: 4px; }"
             + f"QToolButton:hover {{ background: {_P['hover']}; }}"
-            + f"QToolButton:checked {{ background: {_P['surface_input']};"
-            + f" border-color: {_P['border_soft']}; color: {_P['checked_text']}; }}"
+            + f"QToolButton:checked {{ background: {_P['checked_bg']};"
+            + f" border-color: {_P['checked_border']}; color: {_P['checked_text']}; }}"
+            + f"QToolButton:checked:disabled {{ color: {_P['text_faint']};"
+            + " background: transparent; border-color: transparent; }"
             + f"QToolButton:focus {{ border-color: {_P['accent']}; }}"
         )
         self.button_layout.addWidget(button)

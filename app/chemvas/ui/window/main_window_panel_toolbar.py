@@ -26,9 +26,15 @@ from chemvas.ui.window.main_window_config import (
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-    from PyQt6.QtGui import QResizeEvent
+    from PyQt6.QtGui import QResizeEvent, QShowEvent
 
     from chemvas.ui.window.main_window_like import MainWindowLike
+
+_TOOLBAR_ROW_REGULAR_GAP = 2
+_TOOLBAR_ROW_GROUP_GAP = 8
+_TOOLBAR_ROW_GROUP_GAP_AFTER = frozenset({0, 3, 8, 10})
+_TOOLBAR_ROW_MIN_BUTTON_WIDTH = 26
+_TOOLBAR_ROW_MAX_BUTTON_WIDTH = 80
 
 _LABELED_TOOLBAR_STYLE = (
     TOOLBAR_BUTTON_STYLE
@@ -66,23 +72,87 @@ class _ToolButtonRow(QWidget):
     def __init__(self, buttons: list[QToolButton]) -> None:
         super().__init__()
         self._buttons = buttons
+        self._natural_widths: list[int] = []
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
-        self.setMinimumWidth(len(buttons) * 26 - 2)
+        self.setMinimumWidth(
+            len(buttons) * _TOOLBAR_ROW_MIN_BUTTON_WIDTH
+            + max(0, len(buttons) - 1) * _TOOLBAR_ROW_REGULAR_GAP
+        )
         self.setFixedHeight(42)
         for button in buttons:
             button.setParent(self)
+        self._refresh_natural_widths()
+
+    def _gap_after_index(self, index: int) -> int:
+        if index in _TOOLBAR_ROW_GROUP_GAP_AFTER:
+            return _TOOLBAR_ROW_GROUP_GAP
+        return _TOOLBAR_ROW_REGULAR_GAP
+
+    def _refresh_natural_widths(self) -> None:
+        self._natural_widths = [
+            max(_TOOLBAR_ROW_MIN_BUTTON_WIDTH, button.sizeHint().width())
+            for button in self._buttons
+        ]
+
+    def _layout_widths_and_gaps(self, available: int) -> tuple[list[int], list[int]]:
+        count = len(self._buttons)
+        if count == 0:
+            return [], []
+
+        widths = list(self._natural_widths)
+        gaps = [self._gap_after_index(i) for i in range(count - 1)]
+        # Keep every label's natural width before spending space on grouping.
+        if sum(widths) + sum(gaps) > available:
+            gaps = [_TOOLBAR_ROW_REGULAR_GAP] * (count - 1)
+
+        delta = available - sum(gaps) - sum(widths)
+        limits = [
+            width - _TOOLBAR_ROW_MIN_BUTTON_WIDTH
+            if delta < 0
+            else max(0, _TOOLBAR_ROW_MAX_BUTTON_WIDTH - width)
+            for width in widths
+        ]
+        total = sum(limits)
+        if total:
+            amount = min(abs(delta), total)
+            cumulative = previous = 0
+            for index, limit in enumerate(limits):
+                cumulative += limit
+                allocated = amount * cumulative // total
+                change = allocated - previous
+                widths[index] += -change if delta < 0 else change
+                previous = allocated
+        return widths, gaps
+
+    def _apply_layout(self) -> None:
+        if not self._buttons:
+            return
+        self._refresh_natural_widths()
+        available = max(0, self.width())
+        widths, gaps = self._layout_widths_and_gaps(available)
+        x = 0
+        for index, button in enumerate(self._buttons):
+            button.setGeometry(x, 0, widths[index], 42)
+            if index < len(gaps):
+                x += widths[index] + gaps[index]
+            else:
+                x += widths[index]
 
     @override
     def sizeHint(self) -> QSize:
-        return QSize(self.minimumWidth(), 42)
+        self._refresh_natural_widths()
+        gap_total = sum(self._gap_after_index(i) for i in range(len(self._buttons) - 1))
+        return QSize(sum(self._natural_widths) + gap_total, 42)
+
+    @override
+    def showEvent(self, event: QShowEvent | None) -> None:
+        super().showEvent(event)
+        self._apply_layout()
 
     @override
     def resizeEvent(self, event: QResizeEvent | None) -> None:
         super().resizeEvent(event)
-        count = len(self._buttons)
-        width = min(80, (self.width() - 2 * (count - 1)) // count)
-        for index, button in enumerate(self._buttons):
-            button.setGeometry(index * (width + 2), 0, width, 42)
+        self._apply_layout()
 
 
 def _build_tool_action_button(
