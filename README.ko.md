@@ -31,6 +31,9 @@ pip install chemvas
 chemvas
 ```
 
+첫 안정판의 독립 실행 배포물은 [세 OS 지원 목표](https://github.com/dhsohn/Chemvas/blob/main/docs/RELEASE_ACCEPTANCE.ko.md)에 맞춰
+준비 중입니다. 네이티브 설치 검증은 아직 미완료이며, 현재는 위 Python 설치 경로를 사용할 수 있습니다.
+
 Windows 실행 파일을 직접 만들려면 [패키징 안내](https://github.com/dhsohn/Chemvas/blob/main/packaging/windows/README.ko.md)를 따르세요.
 
 ## 첫 반응식 그리기

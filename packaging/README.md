@@ -31,16 +31,13 @@ Output is placed in `dist/Chemvas.app` (macOS) or `dist/chemvas/` (Windows/Linux
 
 See the [Windows build guide](windows/README.md) for building the standalone Inno Setup installer.
 
-## Linux Desktop Integration
+## Linux user package
 
-Register desktop icons and `.cdxml` MIME associations:
+See [Linux installation and build instructions](linux/README.md). The tar.gz
+includes a per-user installer and uninstaller, launcher, desktop entry, icon and
+CDXML MIME registration. Existing defaults and user documents are preserved.
 
-```bash
-xdg-mime install --novendor packaging/linux/chemvas.xml
-xdg-icon-resource install --context mimetypes --size 256 \
-  app/chemvas/assets/icon/chemvas-256.png chemical-x-cdxml
-install -Dm644 app/chemvas/assets/icon/chemvas-256.png \
-  ~/.local/share/icons/hicolor/256x256/apps/chemvas.png
-desktop-file-install --dir="$HOME/.local/share/applications" packaging/linux/chemvas.desktop
-update-desktop-database ~/.local/share/applications
-```
+All desktop bundles include upstream distribution metadata and license texts
+from PyQt6, its Qt/sip dependencies and Pillow. Release licensing review remains
+required; notices are under `_internal/*.dist-info` on Linux/Windows and the
+corresponding `Contents/Resources` tree in the macOS app.

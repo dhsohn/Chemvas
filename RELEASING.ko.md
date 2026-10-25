@@ -8,6 +8,13 @@ Chemvas는 GitHub Actions의 Trusted Publishing (OIDC)을 통해 [PyPI](https://
 
 버전 정보는 [`app/chemvas/__init__.py`](app/chemvas/__init__.py)의 `chemvas.__version__`에서 관리됩니다. 아직 발행하지 않은 후보는 `0.25.0.dev0`일 수 있습니다. Windows 번들과 `v*` 태그는 숫자 `major.minor.patch`가 필요하며, Windows에서 `packaging/chemvas.spec`은 그 외 형식을 거부합니다. 그 번호를 정하고 changelog 절을 옮기는 것은 릴리스 준비입니다. 태그와 발행은 그다음 단계입니다.
 
+## 데스크톱 안정판 출시 조건
+
+첫 데스크톱 안정판 번들을 게시하기 전에 [데스크톱 출시 검증](docs/RELEASE_ACCEPTANCE.ko.md)의
+모든 대상에서 [공개 검증 문서](examples/release-validation/README.ko.md)를 확인합니다.
+지원표는 출시 목표이며 설치 검증 완료를 뜻하지 않습니다. 검사한 배포물의 해시와
+네이티브 실행 결과를 릴리스에 함께 기록합니다.
+
 ## 릴리스 절차
 
 1. `app/chemvas/__init__.py`의 `__version__`을 갱신합니다.

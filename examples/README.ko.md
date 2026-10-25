@@ -31,3 +31,8 @@
 [따라 그리기](../docs/FIRST_SCHEME.ko.md) · [English](../docs/FIRST_SCHEME.md) · [SVG](first-scheme.svg) · [PNG](first-scheme.png).
 
 - 열기, 편집, 그림 출력은 `pip install chemvas`로 동작합니다.
+
+## 출시 검증 문서
+
+[공개 CDXML 예제 다섯 개](release-validation/README.ko.md)로 저장·재열기·표기·그룹·이미지·
+네이티브 XML을 확인합니다. 각 출시 대상에서 같은 문서의 사본을 사용합니다.

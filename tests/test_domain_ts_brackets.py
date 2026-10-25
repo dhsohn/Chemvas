@@ -17,6 +17,7 @@ from chemvas.domain.document import (
 )
 from chemvas.domain.document.schema import VALID_TS_BRACKET_KINDS
 from chemvas.features.annotations import BRACKET_MENU_SPECS, DEFAULT_BRACKET_KIND
+from chemvas.features.document_files import read_document
 from tests.document_file_helpers import read_payload
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -37,8 +38,13 @@ def _document_ts_bracket_states() -> list[dict]:
         *sorted((REPO_ROOT / "tests" / "fixtures").rglob("*.cdxml")),
         *sorted((REPO_ROOT / "examples").rglob("*.cdxml")),
     ]:
-        document = read_payload(path.read_text(encoding="utf-8"))
-        state = document.get("state", document)
+        raw = path.read_text(encoding="utf-8")
+        if "<!-- ChemvasDocument:" in raw:
+            # Preserve the exact saved values in snapshot-backed fixtures.
+            document = read_payload(raw)
+            state = document.get("state", document)
+        else:
+            state = read_document(path).state
         states.extend(state.get("ts_brackets", []))
     return states
 

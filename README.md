@@ -31,6 +31,10 @@ pip install chemvas
 chemvas
 ```
 
+Standalone downloads for the first stable release are being prepared for the
+[three-platform target matrix](https://github.com/dhsohn/Chemvas/blob/main/docs/RELEASE_ACCEPTANCE.md). Its native installation
+checks are still pending; the Python installation above remains available.
+
 To build a Windows executable locally, follow the [packaging guide](https://github.com/dhsohn/Chemvas/blob/main/packaging/windows/README.md).
 
 ## Draw your first scheme

@@ -281,7 +281,7 @@ flowchart LR
 - **지원되는 작용기 약어**: `ATOM_ALIAS_DEFINITIONS`에 정의된 정규 별칭:
   `Me`, `Et`, `OH`, `NH2`, `SH`, `Ph`, `PPh3`, `OMe`, `Boc`, `CO2Me`, `t-Bu`, `tBu`, `i-Pr`, `CF3`, `OTs`, `Ts`, `OMs`, `Ms`, `OTf`, `Tf`, `Ns`, `OAc`, `Ac`.
 - **입체화학**: 쐐기/해시 결합은 단일 결합에만 적용됩니다.
-- **형식 호환성**: Chemvas는 문서 버전 7, 8, 9를 읽으며, 저장 시 버전 9(스키마 1)로 기록합니다.
+- **작업 파일과 내부 상태**: 사용자 작업 형식은 CDXML(`.cdxml`)입니다. CDXML 안의 Chemvas 스냅샷은 내부 문서 버전 10(스키마 1)을 쓰며, 내부 리더는 버전 7–10을 읽습니다. 이 번호는 내부 스냅샷 버전이며, CDXML 형식의 버전이나 기존 `.chemvas` 파일 열기 지원을 뜻하지 않습니다. [문서 호환성](DOCUMENT_COMPATIBILITY.ko.md)을 참고하세요.
 
 ## 아키텍처 결정 기록 (ADR)
 
@@ -381,3 +381,6 @@ ADR을 언제 쓰는지, 작성 규칙과 템플릿은 [ADR 안내](adr/README.m
 - [ADR 0062: Publication-only figure export dialog](adr/0062-publication-only-figure-export-dialog.md)
 
 - [ADR 0063: Retire editable SVG](adr/0063-retire-editable-svg.md)
+
+- [ADR 0065: Three-platform desktop release acceptance](adr/0065-three-platform-release-acceptance.md)
+- [ADR 0066: Linux per-user frozen installation](adr/0066-linux-user-installation.md)

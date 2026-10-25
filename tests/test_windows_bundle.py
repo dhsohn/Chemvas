@@ -138,7 +138,10 @@ def test_other_platform_bundle_shape_is_preserved(monkeypatch, target):
     assert executables[0].kwargs["name"] == "chemvas"
     assert executables[0].args[2] == []
     assert "version" not in executables[0].kwargs
-    assert metadata == []
+    assert metadata == [("PyQt6", True), ("Pillow", True)]
+    analysis = next(call for call in calls if call.kind == "Analysis")
+    assert ("/PyQt6.dist-info", "PyQt6.dist-info") in analysis.kwargs["datas"]
+    assert ("/Pillow.dist-info", "Pillow.dist-info") in analysis.kwargs["datas"]
     bundle = next(call for call in calls if call.kind == "BUNDLE")
     assert bundle.kwargs["info_plist"]["CFBundleDocumentTypes"][0][
         "CFBundleTypeExtensions"

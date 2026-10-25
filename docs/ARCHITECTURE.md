@@ -301,7 +301,7 @@ A plan already stored in a document is kept when it still matches the drawing. S
 - **Supported Aliases**: Canonical aliases defined in `ATOM_ALIAS_DEFINITIONS`:
   `Me`, `Et`, `OH`, `NH2`, `SH`, `Ph`, `PPh3`, `OMe`, `Boc`, `CO2Me`, `t-Bu`, `tBu`, `i-Pr`, `CF3`, `OTs`, `Ts`, `OMs`, `Ms`, `OTf`, `Tf`, `Ns`, `OAc`, and `Ac`.
 - **Stereochemistry**: Wedge and hash stereochemistry maps only to single bonds.
-- **Format Compatibility**: Chemvas reads document versions 7, 8, and 9, and writes version 9 (schema 1).
+- **Working files and internal state**: The user-facing working format is CDXML (`.cdxml`). Its Chemvas snapshot uses internal document version 10 (schema 1); internal readers accept versions 7–10. These are internal snapshot versions, not CDXML format versions or support for opening legacy `.chemvas` files. See [document compatibility](DOCUMENT_COMPATIBILITY.md).
 
 ## Architecture Decision Records (ADR)
 
@@ -402,3 +402,6 @@ process locking and envelope storage ([ADR 0032](adr/0032-browser-clipboard-and-
 - [ADR 0062: Publication-only figure export dialog](adr/0062-publication-only-figure-export-dialog.md)
 
 - [ADR 0063: Retire editable SVG](adr/0063-retire-editable-svg.md)
+
+- [ADR 0065: Three-platform desktop release acceptance](adr/0065-three-platform-release-acceptance.md)
+- [ADR 0066: Linux per-user frozen installation](adr/0066-linux-user-installation.md)

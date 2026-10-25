@@ -31,3 +31,8 @@ Open [first-scheme.cdxml](first-scheme.cdxml) via **File ▸ Open** for an edita
 [Walkthrough](../docs/FIRST_SCHEME.md) · [한국어](../docs/FIRST_SCHEME.ko.md) · [SVG](first-scheme.svg) · [PNG](first-scheme.png).
 
 - Opening, editing, and figure export work with `pip install chemvas`.
+
+## Release validation documents
+
+The [five public CDXML cases](release-validation/README.md) cover saving, reopening,
+notation, grouping, images and native XML. Use the same copies on every release target.

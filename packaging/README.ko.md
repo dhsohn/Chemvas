@@ -31,16 +31,12 @@ pyinstaller packaging/chemvas.spec
 
 독립 실행형 Inno Setup 설치 프로그램 빌드 방법은 [Windows 빌드 안내](windows/README.ko.md)를 참고하세요.
 
-## Linux 데스크톱 통합
+## Linux 사용자 패키지
 
-데스크톱 아이콘 및 `.cdxml` MIME 연결 등록:
+[Linux 설치·빌드 안내](linux/README.ko.md)를 참고하세요. tar.gz에는 사용자 설치·제거
+스크립트, 실행 링크, 앱 메뉴, 아이콘, CDXML MIME 등록이 포함됩니다.
+기존 기본 앱과 사용자 문서는 보존합니다.
 
-```bash
-xdg-mime install --novendor packaging/linux/chemvas.xml
-xdg-icon-resource install --context mimetypes --size 256 \
-  app/chemvas/assets/icon/chemvas-256.png chemical-x-cdxml
-install -Dm644 app/chemvas/assets/icon/chemvas-256.png \
-  ~/.local/share/icons/hicolor/256x256/apps/chemvas.png
-desktop-file-install --dir="$HOME/.local/share/applications" packaging/linux/chemvas.desktop
-update-desktop-database ~/.local/share/applications
-```
+모든 데스크톱 번들에 PyQt6·Qt·sip·Pillow 배포 메타데이터와 라이선스 원문을 포함합니다.
+재배포 조건 검토는 별도로 필요합니다. Linux/Windows에서는 `_internal/*.dist-info`,
+Mac 앱에서는 대응하는 `Contents/Resources` 경로에 포함됩니다.

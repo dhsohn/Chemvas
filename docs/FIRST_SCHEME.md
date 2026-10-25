@@ -20,10 +20,10 @@ chemvas
 ## 1. Draw and arrange structures
 
 1. Choose the **Ring** tool (`J`) and click the left side of the canvas to place benzene.
-2. Choose the **Bond** tool (`X`). Drag one bond outward from a ring atom; that creates a new carbon. Drag a second bond outward from that new carbon to a terminal atom.
+2. Choose the **Bond** tool (`X`). From the upper-right ring atom, drag one bond up and right at 30°; that creates a new carbon. Drag a second bond down and right at 30° from that new carbon to a terminal atom.
 3. Hover the terminal atom, press `o`, then press **Enter** and set the label to `OH`. Leave the new carbon unlabeled.
-4. Switch to the **Select** tool (`Space`), select the molecule, and press **Alt+Up** three times to rotate it by −45° (or use **Edit ▸ Rotate…**).
-5. Place a second benzene to the right. Drag one bond outward from a ring atom, then drag a second bond outward from that new carbon to a terminal atom. Hover the second bond and press `2` so only that bond becomes a double bond. Hover the terminal atom and press `o`. Leave room between the structures for the arrow.
+4. Switch to the **Select** tool (`Space`). Keep the ring upright and the `OH` label horizontal.
+5. Place a second benzene to the right in the same orientation. From its upper-right atom, drag one bond up and right at 30°, then drag a second bond down and right at 30° from the new carbon to a terminal atom. Hover the second bond and press `2` so only that bond becomes a double bond. Hover the terminal atom and press `o`. Leave room between the structures for the arrow.
 
 ## 2. Draw and label the arrow
 
@@ -32,18 +32,19 @@ chemvas
 
 | Field | Enter | Appearance |
 | --- | --- | --- |
-| Above | `MnO_2` | MnO₂ |
+| Above | Type `MnO2`, select only `2`, then click **Subscript x₂** | MnO₂ |
 | Below | `oxidation` | oxidation |
 
 3. Click **OK**. The labels are bound to the arrow and move along with it.
-   - Use underscores for subscripts (`MnO_2` → MnO₂).
-   - Use curly braces for multi-character sub/superscripts (e.g., `K_{2}CO_{3}`, `\Delta G^{\ddagger}`).
+   - Format selected characters with **Subscript x₂** or **Superscript x²**. Use **Symbols** to insert symbols such as Δ and ‡.
+   - The editor accepts visible text and formatting. Typing `MnO_2` does not apply a subscript and disables **OK**; remove the underscore and format the `2` as above.
 
 ## 3. Align and save
 
-1. Select both molecules and the arrow (**Edit ▸ Select All** or `Ctrl+A`).
+1. Select both molecules and the arrow (**Edit ▸ Select All**, `Ctrl+A` on Windows/Linux or `⌘A` on macOS).
 2. Align their vertical centers with **Edit ▸ Align ▸ Middle**.
 3. Save the editable document via **File ▸ Save As…** as `first-scheme.cdxml`.
+4. Close the document, reopen the saved file, and check that both structures and the MnO₂ label are present. Double-click the arrow to confirm that the `2` is still formatted as a subscript.
 
 ## 4. Export the figure
 

@@ -21,7 +21,12 @@ py -3.13 -m venv .venv-windows
 
 - `chemvas.exe`: GUI desktop application (windowed).
 - `chemvas-cli.exe`: Command-line executable for terminal usage and scripting.
-- Output installer executable (`Output/Chemvas-Setup-*.exe`).
+- Each invocation writes a new `dist/windows-<guid>/` directory. The executables are in its `chemvas/` subdirectory.
+- Installer: `dist/windows-<guid>/installer/Chemvas-<version>-windows-x64-setup.exe`.
+- Build receipt: `dist/windows-<guid>/build-receipt.json`; process logs are in `build/windows-<guid>/`. The script prints the exact paths.
+
+A successful build is not an installation or GUI acceptance result. Follow the
+[desktop release acceptance](../../docs/RELEASE_ACCEPTANCE.md) before publishing the installer.
 
 ## Installation & File Association
 
