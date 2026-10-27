@@ -132,6 +132,8 @@ class NativeAtomLabelItem(AtomLabelItem):
         document.clear()
         document.setDocumentMargin(0)
         cursor = QTextCursor(document)
+        # Drop any fixed stack pitch left by a previously applied native label.
+        cursor.setBlockFormat(QTextBlockFormat())
         runs = label.runs
         if len(runs) == 1 and runs[0][3] & 0x60 == 0x60:
             text, family, size, face = runs[0]
@@ -139,7 +141,9 @@ class NativeAtomLabelItem(AtomLabelItem):
                 text = reversed_display_text(text) or text
             elif label.alignment in {"Above", "Below"}:
                 hydride = split_hydride_label(text)
-                if hydride is not None:
+                # A bare element ("P") splits with zero hydrogens and keeps
+                # its literal one-line source text.
+                if hydride is not None and hydride[1] > 0:
                     element, count = hydride
                     hydrogen = "H" + (str(count) if count > 1 else "")
                     text = "\n".join(
@@ -176,7 +180,13 @@ class NativeAtomLabelItem(AtomLabelItem):
                     }[role]
                 )
                 cursor.insertText(value, fmt)
-        if label.line_height is not None and label.line_height > 0:
+        # The source box spans every stacked line, so its halved height is a
+        # stack pitch; a single line keeps its natural height unclipped.
+        if (
+            label.line_height is not None
+            and label.line_height > 0
+            and document.blockCount() > 1
+        ):
             cursor.select(QTextCursor.SelectionType.Document)
             block = QTextBlockFormat()
             block.setLineHeight(

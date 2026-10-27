@@ -15,6 +15,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Keep imported bare atom labels such as P intact when aligned above or below
+  bonds, without adding a hydrogen or clipping the glyph.
 - Synchronize atom charges when deleting or replacing imported CDXML charge marks,
   and retain replacement positions on save. Read native symbol centers from the
   correct bounding-box point.
