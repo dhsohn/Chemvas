@@ -19,6 +19,7 @@ from chemvas.domain.atom_aliases import (
     modeled_atom_formal_charge,
 )
 
+from .cdxml_charge_edits import charge_edit_plan
 from .cdxml_source import parse_native_xml
 from .graph import connected_atom_components
 from .state import deserialize_model_state
@@ -106,11 +107,10 @@ def document_annotations(
     source = state.get("cdxml_source")
     if isinstance(source, Mapping):
         root = parse_native_xml(cast("str", source["xml"]))
-        nodes = {node.get("id"): node for node in root.iter("n")}
-        for atom_id, native_id in cast("Mapping[str, str]", source["atoms"]).items():
-            node = nodes[native_id]
-            if int(atom_id) in model.atoms and "Charge" in node.attrib:
-                native_charges[int(atom_id)] = int(node.attrib["Charge"])
+        plan = charge_edit_plan(state, root, for_write=False)
+        for atom_id, charge in plan.charges.items():
+            if int(atom_id) in model.atoms:
+                native_charges[int(atom_id)] = charge
     return _resolve_annotations(
         model,
         cast("Sequence[object]", marks),

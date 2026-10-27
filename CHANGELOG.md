@@ -15,6 +15,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Synchronize atom charges when deleting or replacing imported CDXML charge marks,
+  and retain replacement positions on save. Read native symbol centers from the
+  correct bounding-box point.
 - Keep longer drawing-tool names readable in compact windows by allocating
   button widths from their labels. Separate related tool groups when space
   permits, increase options-bar heading contrast, and use the same teal
