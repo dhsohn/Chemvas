@@ -341,7 +341,7 @@ class _GraphicProjection:
             )
         elif self.kind == "Symbol":
             symbol = self.e.get("SymbolType", "")
-            center = b
+            center = a
             radius = max(math.dist(a, b) * 0.4, 1.5)
             if symbol in {"Plus", "Minus", "CirclePlus", "CircleMinus"}:
                 cx, cy = center

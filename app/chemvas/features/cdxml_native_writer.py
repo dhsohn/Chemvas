@@ -7,7 +7,9 @@ import re
 import xml.etree.ElementTree as ET
 from typing import Any, cast
 
+from chemvas.domain.document.cdxml_charge_edits import charge_edit_plan
 from chemvas.domain.document.cdxml_source import parse_native_xml, validate_cdxml_source
+from chemvas.domain.document.inspection import document_annotations, document_model
 from chemvas.features.cdxml_document import _ELEMENTS
 
 
@@ -54,6 +56,10 @@ class _NativeWriter:
         self.source = self.state["cdxml_source"]
         validate_cdxml_source(self.source, self.state)
         self.root = parse_native_xml(self.source["xml"])
+        self.charge_plan = charge_edit_plan(self.state, self.root, for_write=True)
+        # Model-only charge/radical edits have no native form; the shared
+        # resolver rejects any that marks and native Charge do not match.
+        document_annotations(self.state, document_model(self.state))
         page = self.root.find("page")
         assert page is not None
         self.page = page
@@ -228,6 +234,15 @@ class _NativeWriter:
             self.byid[node.attrib["id"]] = node
             self.parents[node] = fragment
 
+    def update_charges(self) -> None:
+        for key, charge in self.charge_plan.edits.items():
+            native = self.atom_native[key]
+            if charge:
+                self.byid[native].set("Charge", str(charge))
+            else:
+                self.byid[native].attrib.pop("Charge", None)
+            self.changed_nodes.add(native)
+
     def update_bonds(self) -> None:
         old_bonds = {self.pair(b): b for b in self.original["model"]["bonds"]}
         bonds = {self.pair(b): b for b in self.state["model"]["bonds"]}
@@ -315,7 +330,10 @@ class _NativeWriter:
                 e = self.byid[identity]
                 after = current.get(identity)
                 if after is None:
-                    if e.find("represent") is not None:
+                    if (
+                        e.find("represent") is not None
+                        and identity not in self.charge_plan.deleted_graphics
+                    ):
                         raise ValueError(
                             "Deleting a native chemical annotation requires updating its atom property; the file was not replaced."
                         )
@@ -467,6 +485,7 @@ class _NativeWriter:
     def build(self) -> bytes:
         self.update_atoms()
         self.add_atoms()
+        self.update_charges()
         self.update_bonds()
         self.update_items()
         self.remove_deleted_fallbacks()

@@ -2,8 +2,14 @@
 
 from __future__ import annotations
 
+import math
 import xml.etree.ElementTree as ET
 from typing import Any
+
+from chemvas.domain.document.cdxml_charge_edits import MARK_SYMBOLS
+
+_GLYPH_SIZE = 7.5
+_MARK_TEXT = {1: {"+", "⊕"}, -1: {"-", "−", "⊖"}}
 
 
 def append_new_objects(
@@ -19,6 +25,8 @@ def append_new_objects(
     offset = source["offset"]
     page = root.find("page")
     assert page is not None
+    atoms = {str(k): v for k, v in state["model"]["atoms"].items()}
+    mark_z = _top_z(root)
 
     def point(value: list[float] | tuple[float, ...]) -> str:
         return f"{value[0] + offset[0]:.12g} {value[1] + offset[1]:.12g} 0"
@@ -75,10 +83,76 @@ def append_new_objects(
                         )
                     e.set("RectangleType", "Filled")
                     e.set("color", color_index(item["fill"]))
+            elif kind == "marks":
+                mark_z += 1
+                _append_mark(
+                    page, item, atoms, offset, fresh, color_index, atom_native, mark_z
+                )
             else:
                 raise ValueError(
                     f"New {kind} are not yet supported in a preserved CDXML document; the file was not replaced."
                 )
+
+
+def _append_mark(
+    page: ET.Element,
+    item: dict[str, Any],
+    atoms: dict[str, Any],
+    offset: Any,
+    fresh: Any,
+    color_index: Any,
+    atom_native: dict[str, str],
+    z: int,
+) -> None:
+    # The atom Charge itself is written by the native writer's charge plan.
+    kind = item.get("kind")
+    if not isinstance(kind, str) or kind not in MARK_SYMBOLS:
+        raise ValueError(
+            f"New {kind} marks are not yet supported in a preserved CDXML document; the file was not replaced."
+        )
+    symbol, charge = MARK_SYMBOLS[kind]
+    if item.get("text") not in {None, *_MARK_TEXT[charge]}:
+        raise ValueError("Custom charge mark text has no native CDXML representation.")
+    x, y = item["x"], item["y"]
+    atom_id = item.get("atom_id")
+    if atom_id is not None:
+        atom = atoms[str(atom_id)]
+        dx, dy = item.get("dx"), item.get("dy")
+        if isinstance(dx, (int, float)) and isinstance(dy, (int, float)):
+            x, y = atom["x"] + dx, atom["y"] + dy
+    cx, cy = x + offset[0], y + offset[1]
+    # Symbol bounds: glyph center first, then a point one glyph size away.
+    graphic = ET.SubElement(
+        page,
+        "graphic",
+        id=fresh(),
+        GraphicType="Symbol",
+        SymbolType=symbol,
+        BoundingBox=f"{cx:.12g} {cy:.12g} {cx - _GLYPH_SIZE:.12g} {cy:.12g}",
+        color=color_index(item.get("color") or "#000000"),
+        Z=str(z),
+    )
+    if atom_id is not None:
+        ET.SubElement(
+            graphic,
+            "represent",
+            attribute="Charge",
+            object=atom_native[str(atom_id)],
+        )
+
+
+def _top_z(root: ET.Element) -> int:
+    # New marks stack above every existing native object, so reopening keeps
+    # them over the molecule instead of behind it (missing Z reads as 0).
+    top = 0
+    for e in root.iter():
+        try:
+            z = float(e.get("Z", ""))
+        except ValueError:
+            continue
+        if math.isfinite(z):
+            top = max(top, math.floor(z))
+    return top
 
 
 def _append_arrow(
