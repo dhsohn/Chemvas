@@ -188,6 +188,39 @@ class SelectionNoteServiceTest(unittest.TestCase):
         service.clear_note_selection()
         self.assertEqual(outline_refresh.call_count, 4)
 
+    def test_discard_removed_note_drops_selection_without_group_semantics(
+        self,
+    ) -> None:
+        scene = QGraphicsScene()
+        note = QGraphicsTextItem("A")
+        companion = QGraphicsTextItem("B")
+        scene.addItem(note)
+        scene.addItem(companion)
+        canvas = self._note_canvas()
+        canvas.scene = lambda: scene
+        seed_note_items(canvas, [note, companion])
+        canvas.runtime_state.selection_state.selected_notes = [note, companion]
+        register_group_for(
+            canvas,
+            set(),
+            [require_scene_record_id(item) for item in [note, companion]],
+        )
+        service = build_selection_controller(canvas, render=False)
+        outline_refresh = service.outline_service.update_selection_outline
+        service.update_note_selection_box(note)
+
+        # Removal drops only the erased note; companions stay selected. Outline
+        # refresh stays with the lifecycle caller after scene removal.
+        self.assertTrue(service.discard_removed_note(note))
+        self.assertEqual(
+            canvas.runtime_state.selection_state.selected_notes, [companion]
+        )
+        self.assertFalse(note.data(21).isVisible())
+        outline_refresh.assert_not_called()
+
+        self.assertFalse(service.discard_removed_note(note))
+        outline_refresh.assert_not_called()
+
     def test_set_note_selected_is_idempotent_in_both_directions(self) -> None:
         scene = QGraphicsScene()
         note = QGraphicsTextItem("A")

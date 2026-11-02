@@ -560,6 +560,21 @@ class SelectionController:
         self.update_note_selection_box(item)
         self._refresh_outline_for_note_change()
 
+    def discard_removed_note(self, item: QGraphicsTextItem) -> bool:
+        """Drop a note that is leaving the scene from the selection list.
+
+        Unlike ``set_note_selected(False)``, this does not deselect group
+        companions: the note is gone, so a mixed group's remaining members keep
+        their selection. Updates the note's selection box but does not refresh
+        the group outline; the caller must do that after the note has left the
+        scene. Returns whether the note was selected.
+        """
+        was_selected = self.canvas.runtime_state.selection_state.remove_selected_note(
+            item
+        )
+        self.update_note_selection_box(item)
+        return was_selected
+
     def _deselect_grouped_note_companions(self, item: QGraphicsTextItem) -> None:
         # A notes-only group deselects as a unit, mirroring the select-direction
         # expansion; otherwise Ctrl-clicking one member leaves a partial group

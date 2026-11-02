@@ -273,7 +273,9 @@ def build_canvas_services(
     )
 
     scene_item_lifecycle_service = SceneItemLifecycleService(
-        canvas, graph_service=graph_service
+        canvas,
+        graph_service=graph_service,
+        selection_controller=selection,
     )
     scene_item_controller = SceneItemController(
         canvas,

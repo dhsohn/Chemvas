@@ -36,9 +36,10 @@ def _add_item_with_attach_ports(
 
 
 class SceneItemLifecycleService:
-    def __init__(self, canvas, *, graph_service) -> None:
+    def __init__(self, canvas, *, graph_service, selection_controller) -> None:
         self.canvas = canvas
         self.graph_service = graph_service
+        self.selection_controller = selection_controller
         self.marks = mark_registry_for(canvas)
 
     def bond_ids_for_ring_item(self, item) -> set[int]:
@@ -240,7 +241,6 @@ class SceneItemLifecycleService:
                 if not marks:
                     self.marks.by_atom.pop(mark_atom_id, None)
         elif kind == "note":
-            self.canvas.runtime_state.selection_state.remove_selected_note(item)
             self.canvas.runtime_state.remove_scene_item("note_items", item)
         elif kind == "image":
             self.canvas.runtime_state.remove_scene_item("image_items", item)
@@ -275,13 +275,12 @@ class SceneItemLifecycleService:
             if isinstance(atom_id, int) and not self.marks.get_for_atom(atom_id):
                 self.marks.by_atom.pop(atom_id, None)
             return
-        was_selected_note = (
-            kind == "note"
-            and item in self.canvas.runtime_state.selection_state.selected_notes
-        )
-        self._remove_scene_item_registration(item, kind)
+        was_selected_note = False
         if kind == "note":
-            self.canvas.services.selection.update_note_selection_box(item)
+            # SelectionController owns note-selection writes; removal must not
+            # apply group-deselection semantics (the note is gone).
+            was_selected_note = self.selection_controller.discard_removed_note(item)
+        self._remove_scene_item_registration(item, kind)
         if (
             kind in HANDLE_BEARING_KINDS
             and item is self.canvas.runtime_state.handle_state.target
@@ -291,9 +290,9 @@ class SceneItemLifecycleService:
         if was_selected_note:
             # Scene items emit selectionChanged when a selected item is removed,
             # which redraws the outline; notes carry their own selection state,
-            # so an erased selected note must refresh explicitly or a stale
-            # group box would linger.
-            self.canvas.services.selection.update_selection_outline()
+            # so an erased selected note must refresh explicitly after it has
+            # left the scene or a stale group box would linger.
+            self.selection_controller.update_selection_outline()
         if removed is None:
             return
         if kind == "ring":

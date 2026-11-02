@@ -2569,3 +2569,24 @@ def test_rollback_runner_has_one_owner() -> None:
 def test_document_item_state_does_not_own_transient_selection() -> None:
     path = APP_ROOT / "chemvas" / "ui" / "canvas" / "canvas_scene_items_state.py"
     assert _matching_lines(re.compile(r"\bselected_notes\b"), [path]) == []
+
+
+def test_note_selection_list_mutations_stay_on_named_owners() -> None:
+    """Note-selection list writes go through SelectionController or document reset.
+
+    ``SelectionState`` owns the list methods; ``SelectionController`` is the
+    scene-selection write owner (ADR 0016). Document replacement clears notes
+    through ``CanvasSceneResetService`` without group-deselection side effects.
+    Scene item removal must not call these methods directly.
+    """
+    allowed_paths = {
+        APP_ROOT / "chemvas" / "ui" / "selection" / "selection_state.py",
+        APP_ROOT / "chemvas" / "ui" / "selection" / "selection_controller.py",
+        APP_ROOT / "chemvas" / "ui" / "canvas" / "canvas_scene_reset_service.py",
+    }
+    pattern = re.compile(
+        r"\b(?:add_selected_note|remove_selected_note|clear_selected_notes)\b"
+    )
+    paths = [path for path in _app_python_files() if path not in allowed_paths]
+
+    assert _matching_lines(pattern, paths) == []
