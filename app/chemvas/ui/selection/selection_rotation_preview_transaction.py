@@ -15,11 +15,6 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from chemvas.domain.transactions import add_recovery_error_note
-from chemvas.ui.molecule.atom_coords_access import (
-    pop_atom_coords_3d_for,
-    set_atom_coords_3d_for_id,
-)
-from chemvas.ui.selection.selection_rotation_access import sync_atom_scene_items_for
 from chemvas.ui.transactions.scene_rect import SceneRectSnapshot
 
 if TYPE_CHECKING:
@@ -77,17 +72,16 @@ class _RotationPreviewAuthority:
         self,
         saved: dict[int, tuple[tuple[float, float] | None, Coords3D | None]],
     ) -> None:
-        canvas = self.controller.canvas
-        for atom_id, (position, coords) in saved.items():
-            if position is not None:
-                atom = canvas.model.atom_for_id(atom_id)
-                if atom is not None:
-                    atom.x, atom.y = position
-            if coords is not None:
-                set_atom_coords_3d_for_id(canvas, atom_id, coords)
-            else:
-                pop_atom_coords_3d_for(canvas, atom_id)
-        sync_atom_scene_items_for(canvas, set(self.atom_ids))
+        # Restore saved screen positions directly; never reproject them.
+        positions = {
+            atom_id: position
+            for atom_id, (position, _coords) in saved.items()
+            if position is not None
+        }
+        coords_3d = {atom_id: coords for atom_id, (_position, coords) in saved.items()}
+        self.controller.canvas.services.move_controller.apply_atom_geometry(
+            positions, coords_3d=coords_3d
+        )
         self.controller.refresh_atom_geometry(set(self.atom_ids))
 
     def restore(self) -> None:
@@ -96,18 +90,21 @@ class _RotationPreviewAuthority:
         canvas = self.controller.canvas
         state = self.controller.rotation
         try:
-            for atom_id, position in state.start_positions.items():
-                atom = canvas.model.atom_for_id(atom_id)
-                if atom is not None:
-                    atom.x, atom.y = position
-            for atom_id, coords in state.start_coords_3d.items():
-                set_atom_coords_3d_for_id(canvas, atom_id, coords)
+            coords_3d: dict[int, Coords3D | None] = {
+                atom_id: coords for atom_id, coords in state.start_coords_3d.items()
+            }
             for atom_id in state.coord_atom_ids - state.start_coords_3d.keys():
-                pop_atom_coords_3d_for(canvas, atom_id)
+                coords_3d[atom_id] = None
+            # Restore the gesture-start camera before accessory refresh so any
+            # depth-preserving or camera-dependent layout reads the start frame.
             state.projection_center_3d = state.start_projection_center_3d
             state.projection_anchor_2d = state.start_projection_anchor_2d
-            # Cache-only camera re-expression did not move unrelated items.
-            sync_atom_scene_items_for(canvas, set(state.start_positions))
+            # Cache-only camera re-expression keeps unrelated screen items still:
+            # only start_positions are supplied for accessory synchronization.
+            canvas.services.move_controller.apply_atom_geometry(
+                dict(state.start_positions),
+                coords_3d=coords_3d,
+            )
             refresh_ids = set(state.atom_ids) or set(self.atom_ids)
             if refresh_ids:
                 self.controller.refresh_atom_geometry(refresh_ids)

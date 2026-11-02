@@ -1018,6 +1018,15 @@ class CanvasViewProjectionMathTest(unittest.TestCase):
         self.assertEqual(flattened_missing[1], (0.0, 0.0, 0.0))
         self.assertEqual(flattened_missing[2], (1.0, 0.0, 0.0))
 
+    def _bind_move_controller(self, view) -> CanvasMoveController:
+        hit_testing_service = view.services.hit_testing_service
+        if hit_testing_service is None:
+            hit_testing_service = SimpleNamespace(mark_spatial_index_dirty=mock.Mock())
+            view.services.hit_testing_service = hit_testing_service
+        controller = CanvasMoveController(view, hit_testing_service=hit_testing_service)
+        view.services.move_controller = controller
+        return controller
+
     def test_apply_projected_atom_positions_updates_labels_dots_and_marks(self) -> None:
         label = object()
         dot = _FakeDot()
@@ -1027,12 +1036,17 @@ class CanvasViewProjectionMathTest(unittest.TestCase):
         scene_decoration_build_service = SimpleNamespace(set_mark_center=mock.Mock())
         view = SimpleNamespace(
             model=MoleculeModel(atoms={1: Atom("C", 0.0, 0.0), 2: Atom("O", 4.0, 5.0)}),
+            renderer=SimpleNamespace(style=SimpleNamespace(bond_length_px=20.0)),
             services=canvas_runtime_services(
                 atom_label_service=atom_label_service,
                 scene_decoration_build_service=scene_decoration_build_service,
+                hit_testing_service=SimpleNamespace(
+                    mark_spatial_index_dirty=mock.Mock()
+                ),
             ),
             runtime_state=canvas_runtime_state(
                 spatial_index_state=CanvasSpatialIndexState(),
+                rotation_state=CanvasRotationState(),
                 atom_coords_3d_state=CanvasAtomCoords3DState(),
                 atom_graphics_state=CanvasAtomGraphicsState(),
                 mark_registry=CanvasMarkRegistry(
@@ -1040,6 +1054,7 @@ class CanvasViewProjectionMathTest(unittest.TestCase):
                 ),
             ),
         )
+        self._bind_move_controller(view)
         set_atom_coords_3d_for(view, {})
         set_atom_items_for(view, {1: label})
         set_atom_dots_for(view, {1: dot})
@@ -1079,19 +1094,25 @@ class CanvasViewProjectionMathTest(unittest.TestCase):
     ) -> None:
         view = SimpleNamespace(
             model=MoleculeModel(atoms={1: Atom("C", 0.0, 0.0)}),
+            renderer=SimpleNamespace(style=SimpleNamespace(bond_length_px=20.0)),
             services=canvas_runtime_services(
                 atom_label_service=SimpleNamespace(position_label=mock.Mock()),
                 scene_decoration_build_service=SimpleNamespace(
                     set_mark_center=mock.Mock()
                 ),
+                hit_testing_service=SimpleNamespace(
+                    mark_spatial_index_dirty=mock.Mock()
+                ),
             ),
             runtime_state=canvas_runtime_state(
                 spatial_index_state=CanvasSpatialIndexState(),
+                rotation_state=CanvasRotationState(),
                 atom_coords_3d_state=CanvasAtomCoords3DState(),
                 atom_graphics_state=CanvasAtomGraphicsState(),
                 mark_registry=CanvasMarkRegistry(),
             ),
         )
+        self._bind_move_controller(view)
         set_atom_coords_3d_for(view, {})
         set_atom_items_for(view, {})
         set_atom_dots_for(view, {})
