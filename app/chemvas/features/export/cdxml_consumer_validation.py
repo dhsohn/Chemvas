@@ -10,6 +10,10 @@ import math
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass
 
+from chemvas.domain.document.cdxml_source import (
+    UnsafeCdxmlDeclarationsError,
+    reject_unsafe_cdxml_declarations,
+)
 from chemvas.features.export.cdxml_paint_order import (
     line_overlaps_filled_rectangle,
     validate_relative_order,
@@ -31,8 +35,12 @@ def numbers(value: str, count: int) -> tuple[float, ...]:
 def parse_consumer_xml(raw: bytes) -> ET.Element:
     try:
         text = raw.decode("utf-8-sig")
-        if "<!ENTITY" in text:
-            raise ValueError("CDXML consumer reference must not declare entities")
+        try:
+            reject_unsafe_cdxml_declarations(text)
+        except UnsafeCdxmlDeclarationsError as exc:
+            raise ValueError(
+                "CDXML consumer reference must not declare entities"
+            ) from exc
         root = ET.fromstring(text)
     except (UnicodeError, ET.ParseError) as exc:
         raise ValueError("CDXML consumer reference is not UTF-8 CDXML") from exc

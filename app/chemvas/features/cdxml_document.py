@@ -24,6 +24,10 @@ from chemvas.domain.document import (
     extract_document_state,
     normalize_json_numbers,
 )
+from chemvas.domain.document.cdxml_source import (
+    UnsafeCdxmlDeclarationsError,
+    reject_unsafe_cdxml_declarations,
+)
 from chemvas.domain.json_io import strict_json_loads
 from chemvas.features.document_composition import compose_document_state
 
@@ -73,13 +77,16 @@ def parse_cdxml_document(raw: bytes, *, preserve_source: bool = False) -> CdxmlD
     digest = hashlib.sha256(raw).hexdigest()
     try:
         text = raw.decode("utf-8-sig")
-        if "<!ENTITY" in text or re.search(r"<!DOCTYPE[^>]*\[", text):
+        try:
+            reject_unsafe_cdxml_declarations(text)
+        except UnsafeCdxmlDeclarationsError as exc:
             raise ValueError(
                 "CDXML entity declarations and internal DTDs are not supported"
-            )
+            ) from exc
         root = ET.fromstring(text)
     except (UnicodeError, ET.ParseError) as exc:
         raise ValueError("Not a valid UTF-8 CDXML document") from exc
+
     if root.tag != "CDXML" or len(root.findall("page")) != 1:
         raise ValueError("CDXML editing requires exactly one page")
     match = _MARKER.search(raw)

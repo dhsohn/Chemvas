@@ -13,6 +13,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   public CDXML documents for repeatable editing and export checks. Native bundle
   installation acceptance remains pending.
 
+### Security
+
+- ``review-cdxml`` and the render layout reference now reject internal DOCTYPE
+  subsets like the document importers, and an internal subset after a quoted
+  literal containing ``>`` is now rejected everywhere.
+
 ### Fixed
 
 - Refuse alias and ambiguous atom labels (Ac, Ts, Ar) when editing imported

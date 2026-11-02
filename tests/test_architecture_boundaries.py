@@ -390,6 +390,20 @@ def test_alias_attachment_derivation_has_one_domain_owner() -> None:
     assert _matching_lines(re.compile(r"\b_alias_attachments\b"), consumers) == []
 
 
+def test_cdxml_unsafe_declaration_check_has_one_owner() -> None:
+    """Entity and internal-subset rejection is owned by cdxml_source alone."""
+    owner = APP_ROOT / "chemvas" / "domain" / "document" / "cdxml_source.py"
+    others = [path for path in _app_python_files() if path != owner]
+    source = owner.read_text(encoding="utf-8")
+
+    assert "def reject_unsafe_cdxml_declarations(" in source
+    assert _matching_lines(re.compile(r"\bStartDoctypeDeclHandler\b"), [owner])
+    assert _matching_lines(re.compile(r"""['"]<!ENTITY['"]"""), others) == []
+    assert _matching_lines(re.compile(r"""['"]<!DOCTYPE['"]"""), others) == []
+    assert _matching_lines(re.compile(r"<!DOCTYPE\[\^>\]\*\\?\["), others) == []
+    assert _matching_lines(re.compile(r"\bStartDoctypeDeclHandler\b"), others) == []
+
+
 def test_canvas_runtime_state_attach_does_not_mirror_runtime_services_to_canvas() -> (
     None
 ):

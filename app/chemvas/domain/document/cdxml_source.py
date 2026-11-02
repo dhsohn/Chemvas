@@ -9,10 +9,10 @@ promotion are owned here so callers cannot update one side alone.
 
 from __future__ import annotations
 
-import re
 import xml.etree.ElementTree as ET
 from copy import deepcopy
 from typing import TYPE_CHECKING, Any, TypedDict, cast
+from xml.parsers import expat
 
 if TYPE_CHECKING:
     from collections.abc import Mapping, MutableMapping, Sequence
@@ -44,13 +44,68 @@ class ImageArrowPromotion(TypedDict):
     baseline: dict[str, Any]
 
 
+class UnsafeCdxmlDeclarationsError(ValueError):
+    """Entity declarations or an internal DOCTYPE subset are present."""
+
+
+def reject_unsafe_cdxml_declarations(text: str) -> None:
+    """Reject entity declarations and any internal DOCTYPE subset.
+
+    External DOCTYPE declarations without an internal subset remain allowed.
+    Malformed input is passed through on purpose; callers must parse the same
+    string with ElementTree immediately after this guard. Callers map this
+    error to their own user-facing message.
+    """
+    if "<!ENTITY" in text:
+        raise UnsafeCdxmlDeclarationsError(
+            "CDXML entity declarations are not supported."
+        )
+
+    class _InternalSubsetError(Exception):
+        pass
+
+    class _StopAtRootError(Exception):
+        pass
+
+    parser = expat.ParserCreate()
+    parser.SetParamEntityParsing(expat.XML_PARAM_ENTITY_PARSING_NEVER)
+
+    def start_doctype(
+        _name: str,
+        _sysid: str | None,
+        _pubid: str | None,
+        has_internal_subset: int,
+    ) -> None:
+        if has_internal_subset:
+            raise _InternalSubsetError
+
+    def start_element(_name: str, _attrs: dict[str, str]) -> None:
+        raise _StopAtRootError
+
+    parser.StartDoctypeDeclHandler = start_doctype
+    parser.StartElementHandler = start_element
+    try:
+        parser.Parse(text, True)
+    except _InternalSubsetError as exc:
+        raise UnsafeCdxmlDeclarationsError(
+            "CDXML internal DOCTYPE subsets are not supported."
+        ) from exc
+    except _StopAtRootError:
+        return
+    except expat.ExpatError:
+        # Malformed input is reported by the caller's ElementTree parse.
+        return
+
+
 def parse_native_xml(xml: str) -> ET.Element:
     if not isinstance(xml, str) or len(xml.encode("utf-8")) > MAX_CDXML_SOURCE_BYTES:
         raise ValueError("Invalid or oversized native CDXML source.")
-    if "<!ENTITY" in xml or re.search(r"<!DOCTYPE[^>]*\[", xml):
+    try:
+        reject_unsafe_cdxml_declarations(xml)
+    except UnsafeCdxmlDeclarationsError as exc:
         raise ValueError(
             "CDXML entity declarations and internal DTDs are not supported."
-        )
+        ) from exc
     try:
         root = ET.fromstring(xml)
     except ET.ParseError as exc:
