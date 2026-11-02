@@ -182,8 +182,13 @@ class CanvasViewCenterTransformHelpersTest(unittest.TestCase):
 
         tool_mode_controller = CanvasToolModeController(
             view,
+            insert_controller=SimpleNamespace(
+                cancel_template_insert=mock.Mock(),
+                begin_ring_template_insert=mock.Mock(),
+            ),
             hover_refresh=view.services.hover.refresh,
             set_active_tool=view.services.tool_controller.set_active,
+            history_service=SimpleNamespace(push=mock.Mock()),
         )
         tool_mode_controller.set_bond_style("double", 2)
         tool_mode_controller.set_arrow_type("curved")

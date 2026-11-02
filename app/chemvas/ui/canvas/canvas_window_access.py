@@ -9,17 +9,8 @@ def notify_error_for(canvas, message: str) -> bool:
     return True
 
 
-def history_service_for_canvas(canvas):
-    runtime_state = getattr(canvas, "runtime_state", None)
-    service = getattr(runtime_state, "history_service", None)
-    if service is not None:
-        return service
-    msg = "Canvas runtime history service is not available"
-    raise AttributeError(msg)
-
-
 def set_history_change_callback_for(canvas, callback) -> None:
-    history_service_for_canvas(canvas).set_change_callback(callback)
+    canvas.services.history_service.set_change_callback(callback)
 
 
 def set_document_change_callback_for(canvas, callback) -> None:
@@ -43,7 +34,6 @@ def notify_document_change_for(canvas, *, edited_note=None) -> None:
 
 
 __all__ = [
-    "history_service_for_canvas",
     "notify_document_change_for",
     "notify_error_for",
     "set_document_change_callback_for",

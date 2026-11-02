@@ -72,7 +72,7 @@ class _Canvas(QGraphicsView):
             scene_items_state=CanvasSceneItemsState(),
             text_style_state=CanvasTextStyleState(),
         )
-        self.services = canvas_runtime_services()
+        self.services = canvas_runtime_services(history_service=self.history)
         self.selection_controller = build_selection_controller(self, render=False)
         for name in (
             "select_note",

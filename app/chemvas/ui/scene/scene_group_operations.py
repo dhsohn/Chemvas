@@ -18,10 +18,7 @@ from chemvas.ui.canvas.canvas_group_state import (
 )
 from chemvas.ui.canvas.canvas_mark_registry import mark_registry_for
 from chemvas.ui.canvas.canvas_scene_items_state import require_scene_record_id
-from chemvas.ui.canvas.canvas_window_access import (
-    history_service_for_canvas,
-    notify_error_for,
-)
+from chemvas.ui.canvas.canvas_window_access import notify_error_for
 from chemvas.ui.history.history_commands import (
     GroupSceneItemsCommand,
     UngroupSceneItemsCommand,
@@ -95,7 +92,7 @@ def group_updates_for_atom_merge(
 def _atomic_group_change(operation):
     @wraps(operation)
     def run(canvas, *args, **kwargs):
-        history = history_service_for_canvas(canvas)
+        history = canvas.services.history_service
         with document_transaction(canvas, history_service=history):
             return operation(canvas, *args, **kwargs)
 
@@ -104,7 +101,7 @@ def _atomic_group_change(operation):
 
 def _push_group_command(canvas, command) -> None:
     """Publish within the caller's document transaction; it owns failed edits."""
-    history_service_for_canvas(canvas).push(command)
+    canvas.services.history_service.push(command)
 
 
 def _bound_mark_atom_id(canvas, item) -> int | None:

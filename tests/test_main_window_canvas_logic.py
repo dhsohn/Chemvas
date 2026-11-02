@@ -25,6 +25,7 @@ from chemvas.ui.window.main_window_canvas_logic import (
     copy_canvas_template_settings,
     resolve_active_canvas,
 )
+from tests.runtime_services import canvas_runtime_services
 from tests.runtime_state import canvas_runtime_state
 
 
@@ -34,14 +35,16 @@ class MainWindowCanvasLogicTest(unittest.TestCase):
         canvas = SimpleNamespace()
         operations = CanvasHistoryOperations(canvas)
         history_state = CanvasHistoryState()
+        history_service = CanvasHistoryService(
+            operations, history_state, replay_context=nullcontext
+        )
         canvas.runtime_state = canvas_runtime_state(
             history_state=history_state,
-            history_service=CanvasHistoryService(
-                operations, history_state, replay_context=nullcontext
-            ),
+            history_service=history_service,
             callback_state=CanvasCallbackState(),
             selection_info_state=SelectionInfoState(),
         )
+        canvas.services = canvas_runtime_services(history_service=history_service)
         return canvas
 
     def test_resolve_active_canvas_prefers_current_then_last_then_first(self) -> None:

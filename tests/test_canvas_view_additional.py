@@ -336,6 +336,7 @@ class CanvasViewAdditionalTest(unittest.TestCase):
             insert_controller=tool_view.services.insert_controller,
             hover_refresh=tool_view.services.hover.refresh,
             set_active_tool=tool_view.services.tool_controller.set_active,
+            history_service=SimpleNamespace(push=mock.Mock()),
         )
         tool_view.services.tool_mode_controller.set_tool("bond")
         tool_view.services.tool_mode_controller.set_mark_kind("minus")
@@ -381,6 +382,7 @@ class CanvasViewAdditionalTest(unittest.TestCase):
             insert_controller=view.services.insert_controller,
             hover_refresh=view.services.hover.refresh,
             set_active_tool=view.services.tool_controller.set_active,
+            history_service=SimpleNamespace(push=mock.Mock()),
         )
 
         view.services.tool_mode_controller.set_tool("bond")

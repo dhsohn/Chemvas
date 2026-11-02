@@ -15,7 +15,6 @@ from chemvas.domain.document import CANVAS_FILE_VERSION
 from chemvas.features.document_composition import compose_document_state
 from chemvas.features.session import DocDescriptor
 from chemvas.shell.window_registry import open_windows
-from chemvas.ui.canvas.canvas_window_access import history_service_for_canvas
 from chemvas.ui.molecule.structure_mutation_access import add_bond_between_points_for
 from chemvas.ui.session.session_snapshot_store import OWNER_NAME, SessionSnapshotStore
 from chemvas.ui.window import recent_documents_store
@@ -60,7 +59,7 @@ def test_hardlinked_recents_cannot_break_document_operations(
     try:
         assert actions.load_canvas_from_path(window, str(source))
         canvas = active_canvas_for_window(window)
-        history = history_service_for_canvas(canvas)
+        history = canvas.services.history_service
         # Keep both undo and redo history live; opening an already-open path
         # must activate, never reload, even though its recent-list write fails.
         add_bond_between_points_for(canvas, QPointF(100, 0), QPointF(140, 0))

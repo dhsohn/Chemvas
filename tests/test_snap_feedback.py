@@ -11,7 +11,6 @@ from PyQt6.QtWidgets import QApplication
 
 from chemvas.features.rendering import ENDPOINT_SNAP_SCREEN_PX
 from chemvas.ui.annotations.state import arrow_state_dict_for
-from chemvas.ui.canvas.canvas_window_access import history_service_for_canvas
 from chemvas.ui.canvas.input_view_access import set_zoom_for
 from chemvas.ui.scene.scene_decoration_build_access import SNAP_MARK_ROLE
 from chemvas.ui.tools.endpoint_snap_access import (
@@ -327,7 +326,7 @@ class MoveConnectTest(unittest.TestCase):
             arrow_state_dict_for(self.canvas, self.level)["end"], self.TARGET
         )
 
-        history_service_for_canvas(self.canvas).undo()
+        self.canvas.services.history_service.undo()
         self.app.processEvents()
 
         self.assertEqual(
