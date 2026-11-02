@@ -1821,6 +1821,78 @@ def test_bond_cycle_cache_has_one_writer() -> None:
     assert writers == [GRAPH_FEATURE_INIT_MODULE]
 
 
+MARK_REGISTRY_BY_ATOM = "by_atom"
+MARK_REGISTRY_BY_ATOM_MUTATORS = frozenset(
+    {"clear", "pop", "popitem", "setdefault", "update"}
+)
+MARK_REGISTRY_BY_ATOM_WRITERS = [
+    "app/chemvas/bootstrap/web_adapter.py",
+    "app/chemvas/ui/canvas/canvas_mark_registry.py",
+    "app/chemvas/ui/transactions/scene_item_attach.py",
+    "app/chemvas/ui/transactions/scene_runtime_restore.py",
+]
+
+
+def _is_mark_registry_by_atom(node: ast.expr) -> bool:
+    return isinstance(node, ast.Attribute) and node.attr == MARK_REGISTRY_BY_ATOM
+
+
+def _mark_registry_by_atom_writes(source: str) -> list[int]:
+    """Line numbers where something writes the mark registry ``by_atom`` map.
+
+    A write is an assignment to the attribute or to a slot of it, or a call to
+    one of the mapping methods that mutate. Reads — ``.get``, ``in``,
+    subscripting on the right-hand side, passing the mapping onward — are not
+    writes. Whole-mapping restores for exact rollback live in the allowed
+    snapshot modules; every other mutation belongs on ``CanvasMarkRegistry``.
+
+    What escapes: a writer that reaches the mapping through a local alias
+    (``marks = registry.by_atom``), because the attribute is no longer named at
+    the write.
+    """
+    writes: list[int] = []
+    for node in _module_nodes(source):
+        targets: list[ast.expr] = []
+        if isinstance(node, ast.Assign):
+            targets = list(node.targets)
+        elif isinstance(node, (ast.AnnAssign, ast.AugAssign)):
+            targets = [node.target]
+        for target in targets:
+            if _is_mark_registry_by_atom(target) or (
+                isinstance(target, ast.Subscript)
+                and _is_mark_registry_by_atom(target.value)
+            ):
+                writes.append(node.lineno)
+        if (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Attribute)
+            and node.func.attr in MARK_REGISTRY_BY_ATOM_MUTATORS
+            and _is_mark_registry_by_atom(node.func.value)
+        ):
+            writes.append(node.lineno)
+    return sorted(set(writes))
+
+
+def test_mark_registry_by_atom_has_one_writer() -> None:
+    """Only the mark registry and exact-rollback snapshots write ``by_atom``.
+
+    Callers used to remove items, drop empty lists, reorder on undo, and
+    rebind ownership by mutating ``registry.by_atom`` in place, so the
+    "no empty lists / no duplicates" contract was reimplemented next to each
+    edit. ``CanvasMarkRegistry`` owns those writes; snapshot modules may still
+    re-pin the whole mapping for exact rollback.
+    """
+    writers = sorted(
+        {
+            f"{path.relative_to(APP_ROOT.parents[0]).as_posix()}"
+            for path in _app_python_files()
+            if _mark_registry_by_atom_writes(path.read_text(encoding="utf-8"))
+        }
+    )
+
+    assert writers == MARK_REGISTRY_BY_ATOM_WRITERS
+
+
 def _modules_using(name: str) -> list[str]:
     """Modules that import or call ``name``, however they spell the import."""
     users: list[str] = []

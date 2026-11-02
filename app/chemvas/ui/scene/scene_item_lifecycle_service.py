@@ -235,11 +235,7 @@ class SceneItemLifecycleService:
         elif kind == "mark":
             self.canvas.runtime_state.remove_scene_item("mark_items", item)
             if mark_atom_id is not None:
-                marks = self.marks.get_for_atom(mark_atom_id)
-                if marks is not None and item in marks:
-                    marks.remove(item)
-                if not marks:
-                    self.marks.by_atom.pop(mark_atom_id, None)
+                self.marks.discard(mark_atom_id, item)
         elif kind == "note":
             self.canvas.runtime_state.remove_scene_item("note_items", item)
         elif kind == "image":
@@ -269,11 +265,9 @@ class SceneItemLifecycleService:
             return
         kind = item.data(0)
         if kind == "mark":
-            data = item.data(1) or {}
-            atom_id = data.get("atom_id") if isinstance(data, dict) else None
+            # ``remove_mark_item`` already discards the registry entry (and pops
+            # an emptied atom list); no second cleanup here.
             self.canvas.services.canvas_mark_scene_service.remove_mark_item(item)
-            if isinstance(atom_id, int) and not self.marks.get_for_atom(atom_id):
-                self.marks.by_atom.pop(atom_id, None)
             return
         was_selected_note = False
         if kind == "note":
