@@ -547,14 +547,19 @@ def test_contributor_docs_match_ci_and_the_test_runner() -> None:
     jobs = set(re.findall(r"(?m)^  ([A-Za-z0-9-]+):", ci))
     assert {"quality", "package-smoke"} <= jobs
     assert "windows-native" not in jobs
-    reports_rdkit = 'find_spec("rdkit")' in reporter
+    assert 'find_spec("rdkit")' not in reporter
+    assert "RDKit" not in reporter
+    assert "Commit:" in reporter
+    assert "working tree" in reporter
+    assert "PYQT_VERSION_STR" in reporter
+    assert "QT_VERSION_STR" in reporter
     for path in _CONTRIBUTOR_DOCS:
         text = _read(path)
         assert "quality" in text, path.name
         assert "run_test_files.sh" in text, path.name
         assert "package-smoke" in text, path.name
         assert "windows-native" not in text, path.name
-        assert ("RDKit" in text) is reports_rdkit, path.name
+        assert "RDKit" not in text, path.name
         for token in _RETIRED_CHECK_CLAIMS:
             if token in present:
                 continue

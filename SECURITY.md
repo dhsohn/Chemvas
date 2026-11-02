@@ -25,7 +25,7 @@ Report them privately through GitHub:
 Include as much of the following as you can:
 
 - Chemvas version (`chemvas --version` or the **About Chemvas** dialog), Python
-  version, operating system, and whether the RDKit extra is installed
+  version, PyQt6 and Qt versions, and operating system
 - The affected entry point: desktop app, a specific CLI command, or the Python API
 - A minimal input file (`.cdxml`, Chemvas SVG, composition/patch/plan JSON,
   or image) and the exact steps or command that trigger the issue
@@ -65,7 +65,7 @@ In scope:
 
 Out of scope:
 
-- Vulnerabilities in dependencies such as Qt/PyQt6, RDKit, or Pillow that
+- Vulnerabilities in dependencies such as Qt/PyQt6 or Pillow that
   Chemvas does not make worse; report those to the upstream project
 - Attacks that require an attacker who already runs code as the same user
 - Slow processing of large inputs that stay within the documented limits

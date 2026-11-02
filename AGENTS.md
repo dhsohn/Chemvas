@@ -22,8 +22,8 @@ make check
 ```
 
 매 검사에서 줄·분기 커버리지를 수집하고 새 `htmlcov/check.*/`에 HTML·JSON·텍스트
-보고서를 남긴다. 완료 보고에는 두 수치와 실행 플랫폼·전체/선별 범위·RDKit 포함 여부를
-적는다. 선별 검사 수치를 전체 기준선으로 보고하지 않는다. GitHub CI는 `quality`(Ruff·format·mypy), `package-smoke`, 비밀정보 검사만 실행한다.
+보고서를 남긴다. 완료 보고에는 두 수치와 실행 플랫폼·전체/선별 범위·후보 커밋·
+Python/PyQt6/Qt 버전을 적는다. 선별 검사 수치를 전체 기준선으로 보고하지 않는다. GitHub CI는 `quality`(Ruff·format·mypy), `package-smoke`, 비밀정보 검사만 실행한다.
 OS별 전체 테스트는 CI에서 실행하지 않으며, 로컬 `make check`로 검증한다.
 
 Ruff·format·mypy를 돌린 뒤 **테스트를 `test_*.py` 파일마다 별도 pytest 프로세스로**
@@ -73,7 +73,7 @@ macOS와 네이티브 Windows에서만 지원하며, 기존 편집·텍스트·�
 ## `make check`가 흡수하지 못하는 것
 
 - **휠 스모크는 CI 전용이다.** 패키징이 걸린 변경은 CI의 `package-smoke` 잡이 판정한다.
-  RDKit 잡과 `rdkit` extra는 없다.
+  `rdkit` 잡과 extra는 없다.
 - **GUI 실검증은 별도다.** Mac 게이트의 Cocoa workflow는 메뉴·포커스·문서 편집·복구 범위를 검증한다.
   offscreen 스위트나 이 제한된 Cocoa 검사가 모든 실제 창·입력기 상호작용을 증명하지는
   않는다 — 캔버스가 걸린 변경은 해당 기능의 실캔버스 확인을 따로 한다.

@@ -2,13 +2,36 @@
 
 from __future__ import annotations
 
-import importlib.util
 import json
 import os
+import subprocess
 import sys
 from pathlib import Path
 
 from coverage import Coverage
+from PyQt6.QtCore import PYQT_VERSION_STR, QT_VERSION_STR
+
+
+def _commit_receipt(root: Path) -> str:
+    try:
+        sha = subprocess.run(
+            ["git", "rev-parse", "HEAD"],
+            cwd=root,
+            capture_output=True,
+            text=True,
+            check=True,
+        ).stdout.strip()
+        status = subprocess.run(
+            ["git", "status", "--porcelain"],
+            cwd=root,
+            capture_output=True,
+            text=True,
+            check=True,
+        ).stdout
+    except (OSError, subprocess.SubprocessError):
+        return "Commit: git unavailable"
+    dirty = "dirty" if status.strip() else "clean"
+    return f"Commit: {sha}; working tree {dirty}"
 
 
 def main() -> None:
@@ -29,9 +52,11 @@ def main() -> None:
     totals = json.loads((output / "coverage.json").read_text(encoding="utf-8"))[
         "totals"
     ]
-    rdkit = "installed" if importlib.util.find_spec("rdkit") else "not installed"
+    python_version = sys.version.split()[0]
     summary = (
-        f"Coverage: {scope}; tests {outcome}; RDKit {rdkit}\n\n"
+        f"Coverage: {scope}; tests {outcome}\n"
+        f"{_commit_receipt(root)}\n"
+        f"Python {python_version}; PyQt6 {PYQT_VERSION_STR}; Qt {QT_VERSION_STR}\n\n"
         "| Metric | Covered / total | Percent |\n"
         "| --- | ---: | ---: |\n"
     )
