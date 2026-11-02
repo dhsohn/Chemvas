@@ -11,6 +11,7 @@ from chemvas.domain.document.cdxml_charge_edits import charge_edit_plan
 from chemvas.domain.document.cdxml_source import parse_native_xml, validate_cdxml_source
 from chemvas.domain.document.inspection import document_annotations, document_model
 from chemvas.features.cdxml_document import _ELEMENTS
+from chemvas.features.cdxml_native_palette import allocate_native_color_index
 
 
 def transform_native(
@@ -93,29 +94,7 @@ class _NativeWriter:
             parent.remove(e)
 
     def color_index(self, color: str) -> str:
-        if color.lower() == "#000000" and self.root.get("fgcolor", "0") == "0":
-            return "0"
-        if color.lower() == "#ffffff":
-            return "1"
-        table = self.root.find("colortable")
-        if table is None:
-            table = ET.SubElement(self.root, "colortable")
-        target = tuple(int(color[i : i + 2], 16) for i in (1, 3, 5))
-        for i, c in enumerate(table):
-            if (
-                tuple(round(float(c.get(k, "0")) * 255) for k in ("r", "g", "b"))
-                == target
-            ):
-                return str(i + 2)
-        ET.SubElement(
-            table,
-            "color",
-            {
-                k: f"{v / 255:.12g}"
-                for k, v in zip(("r", "g", "b"), target, strict=True)
-            },
-        )
-        return str(len(table) + 1)
+        return allocate_native_color_index(self.root, color)
 
     def pair(self, bond: dict[str, Any]) -> str:
         return f"{min(bond['a'], bond['b'])}:{max(bond['a'], bond['b'])}"
