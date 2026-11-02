@@ -18,6 +18,19 @@ from chemvas.features.cdxml_document import _ELEMENTS, _Importer
 from chemvas.features.document_composition import compose_document_state
 
 
+def _css_string_literal(value: str) -> str:
+    """Return ``value`` as a single-quoted CSS string literal.
+
+    Qt's HTML subset discards an entire ``style`` declaration list when an
+    unquoted ``font-family`` token starts with ``.`` (for example macOS
+    ``.AppleSystemUIFont``). Quoting keeps family, color, and size together.
+    Backslash and quote are escaped so ordinary ASCII, spaces, Unicode,
+    quotes, and backslashes cannot break out of the CSS string or the HTML
+    ``style`` attribute once the declaration is HTML-escaped.
+    """
+    return "'" + value.replace("\\", "\\\\").replace("'", "\\'") + "'"
+
+
 class PreservingImporter(_Importer):
     def __init__(self, xml: str):
         root = parse_native_xml(xml)
@@ -212,7 +225,7 @@ class PreservingImporter(_Importer):
             face = int(run.get("face", "0"))
             family = self.fonts.get(run.get("font"), self.caption_font)
             css = [
-                f"font-family: {escape(family, quote=True)}",
+                f"font-family: {_css_string_literal(family)}",
                 f"font-size: {size:g}px",
                 f"color: {self.color(run)}",
             ]
@@ -228,9 +241,7 @@ class PreservingImporter(_Importer):
             elif face & 0x60 == 0x40:
                 css.append("vertical-align:super")
             pieces.append(
-                '<span style="'
-                + ";".join(css)
-                + '">'
+                f'<span style="{escape(";".join(css), quote=True)}">'
                 + escape(text).replace("\n", "<br/>")
                 + "</span>"
             )

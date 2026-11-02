@@ -7,6 +7,8 @@ import xml.etree.ElementTree as ET
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QFont, QTextCharFormat, QTextDocument
 
+from chemvas.features.cdxml_native_palette import allocate_native_color_index
+
 
 def write_native_caption(root: ET.Element, node: ET.Element, state: dict) -> None:
     document = QTextDocument()
@@ -16,9 +18,6 @@ def write_native_caption(root: ET.Element, node: ET.Element, state: dict) -> Non
     fonts = root.find("fonttable")
     if fonts is None:
         fonts = ET.SubElement(root, "fonttable")
-    colors = root.find("colortable")
-    if colors is None:
-        colors = ET.SubElement(root, "colortable")
 
     def font_id(name: str) -> str:
         for font in fonts:
@@ -27,22 +26,6 @@ def write_native_caption(root: ET.Element, node: ET.Element, state: dict) -> Non
         identity = str(max((int(f.get("id", "0")) for f in fonts), default=0) + 1)
         ET.SubElement(fonts, "font", id=identity, name=name, charset="utf-8")
         return identity
-
-    def color_id(value: str) -> str:
-        if value == "#000000":
-            return "0"
-        if value == "#ffffff":
-            return "1"
-        rgb = [int(value[i : i + 2], 16) for i in (1, 3, 5)]
-        for i, color in enumerate(colors):
-            if [round(float(color.get(k, "0")) * 255) for k in ("r", "g", "b")] == rgb:
-                return str(i + 2)
-        ET.SubElement(
-            colors,
-            "color",
-            {k: str(v / 255) for k, v in zip(("r", "g", "b"), rgb, strict=True)},
-        )
-        return str(len(colors) + 1)
 
     for child in list(node):
         if child.tag == "s":
@@ -96,7 +79,9 @@ def write_native_caption(root: ET.Element, node: ET.Element, state: dict) -> Non
                     font=font_id(font.family()),
                     size=f"{size:.12g}",
                     face=str(face),
-                    color=color_id(fmt.foreground().color().name()),
+                    color=allocate_native_color_index(
+                        root, fmt.foreground().color().name()
+                    ),
                 ).text = fragment.text()
             it += 1
         first = False

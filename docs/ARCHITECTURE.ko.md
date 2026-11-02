@@ -57,12 +57,12 @@ import하며, `bootstrap`만 adapters를 알고 편집기를 조립합니다. `u
 - **Renderer** (`app/chemvas/adapters/qt/renderer.py`): `acs1996_style` 드로잉 정책을 적용하는 Qt 렌더링 구현체입니다.
 - **HistoryCommand** (`app/chemvas/core/history.py`): 델타 기반 Undo/Redo 엔진입니다. 복합 작업은 `CompositeCommand`로 묶여 원자적으로 실행 취소/다시 실행됩니다.
 - **장면 렌더링** (`scene_render_context.py`, `scene_rendering.py`): `SceneRenderContext`를 통해 뷰에 독립적인 분자 그래픽 및 주석 렌더링을 제공합니다 ([ADR 0004](adr/0004-view-independent-scene-rendering.md)).
-- **도메인 문서** (`app/chemvas/domain/document`): 문서 직렬화, 스키마 검증 및 Calculation Plan v2 구조를 관리합니다.
+- **도메인 문서** (`app/chemvas/domain/document`): 문서 직렬화, 스키마 검증, 네이티브 CDXML 원본(`cdxml_source`) 및 Calculation Plan v2 구조를 관리합니다.
 
 ## UI 아키텍처 및 경계 원칙
 
 - **기능 소유권**: 상호작용 흐름은 컨트롤러 중심으로 구성하고 구체적인 협력 객체를 직접 주입받아 호출합니다. 캔버스가 소유하는 협력 객체는 한 가지 표기만 갖습니다. 런타임은 `canvas.services.<이름>`(평탄한 `CanvasRuntimeServices`), 상태는 `canvas.runtime_state.<이름>`, 캔버스 셋업이 만드는 객체는 `canvas.model`, `canvas.renderer`, `canvas.render_context`, `canvas.bond_renderer`입니다. 이 표기로 단순 위임만 하던 모듈은 제거했습니다 ([ADR 0012](adr/0012-flat-editor-runtime-and-ui-packages.md)).
-- **서비스 의존성**: 그래프 조회는 현재 모델 조회 함수·렌더러·그래프 캐시를 받습니다. 결합 편집과 고리 채움은 기존 `SceneRenderContext`를, 단축키는 모델 조회 함수·호버 상태·구체적인 편집 서비스를 받습니다. 이 서비스들에 뷰 전체를 전달하지 않아도 문서 교체 후 현재 모델을 읽습니다. 뷰 수명과 입력을 조정하는 컨트롤러는 타입이 명시된 `CanvasView`를 유지합니다. 런타임 조립과 이력 어댑터에는 구체 타입을 적용하고, 메모·마크 편집과 이력 기록에는 이력 서비스를 필수로 주입합니다. 그래프·단축키 서비스는 strict 타입 검사를 받습니다. 서로 다른 장면 객체의 복원과 명령 조합에는 동적인 부분이 남습니다. 편집·Undo/Redo 측정은 [성능 기준 문서](performance/README.md)에 정리합니다.
+- **서비스 의존성**: 그래프 조회는 현재 모델 조회 함수·렌더러·그래프 캐시를 받습니다. 결합 편집과 고리 채움은 기존 `SceneRenderContext`를, 단축키는 모델 조회 함수·호버 상태·구체적인 편집 서비스를 받습니다. 이 서비스들에 뷰 전체를 전달하지 않아도 문서 교체 후 현재 모델을 읽습니다. 뷰 수명과 입력을 조정하는 컨트롤러는 타입이 명시된 `CanvasView`를 유지합니다. 런타임 조립과 이력 어댑터에는 구체 타입을 적용합니다. 메모 편집(`CanvasNoteController`)에는 선택 컨트롤러와 이력 서비스를 필수로 주입해 `canvas.services` 우회 조회나 노트 선택 상태 직접 변경을 두지 않으며, 마크 편집과 이력 기록에도 이력 서비스를 필수로 주입합니다. 그래프·단축키 서비스와 노트 컨트롤러는 strict 타입 검사를 받습니다. 서로 다른 장면 객체의 복원과 명령 조합에는 동적인 부분이 남습니다. 편집·Undo/Redo 측정은 [성능 기준 문서](performance/README.md)에 정리합니다.
 - **상태 소유권**: `CanvasRuntimeState`가 캔버스 런타임 상태의 단일 소유자이며 `SceneRenderState`를 확장합니다. 상태 복사본을 두지 않고 소유자의 공개 인터페이스를 통해 작업하며, 히스토리·캐시 무효화·수명 주기 처리는 해당 소유자가 전담합니다.
 - **동적 의존성 및 수명**: 윈도우 액션은 호출 시점에 활성 문서를 조회합니다. 공통 렌더 컨텍스트는 모델 및 장면 교체 시 최신 인스턴스를 추적하며, 수명 주기 계약을 준수합니다.
 - **문서 모델과 장면 분리**: 분자 그래프와 `AnnotationCollection`은 Qt와 독립적으로 문서 데이터를 소유합니다. 주석 8종 모두 이 컬렉션에서 존재 여부·순서·저장 값을 읽으며, 그래픽 아이템은 런타임 ID로 연결된 표시 객체입니다 ([ADR 0010](adr/0010-document-owned-notes-and-marks.md)).
@@ -109,7 +109,7 @@ import하며, `bootstrap`만 adapters를 알고 편집기를 조립합니다. `u
 기반 세션 경로를 유지합니다.
 
 `SelectionController`가 장면 선택 쓰기, ID 기반 복원, 전체 선택과 노트 선택을
-소유합니다. 조회와 선택 스타일 모듈은 선택 상태를 읽기만 합니다. 클립보드·이미지·
+소유합니다. 조회와 선택 스타일 모듈은 선택 상태를 읽기만 합니다. 노트·클립보드·이미지·
 원자 라벨 경로도 컨트롤러를 호출하며, 문서·히스토리 롤백 소유자는 정확한 선택 플래그
 복원을 유지합니다. Qt는 러버밴드 입력을 소유합니다. 구조 선택과 ID 기반 복원은 중간
 신호를 묶고 그룹을 확장한 뒤 완성된 윤곽을 한 번 게시합니다. 노트의 명시적 선택 목록과
@@ -272,6 +272,24 @@ flowchart LR
 독립 노트와 화살표·일반선의 충돌도 포함합니다
 ([ADR 0057](adr/0057-bounded-spatial-layout-checks.md)).
 
+### 네이티브 CDXML 원본과 결합 컬렉션
+`domain.document.cdxml_source`(`CdxmlSource`)가 저장된 네이티브 CDXML 원본 검증과
+함께 주석 배열, 병렬 네이티브 ID 배열(`items`, `baseline_items`), 위치 기반 `groups`
+참조의 결합 변경을 소유합니다([ADR 0058](adr/0058-desktop-cdxml-documents.md),
+[ADR 0067](adr/0067-coupled-native-cdxml-collections.md)). 컬렉션별 바인딩 생략은
+기존과 같이 해당 컬렉션의 모든 항목이 네이티브 객체에 연결되지 않았음을 뜻합니다.
+`features.document_patch`는 SHA-256 스냅샷 검증과 `_compose_note`를 유지하며,
+`add_note` 추가는 `append_unbound_note`에 위임해 `baseline`을 바꾸지 않고 런타임
+ID도 직렬화하지 않습니다. `features.cdxml_editable_arrows`는 네이티브 선 표현 가능
+여부, 래스터·불투명도 자격 검사, 끝점 계산을 유지하고 현재 상태와 `baseline`의
+화살표 레코드(`ImageArrowPromotion`)를 각각 준비한 뒤,
+`promote_linked_images_to_arrows`가 두 투영의 변경을 모두 스테이징해 각 투영의
+이미지 순서와 남은 이미지 순서를 보존하며 원자적으로 반영합니다
+([ADR 0060](adr/0060-editable-native-arrows-and-local-platform-gates.md)). 준비에
+실패하면 입력 상태는 바뀌지 않으며, `xml`·`offset`·원자/결합 바인딩·미지원 네이티브
+XML·저장 스키마는 그대로 유지됩니다. `ui.canvas.canvas_cdxml_source`는 런타임
+`AnnotationCollection` 레코드 ID와 저장 위치 기반 바인딩 사이의 경계를 유지합니다.
+
 ### 기존 계산 계획
 문서에 이미 저장된 계획은 현재 그림과 맞을 때 유지됩니다. 그 계획이 빠지는 저장은 거부됩니다. Chemvas는 반응을 대응시키거나 `machine.json`을 쓰지 않습니다 ([ADR 0055](adr/0055-retire-rdkit-chemistry-provider.md)).
 
@@ -315,10 +333,13 @@ ADR을 언제 쓰는지, 작성 규칙과 템플릿은 [ADR 안내](adr/README.m
 
 ### 통합한 편집 책임
 
-`CanvasMoveController.set_atom_positions`가 상대 이동과 함께 원자 위치의 절대
-적용을 소유합니다. History와 선택 변환이 같은 소유자를 사용하며, 명시적 깊이의
-정확한 복원과 화면 이동에 따른 깊이 보존을 구분합니다
-([ADR 0025](adr/0025-shared-atom-position-mutation.md)).
+`CanvasMoveController.apply_atom_geometry`가 명시적 깊이의 복원·제거와 화면 이동에
+따른 깊이 보존을 구분해 원자 절대 좌표·3D 깊이 캐시 갱신과 라벨·점·부착 표식·공간
+인덱스 동기화를 함께 소유합니다
+([ADR 0025](adr/0025-shared-atom-position-mutation.md)). `set_atom_positions`는
+이 위에 히스토리·변환용 일괄 결합·고리·선택 갱신을 얹고, 프레임별 결합·고리 갱신과
+카메라·히스토리·복구 제어는 호출자에 남기며 상대 포인터 이동은 기존 아이템 평행이동
+최적화 경로를 유지합니다.
 
 도형·괄호·화살표의 회전과 반전은 Qt-free record 변환을 사용하며, History의 상태
 코덱은 UI 경계에 남습니다
@@ -384,3 +405,4 @@ ADR을 언제 쓰는지, 작성 규칙과 템플릿은 [ADR 안내](adr/README.m
 
 - [ADR 0065: Three-platform desktop release acceptance](adr/0065-three-platform-release-acceptance.md)
 - [ADR 0066: Linux per-user frozen installation](adr/0066-linux-user-installation.md)
+- [ADR 0067: Coupled native CDXML collections](adr/0067-coupled-native-cdxml-collections.md)

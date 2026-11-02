@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from PyQt6.QtCore import QPointF
+from typing import TYPE_CHECKING
 
 from chemvas.features.selection import (
     center_for_coords_3d,
@@ -9,12 +9,9 @@ from chemvas.features.selection import (
     rotate_point_around_axis,
     unproject_point_3d,
 )
-from chemvas.ui.canvas.canvas_mark_registry import mark_registry_for
 from chemvas.ui.canvas.canvas_ring_fill_scene_access import (
     update_ring_fills_for_atoms_for,
 )
-from chemvas.ui.canvas.spatial_index_state import mark_spatial_index_dirty_for
-from chemvas.ui.molecule.atom_coords_access import set_atom_coords_3d_for_id
 from chemvas.ui.molecule.bond_graphics_access import project_point_3d_for
 from chemvas.ui.selection.selection_rotation_planarity import (
     atom_in_planar_system_for,
@@ -23,6 +20,9 @@ from chemvas.ui.selection.selection_rotation_planarity import (
     flatten_planar_fragments_for,
     planar_fragment_components_for,
 )
+
+if TYPE_CHECKING:
+    from PyQt6.QtCore import QPointF
 
 
 def bond_ids_for_atom_ids_for(canvas, atom_ids: set[int]) -> set[int]:
@@ -62,56 +62,26 @@ def apply_projected_atom_positions_for(
     atom_ids: set[int],
     coords_3d: dict[int, tuple[float, float, float]],
 ) -> None:
-    mark_spatial_index_dirty_for(canvas)
-    label_service = canvas.services.atom_label_service
+    """Project 3D coordinates then install them through the move owner.
+
+    Exact cache entries are passed for every supplied atom, including atoms
+    missing from the model, so the nonexistent-atom depth-cache behavior stays
+    with this adapter. Bond/ring/selection refresh remains the caller's job.
+    """
+    positions: dict[int, tuple[float, float]] = {}
+    exact_coords: dict[int, tuple[float, float, float]] = {}
     for atom_id in atom_ids:
         point = coords_3d.get(atom_id)
         if point is None:
             continue
-        set_atom_coords_3d_for_id(canvas, atom_id, point)
+        exact_coords[atom_id] = point
         atom = canvas.model.atom_for_id(atom_id)
         if atom is None:
             continue
-        proj_x, proj_y = project_point_3d_for(canvas, point)
-        atom.x = proj_x
-        atom.y = proj_y
-        _sync_atom_scene_items_for(canvas, atom_id, label_service)
-
-
-def sync_atom_scene_items_for(canvas, atom_ids: set[int]) -> None:
-    """Reposition label/dot/mark items to their atoms' current coordinates."""
-
-    mark_spatial_index_dirty_for(canvas)
-    label_service = canvas.services.atom_label_service
-    for atom_id in atom_ids:
-        _sync_atom_scene_items_for(canvas, atom_id, label_service)
-
-
-def _sync_atom_scene_items_for(canvas, atom_id: int, label_service) -> None:
-    atom = canvas.model.atom_for_id(atom_id)
-    if atom is None:
-        return
-    label = canvas.runtime_state.atom_graphics_state.atom_items.get(atom_id)
-    if label is not None:
-        label_service.position_label(label, atom.x, atom.y)
-    dot = canvas.runtime_state.atom_graphics_state.atom_dots.get(atom_id)
-    if dot is not None:
-        dot.setPos(atom.x, atom.y)
-    marks = mark_registry_for(canvas).get_for_atom(atom_id)
-    if not marks:
-        return
-    for mark in list(marks):
-        data = mark.data(1) or {}
-        dx = data.get("dx")
-        dy = data.get("dy")
-        if isinstance(dx, (int, float)) and isinstance(dy, (int, float)):
-            canvas.services.scene_decoration_build_service.set_mark_center(
-                mark, QPointF(atom.x + dx, atom.y + dy)
-            )
-        else:
-            canvas.services.scene_decoration_build_service.set_mark_center(
-                mark, QPointF(atom.x, atom.y)
-            )
+        positions[atom_id] = project_point_3d_for(canvas, point)
+    canvas.services.move_controller.apply_atom_geometry(
+        positions, coords_3d=exact_coords
+    )
 
 
 def rotate_point_around_axis_for(

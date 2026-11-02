@@ -271,10 +271,11 @@ def _apply_note_operation(
     if op == "add_note":
         if note_index != len(notes):
             raise ValueError(f"note_index must equal next_note_index {len(notes)}")
-        notes.append(_compose_note(operation["note"]))
-        source = state.get("cdxml_source")
-        if source is not None:
-            source["items"].setdefault("notes", [None] * note_index).append(None)
+        from chemvas.domain.document.cdxml_source import append_unbound_note
+
+        appended = append_unbound_note(state, _compose_note(operation["note"]))
+        if appended != note_index:
+            raise ValueError(f"note_index must equal next_note_index {appended}")
         return {"op": op, "note_index": note_index}
     if note_index >= len(notes):
         raise ValueError(f"note {note_index} does not exist")

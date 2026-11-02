@@ -758,7 +758,9 @@ class CanvasViewAdditionalTest(unittest.TestCase):
         )
         selection_controller = _selection_controller_for(note_view)
         note_controller = CanvasNoteController(
-            note_view, history_service=NonCallableMock(spec=())
+            note_view,
+            selection_controller=selection_controller,
+            history_service=NonCallableMock(spec=()),
         )
         note_view.services = canvas_runtime_services(
             selection=selection_controller,

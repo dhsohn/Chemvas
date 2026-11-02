@@ -153,7 +153,7 @@ def viewport_center_scene_pos_for(canvas):
     return canvas.mapToScene(canvas.viewport().rect().center())
 
 
-def focused_scene_item_for(canvas):
+def focused_scene_item_for(canvas: object) -> object | None:
     scene = getattr(canvas, "scene", None)
     if not callable(scene):
         return None

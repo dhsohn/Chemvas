@@ -57,12 +57,12 @@ the editor, not layers below it.
 - **Renderer** (`app/chemvas/adapters/qt/renderer.py`): Qt painting implementation applying `acs1996_style` drawing policies.
 - **HistoryCommand** (`app/chemvas/core/history.py`): Delta-based undo/redo engine. Multi-entity operations are atomically bundled into a `CompositeCommand`.
 - **Scene Rendering** (`scene_render_context.py`, `scene_rendering.py`): `SceneRenderContext` provides a view-independent context for rendering molecular graphics and annotations ([ADR 0004](adr/0004-view-independent-scene-rendering.md)).
-- **Domain Document** (`app/chemvas/domain/document`): Manages document serialization, schema validation, and Calculation Plan v2 data structures.
+- **Domain Document** (`app/chemvas/domain/document`): Manages document serialization, schema validation, native CDXML provenance (`cdxml_source`), and Calculation Plan v2 data structures.
 
 ## UI Architecture & Service Boundaries
 
 - **Feature ownership**: Interaction workflows are centered in controllers, which call concrete collaborators directly. Each canvas-owned collaborator has one spelling: runtimes are `canvas.services.<name>` (a flat `CanvasRuntimeServices`), state is `canvas.runtime_state.<name>`, and the objects canvas setup creates are `canvas.model`, `canvas.renderer`, `canvas.render_context` and `canvas.bond_renderer`. Modules that only forwarded to one of those spellings were removed ([ADR 0012](adr/0012-flat-editor-runtime-and-ui-packages.md)).
-- **Service dependencies**: Graph queries receive a current-model provider, renderer and graph cache. Bond edits and ring fills use the existing `SceneRenderContext`; shortcuts receive their model provider, hover state and concrete editing collaborators. Document replacement therefore remains visible at invocation time without giving these services the whole view. View-level lifecycle and input controllers retain a typed `CanvasView`. Runtime assembly and history adapters use concrete types; note/mark edits and history recording require an injected history service. Graph and shortcut services are checked in strict mode. Heterogeneous scene snapshots and command composition still have dynamic parts. Reproducible edit/Undo/Redo measurements are described in [the performance baseline](performance/README.md).
+- **Service dependencies**: Graph queries receive a current-model provider, renderer and graph cache. Bond edits and ring fills use the existing `SceneRenderContext`; shortcuts receive their model provider, hover state and concrete editing collaborators. Document replacement therefore remains visible at invocation time without giving these services the whole view. View-level lifecycle and input controllers retain a typed `CanvasView`. Runtime assembly and history adapters use concrete types; note editing (`CanvasNoteController`) requires injected selection and history collaborators without `canvas.services` fallback or direct note-selection state mutation, and mark edits and history recording require an injected history service. Graph, shortcut and note-controller modules are checked in strict mode. Heterogeneous scene snapshots and command composition still have dynamic parts. Reproducible edit/Undo/Redo measurements are described in [the performance baseline](performance/README.md).
 - **State ownership**: `CanvasRuntimeState` is the single owner of canvas runtime state and extends `SceneRenderState`. Other modules interact via the owner's public interface without duplicate state; history, invalidation, and lifecycle management remain the owner's responsibility.
 - **Dynamic dependencies and lifecycle**: Window actions resolve the active document at invocation time. The shared render context tracks replacement models and scenes, adhering to lifecycle contracts.
 - **Document models and scene separation**: Molecular graphs and `AnnotationCollection` own document data independently of Qt. All eight annotation families use this collection for membership, order and saved values; graphics items are projections keyed by runtime ID ([ADR 0010](adr/0010-document-owned-notes-and-marks.md)).
@@ -114,8 +114,9 @@ gestures retain their indexed session path for repeated pointer updates.
 
 `SelectionController` owns scene selection writes, ID restoration, whole-canvas
 selection and note selection. Queries and selection styling only read selection.
-Clipboard, image and atom-label workflows call the controller; the document and
-history rollback owners retain their exact selected-flag restoration. Qt still
+Note, clipboard, image and atom-label workflows call the controller; the
+document and history rollback owners retain their exact selected-flag
+restoration. Qt still
 owns rubber-band input. Structure selection and ID restoration batch intermediate
 signals, expand groups, then publish one complete outline update. Notes retain
 their explicit selection list alongside the Qt scene flags; structure selection
@@ -292,6 +293,26 @@ use bounded spatial candidates followed by exact painted-path intersections,
 including standalone notes against arrow and line strokes
 ([ADR 0057](adr/0057-bounded-spatial-layout-checks.md)).
 
+### Native CDXML provenance
+`domain.document.cdxml_source` (`CdxmlSource`) owns persisted native CDXML
+provenance validation and coupled mutations across saved annotation arrays,
+parallel native-ID arrays (`items`, `baseline_items`) and positional `groups`
+references ([ADR 0058](adr/0058-desktop-cdxml-documents.md),
+[ADR 0067](adr/0067-coupled-native-cdxml-collections.md)). Omitted
+per-collection bindings continue to mean every item in that collection is
+unbound. `features.document_patch` retains SHA-256 snapshot validation and
+`_compose_note`, delegating `add_note` appends to `append_unbound_note` without
+changing `baseline` or serializing runtime IDs. `features.cdxml_editable_arrows`
+retains native stroke representability, raster/opacity eligibility and endpoint
+math, preparing distinct live and baseline arrow records (`ImageArrowPromotion`)
+before `promote_linked_images_to_arrows` stages and publishes both projections
+in each projection's image order while preserving retained image order
+([ADR 0060](adr/0060-editable-native-arrows-and-local-platform-gates.md)). A
+preparation failure leaves the input unchanged, and `xml`, `offset`, atom/bond
+bindings, unsupported native XML and the persisted schema stay unchanged.
+`ui.canvas.canvas_cdxml_source` retains the boundary between runtime
+`AnnotationCollection` record IDs and persisted positional bindings.
+
 ### Legacy calculation plans
 A plan already stored in a document is kept when it still matches the drawing. Save refuses a write that would drop it. Chemvas does not map reactions or write `machine.json` ([ADR 0055](adr/0055-retire-rdkit-chemistry-provider.md)).
 
@@ -335,10 +356,14 @@ When to write an ADR, its rules and its template are in [the ADR guide](adr/READ
 
 ### Consolidated editing boundaries
 
-`CanvasMoveController.set_atom_positions` owns absolute atom geometry application
-as well as relative movement. History and selection transforms share this owner;
-explicit depth restores remain distinct from depth-preserving screen translation
-([ADR 0025](adr/0025-shared-atom-position-mutation.md)).
+`CanvasMoveController.apply_atom_geometry` owns absolute atom coordinate and 3D
+depth-cache updates—distinguishing exact depth restores or removals from
+depth-preserving screen translation—together with label, dot, attached-mark and
+spatial-index synchronization ([ADR 0025](adr/0025-shared-atom-position-mutation.md)).
+`set_atom_positions` layers one-shot bond, ring and selection refresh on top for
+history and transforms, while per-frame bond/ring refresh, camera state, history
+and recovery remain with callers; relative pointer movement retains its direct
+item-translation path.
 
 Shape, bracket and arrow rotation and reflection use Qt-free record transforms;
 history codecs remain at the UI boundary
@@ -405,3 +430,4 @@ process locking and envelope storage ([ADR 0032](adr/0032-browser-clipboard-and-
 
 - [ADR 0065: Three-platform desktop release acceptance](adr/0065-three-platform-release-acceptance.md)
 - [ADR 0066: Linux per-user frozen installation](adr/0066-linux-user-installation.md)
+- [ADR 0067: Coupled native CDXML collections](adr/0067-coupled-native-cdxml-collections.md)

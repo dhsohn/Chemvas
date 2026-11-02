@@ -40,6 +40,10 @@ dependencies = [
 dev = [
     "coverage>=7.15.2,<8",
     "mypy>=2.3,<3",
+    # PyQt6 6.12.0 ships QtGui/QtDBus stubs with `*args, /`, which mypy rejects
+    # as a syntax error before checking anything. Runtime support is unchanged;
+    # drop this cap once a PyQt6 release fixes the stubs.
+    "PyQt6<6.12",
     "pytest>=8",
     "ruff>=0.16.2,<0.17",
     # Lets the packaging tests exercise setup.py's build hook directly.
@@ -202,6 +206,7 @@ module = [
     # the types to fill in were real ones.
     "chemvas.ui.canvas.canvas_graph_service",
     "chemvas.ui.canvas.canvas_chemdraw_shortcut_service",
+    "chemvas.ui.canvas.canvas_note_controller",
     "chemvas.ui.tools.tool_overlay_logic",
     "chemvas.ui.tools.bond_tool_logic",
     "chemvas.ui.tools.text_tool_logic",

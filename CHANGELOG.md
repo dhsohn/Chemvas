@@ -15,6 +15,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Keep absolute black in edited native CDXML captions when the document
+  foreground is a custom color, instead of rewriting it as index 0 which
+  importers remap through ``fgcolor``. Quote native caption ``font-family``
+  values in imported HTML so styles (including per-run colors) survive reopen
+  when the family is a dot-prefixed system face such as ``.AppleSystemUIFont``.
+
 - Keep imported bare atom labels such as P intact when aligned above or below
   bonds, without adding a hydrogen or clipping the glyph.
 - Synchronize atom charges when deleting or replacing imported CDXML charge marks,

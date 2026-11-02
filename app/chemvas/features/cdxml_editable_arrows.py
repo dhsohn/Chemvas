@@ -139,6 +139,10 @@ def promote_snapshot_arrows(state: dict[str, Any]) -> None:
     """Upgrade old native image bindings, preserving edits and group membership."""
     from copy import deepcopy
 
+    from chemvas.domain.document.cdxml_source import (
+        ImageArrowPromotion,
+        promote_linked_images_to_arrows,
+    )
     from chemvas.features.cdxml_preservation import PreservingImporter
 
     source = state.get("cdxml_source")
@@ -154,7 +158,7 @@ def promote_snapshot_arrows(state: dict[str, Any]) -> None:
             strict=True,
         )
     )
-    promoted = {}
+    promotions: dict[str, ImageArrowPromotion] = {}
     for identity, image in zip(
         source["items"]["images"], state.get("images", []), strict=True
     ):
@@ -166,47 +170,14 @@ def promote_snapshot_arrows(state: dict[str, Any]) -> None:
         ) != before.get("opacity", 1):
             continue
         arrow = editable_arrow(reader, byid[identity])
-        if arrow is not None:
-            promoted[identity] = arrow
-    if not promoted:
-        return
-    for projection, bindings, live in (
-        (state, source["items"], True),
-        (baseline, source["baseline_items"], False),
-    ):
-        arrows = projection.setdefault("arrows", [])
-        arrow_ids = bindings.setdefault("arrows", [None] * len(arrows))
-        images: list[dict[str, Any]] = []
-        image_ids: list[str | None] = []
-        remap: dict[int, list[Any]] = {}
-        for index, (identity, image) in enumerate(
-            zip(bindings.get("images", []), projection.get("images", []), strict=True)
-        ):
-            if identity in promoted:
-                arrow = deepcopy(promoted[identity])
-                if live:
-                    before = old_images[identity]
-                    for key in ("start", "end"):
-                        arrow[key] = [
-                            image[axis]
-                            + (arrow[key][i] - before[axis])
-                            * image[size]
-                            / before[size]
-                            for i, (axis, size) in enumerate(
-                                (("x", "width"), ("y", "height"))
-                            )
-                        ]
-                remap[index] = ["arrows", len(arrows)]
-                arrows.append(arrow)
-                arrow_ids.append(identity)
-            else:
-                remap[index] = ["images", len(images)]
-                images.append(image)
-                image_ids.append(identity)
-        projection["images"] = images
-        bindings["images"] = image_ids
-        for group in projection.get("groups", []):
-            group["items"] = [
-                remap[index] if kind == "images" else [kind, index]
-                for kind, index in group["items"]
+        if arrow is None:
+            continue
+        live = deepcopy(arrow)
+        for key in ("start", "end"):
+            live[key] = [
+                image[axis]
+                + (arrow[key][i] - before[axis]) * image[size] / before[size]
+                for i, (axis, size) in enumerate((("x", "width"), ("y", "height")))
             ]
+        promotions[identity] = {"live": live, "baseline": deepcopy(arrow)}
+    promote_linked_images_to_arrows(state, promotions)

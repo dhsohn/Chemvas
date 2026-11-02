@@ -9,8 +9,13 @@ from chemvas.features.graph import geometry_bond_sets_for_atom_ids
 from chemvas.features.selection import translate_projected_point_3d
 from chemvas.ui.canvas.canvas_mark_registry import mark_registry_for
 from chemvas.ui.canvas.canvas_ring_fill_scene_service import rebuild_ring_fill_polygons
-from chemvas.ui.molecule.atom_coords_access import set_atom_coords_3d_for_id
+from chemvas.ui.molecule.atom_coords_access import (
+    pop_atom_coords_3d_for,
+    set_atom_coords_3d_for_id,
+)
 from chemvas.ui.molecule.bond_renderer_access import update_bond_geometry_for
+
+Coords3D = tuple[float, float, float]
 
 # Annotation items whose geometry follows their Qt translation.
 _MOVE_BY_ITEM_KINDS = frozenset(
@@ -21,6 +26,8 @@ _MOVE_BY_ITEM_KINDS = frozenset(
 
 
 if TYPE_CHECKING:
+    from collections.abc import Mapping
+
     from chemvas.ui.canvas.canvas_hit_testing_service import CanvasHitTestingService
     from chemvas.ui.canvas.canvas_view import CanvasView
 
@@ -283,7 +290,7 @@ class CanvasMoveController:
         x: float,
         y: float,
         *,
-        coords_3d: tuple[float, float, float] | None = None,
+        coords_3d: Coords3D | None = None,
     ) -> bool:
         """Apply screen coordinates and their depth-preserving or exact 3D value."""
         atom = self.canvas.model.atom_for_id(atom_id)
@@ -308,12 +315,90 @@ class CanvasMoveController:
             )
         return True
 
+    def _point_factory(self):
+        point_factory = self.point_factory
+        if point_factory is None:
+            from PyQt6.QtCore import QPointF
+
+            point_factory = QPointF
+        return point_factory
+
+    def _sync_atom_accessories(self, atom_id: int, x: float, y: float) -> None:
+        """Relayout the label/dot and reattach marks from saved offsets."""
+        label = self.canvas.runtime_state.atom_graphics_state.atom_items.get(atom_id)
+        if label is not None:
+            self.canvas.services.atom_label_service.position_label(label, x, y)
+        dot = self.canvas.runtime_state.atom_graphics_state.atom_dots.get(atom_id)
+        if dot is not None:
+            dot.setPos(x, y)
+        marks = self.marks.get_for_atom(atom_id)
+        if not marks:
+            return
+        point_factory = self._point_factory()
+        for mark in list(marks):
+            data = mark.data(1) or {}
+            dx, dy = data.get("dx"), data.get("dy")
+            center = (
+                point_factory(x + dx, y + dy)
+                if isinstance(dx, (int, float)) and isinstance(dy, (int, float))
+                else point_factory(x, y)
+            )
+            self.canvas.services.scene_decoration_build_service.set_mark_center(
+                mark, center
+            )
+
+    def apply_atom_geometry(
+        self,
+        positions: Mapping[int, tuple[float, float]],
+        *,
+        coords_3d: Mapping[int, Coords3D | None] | None = None,
+    ) -> set[int]:
+        """Own absolute screen positions plus label/dot/mark and 3D cache sync.
+
+        Missing ``coords_3d`` entries preserve depth through ordinary screen
+        translation. Tuple entries install exactly. Explicit ``None`` removes
+        the saved 3D entry. Cache-only mapping entries update the depth cache
+        without moving screen items or accessories. Bond, ring, and selection
+        refresh stay with the caller.
+        """
+        if not positions and not coords_3d:
+            return set()
+        # Invalidate before mutation so a partial accessory failure cannot leave
+        # a still-clean index over drifted atom/mark geometry (matches the old
+        # projected helper, which marked dirty first).
+        self.hit_testing_service.mark_spatial_index_dirty()
+        affected: set[int] = set()
+        for atom_id, (x, y) in positions.items():
+            atom = self.canvas.model.atom_for_id(atom_id)
+            if atom is None:
+                continue
+            if coords_3d is not None and atom_id in coords_3d:
+                value = coords_3d[atom_id]
+                if value is None:
+                    atom.x, atom.y = x, y
+                    pop_atom_coords_3d_for(self.canvas, atom_id)
+                else:
+                    self._set_atom_coordinates(atom_id, x, y, coords_3d=value)
+            else:
+                self._set_atom_coordinates(atom_id, x, y)
+            affected.add(atom_id)
+            self._sync_atom_accessories(atom_id, x, y)
+        for atom_id, value in (coords_3d or {}).items():
+            if atom_id in positions:
+                continue
+            if value is None:
+                pop_atom_coords_3d_for(self.canvas, atom_id)
+            else:
+                set_atom_coords_3d_for_id(self.canvas, atom_id, value)
+            affected.add(atom_id)
+        return affected
+
     def set_atom_positions(
         self,
         positions: dict[int, tuple[float, float]],
         *,
         update_selection: bool = True,
-        coords_3d: dict[int, tuple[float, float, float]] | None = None,
+        coords_3d: dict[int, Coords3D] | None = None,
     ) -> None:
         """Apply absolute geometry for transforms and exact history restoration.
 
@@ -324,47 +409,18 @@ class CanvasMoveController:
         """
         if not positions and not coords_3d:
             return
-        atom_ids: set[int] = set()
-        for atom_id, (x, y) in positions.items():
-            if not self._set_atom_coordinates(
-                atom_id,
-                x,
-                y,
-                coords_3d=coords_3d.get(atom_id) if coords_3d is not None else None,
-            ):
-                continue
-            atom_ids.add(atom_id)
-            label = self.canvas.runtime_state.atom_graphics_state.atom_items.get(
-                atom_id
-            )
-            if label is not None:
-                self.canvas.services.atom_label_service.position_label(label, x, y)
-            dot = self.canvas.runtime_state.atom_graphics_state.atom_dots.get(atom_id)
-            if dot is not None:
-                dot.setPos(x, y)
-            for mark in list(self.marks.get_for_atom(atom_id) or ()):
-                point_factory = self.point_factory
-                if point_factory is None:
-                    from PyQt6.QtCore import QPointF
-
-                    point_factory = QPointF
-                data = mark.data(1) or {}
-                dx, dy = data.get("dx"), data.get("dy")
-                center = (
-                    point_factory(x + dx, y + dy)
-                    if isinstance(dx, (int, float)) and isinstance(dy, (int, float))
-                    else point_factory(x, y)
-                )
-                self.canvas.services.scene_decoration_build_service.set_mark_center(
-                    mark, center
-                )
-        for atom_id, coord in (coords_3d or {}).items():
-            if (
-                atom_id not in atom_ids
-                and self.canvas.model.atom_for_id(atom_id) is not None
-            ):
-                set_atom_coords_3d_for_id(self.canvas, atom_id, coord)
-                atom_ids.add(atom_id)
+        # Keep nonexistent-atom filtering here: the shared owner stores
+        # cache-only 3D for missing atoms (projection needs that), while this
+        # one-shot path never installs depth for atoms absent from the model.
+        owner_coords: dict[int, Coords3D] | None = None
+        if coords_3d is not None:
+            owner_coords = {
+                atom_id: coord
+                for atom_id, coord in coords_3d.items()
+                if atom_id in positions
+                or self.canvas.model.atom_for_id(atom_id) is not None
+            }
+        atom_ids = self.apply_atom_geometry(positions, coords_3d=owner_coords)
         if atom_ids:
             self.update_bond_geometries_for_atoms(
                 atom_ids, rebuild_stale_bond_topology=True
@@ -372,7 +428,6 @@ class CanvasMoveController:
             self.canvas.services.canvas_ring_fill_scene_service.update_ring_fills_for_atoms(
                 atom_ids, ring_items=None
             )
-        self.hit_testing_service.mark_spatial_index_dirty()
         if update_selection:
             self.canvas.services.selection.update_selection_outline()
 

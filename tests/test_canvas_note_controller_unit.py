@@ -64,10 +64,18 @@ def _note_controller(canvas, **kwargs) -> CanvasNoteController:
         build_selection_controller(canvas, render=False)
     if not hasattr(canvas.services.selection, "update_note_selection_box"):
         canvas.services.selection.update_note_selection_box = mock.Mock()
-    history_service = getattr(
-        getattr(canvas, "services", None), "history_service", None
+    selection_controller = kwargs.pop("selection_controller", canvas.services.selection)
+    history_service = kwargs.pop("history_service", None)
+    if history_service is None:
+        history_service = getattr(canvas.services, "history_service", None)
+    if history_service is None:
+        history_service = _attach_history_service(canvas)
+    return CanvasNoteController(
+        canvas,
+        selection_controller=selection_controller,
+        history_service=history_service,
+        **kwargs,
     )
-    return CanvasNoteController(canvas, history_service=history_service, **kwargs)
 
 
 def _selection_controller_for(canvas):
@@ -311,10 +319,9 @@ class CanvasNoteControllerUnitTest(unittest.TestCase):
                 text_style_state=CanvasTextStyleState(),
                 scene_items_state=CanvasSceneItemsState(),
             ),
+            services=canvas_runtime_services(),
         )
-        controller = CanvasNoteController(
-            canvas, history_service=NonCallableMock(spec=())
-        )
+        controller = _note_controller(canvas, history_service=NonCallableMock(spec=()))
         # No focused note -> should not raise.
         controller.toggle_text_bold()
         controller.toggle_text_superscript()
@@ -667,6 +674,95 @@ class CanvasNoteControllerUnitTest(unittest.TestCase):
         # A mixed group's box spans attached members, so the outline must be
         # refreshed again after the note leaves the scene.
         update_selection_outline.assert_called_once_with()
+
+    def test_deselect_and_begin_edit_use_injected_selection_not_services_fallback(
+        self,
+    ) -> None:
+        # Required construction must not fall back to canvas.services.selection
+        # when a different collaborator was injected.
+        scene = QGraphicsScene()
+        injected_toggle = mock.Mock()
+        injected_select = mock.Mock()
+        services_toggle = mock.Mock()
+        services_select = mock.Mock()
+        canvas = SimpleNamespace(
+            commands=[],
+            removed_items=[],
+            updated_boxes=[],
+            setFocus=mock.Mock(),
+            scene=lambda: scene,
+            runtime_state=canvas_runtime_state(
+                scene_items_state=CanvasSceneItemsState()
+            ),
+            push_command=lambda command: canvas.commands.append(command),
+            services=canvas_runtime_services(
+                scene_item_controller=SimpleNamespace(
+                    remove_scene_item=lambda item: canvas.removed_items.append(item)
+                ),
+                selection=SimpleNamespace(
+                    toggle_note_selection=services_toggle,
+                    select_note=services_select,
+                    update_note_selection_box=mock.Mock(),
+                    update_selection_outline=mock.Mock(),
+                ),
+            ),
+        )
+        _attach_history_service(canvas)
+        item = new_note_item_for(canvas)
+        history_item_id(canvas, item)
+        item.setPlainText("kept")
+        item.set_committed_text("kept")
+        item.set_committed_html(item.toHtml())
+        scene.addItem(item)
+        canvas.runtime_state.selection_state.selected_notes = [item]
+        injected = SimpleNamespace(
+            toggle_note_selection=injected_toggle,
+            select_note=injected_select,
+            update_note_selection_box=mock.Mock(),
+            update_selection_outline=mock.Mock(),
+        )
+        controller = _note_controller(canvas, selection_controller=injected)
+
+        controller.handle_note_focus_out(item)
+
+        injected_toggle.assert_called_once_with(item)
+        services_toggle.assert_not_called()
+
+        canvas.runtime_state.selection_state.selected_notes = []
+        controller.begin_note_edit(item)
+
+        injected_select.assert_called_once_with(item, additive=False)
+        services_select.assert_not_called()
+
+    def test_batch_note_formatting_always_records_required_history(self) -> None:
+        # history_service is a required collaborator; formatting must not skip
+        # the push path via a legacy history-is-None guard.
+        scene = QGraphicsScene()
+        push_command = mock.Mock()
+        canvas = SimpleNamespace(
+            scene=lambda: scene,
+            runtime_state=canvas_runtime_state(
+                text_style_state=CanvasTextStyleState(),
+                scene_items_state=CanvasSceneItemsState(),
+            ),
+            services=canvas_runtime_services(),
+        )
+        canvas.services.history_service = _history_service(canvas, push_command)
+        note = new_note_item_for(canvas)
+        history_item_id(canvas, note)
+        note.setData(0, "note")
+        note.setPlainText("memo")
+        scene.addItem(note)
+        canvas.runtime_state.selection_state.selected_notes = [note]
+        controller = _note_controller(canvas)
+
+        controller.toggle_text_bold()
+
+        self.assertEqual(push_command.call_count, 1)
+        self.assertIsInstance(push_command.call_args.args[0], UpdateSceneItemCommand)
+        cursor = note.textCursor()
+        cursor.select(QTextCursor.SelectionType.Document)
+        self.assertGreater(cursor.charFormat().fontWeight(), QFont.Weight.Normal)
 
     def test_update_note_box_covers_no_brush_and_no_pen_fallbacks(self) -> None:
         scene = QGraphicsScene()

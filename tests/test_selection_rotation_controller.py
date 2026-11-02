@@ -27,6 +27,7 @@ from chemvas.ui.canvas.canvas_atom_graphics_state import (
 )
 from chemvas.ui.canvas.canvas_lifecycle import schedule_canvas_deletion_for
 from chemvas.ui.canvas.canvas_mark_registry import CanvasMarkRegistry
+from chemvas.ui.canvas.canvas_move_controller import CanvasMoveController
 from chemvas.ui.canvas.canvas_rotation_state import CanvasRotationState
 from chemvas.ui.canvas.canvas_scene_items_state import CanvasSceneItemsState
 from chemvas.ui.canvas.spatial_index_state import CanvasSpatialIndexState
@@ -217,15 +218,34 @@ class _FakeCanvas:
         )
         self.restore_selection_calls: list[tuple[set[int], set[int]]] = []
         self.selection_info_emits = 0
+        hit_testing_service = SimpleNamespace(mark_spatial_index_dirty=mock.Mock())
         self.services = canvas_runtime_services(
             history_service=self.history_service,
-            move_controller=SimpleNamespace(
-                redraw_bonds_for_atoms=self.record_redraw_bonds_for_atoms
+            hit_testing_service=hit_testing_service,
+            atom_label_service=SimpleNamespace(position_label=mock.Mock()),
+            scene_decoration_build_service=SimpleNamespace(set_mark_center=mock.Mock()),
+            canvas_ring_fill_scene_service=SimpleNamespace(
+                update_ring_fills_for_atoms=mock.Mock()
             ),
             graph_service=SimpleNamespace(
                 axis_from_rotation_hint=self.axis_from_rotation_hint
             ),
+            selection=SimpleNamespace(
+                update_selection_outline=self.refresh_selection_outline
+            ),
         )
+        move_controller = CanvasMoveController(
+            self, hit_testing_service=hit_testing_service
+        )
+        move_controller.redraw_bonds_for_atoms = self.record_redraw_bonds_for_atoms
+        # Keep absolute geometry ownership real; bond redraw stays a stub so
+        # FakeCanvas end-of-gesture paths need no bond_renderer.
+        move_controller.update_bond_geometries_for_atoms = (
+            lambda atom_ids, *, rebuild_stale_bond_topology=False: (
+                self.record_redraw_bonds_for_atoms(atom_ids)
+            )
+        )
+        self.services.move_controller = move_controller
 
     def scene(self) -> _FakeScene:
         return self._scene
