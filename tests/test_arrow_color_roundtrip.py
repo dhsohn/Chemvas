@@ -221,7 +221,9 @@ def test_color_operation_recolors_arrows_with_one_undo_step(canvas, kind):
     colors = CanvasColorMutationService(
         canvas,
         note_controller=CanvasNoteController(
-            canvas, history_service=NonCallableMock(spec=())
+            canvas,
+            selection_controller=canvas.services.selection,
+            history_service=NonCallableMock(spec=()),
         ),
         graph_service=canvas.services.graph_service,
         history_service=history,
@@ -281,7 +283,9 @@ def test_color_tool_empty_space_click_recolors_selected_arrow(canvas):
     colors = CanvasColorMutationService(
         canvas,
         note_controller=CanvasNoteController(
-            canvas, history_service=NonCallableMock(spec=())
+            canvas,
+            selection_controller=canvas.services.selection,
+            history_service=NonCallableMock(spec=()),
         ),
         graph_service=canvas.services.graph_service,
         history_service=canvas.runtime_state.history_service,
@@ -360,7 +364,9 @@ def test_failed_arrow_color_batch_restores_document(canvas, monkeypatch, failure
     colors = CanvasColorMutationService(
         canvas,
         note_controller=CanvasNoteController(
-            canvas, history_service=NonCallableMock(spec=())
+            canvas,
+            selection_controller=canvas.services.selection,
+            history_service=NonCallableMock(spec=()),
         ),
         graph_service=canvas.services.graph_service,
         history_service=history,

@@ -85,7 +85,9 @@ def _color_service_for(canvas, *, graph_service=None) -> CanvasColorMutationServ
     return CanvasColorMutationService(
         canvas,
         note_controller=CanvasNoteController(
-            canvas, history_service=NonCallableMock(spec=())
+            canvas,
+            selection_controller=canvas.services.selection,
+            history_service=NonCallableMock(spec=()),
         ),
         graph_service=graph_service,
         history_service=canvas.services.history_service,
@@ -156,7 +158,9 @@ class CanvasColorMutationServiceTest(unittest.TestCase):
         service = CanvasColorMutationService(
             canvas,
             note_controller=CanvasNoteController(
-                canvas, history_service=NonCallableMock(spec=())
+                canvas,
+                selection_controller=canvas.services.selection,
+                history_service=NonCallableMock(spec=()),
             ),
             graph_service=graph_service,
             history_service=history_service,

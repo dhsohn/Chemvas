@@ -56,14 +56,28 @@ def _panel_toolbar_callbacks() -> "MainWindowPanelToolbarCallbacks":
     )
 
 
+def _stub_note_selection_controller():
+    return SimpleNamespace(
+        select_note=mock.Mock(),
+        toggle_note_selection=mock.Mock(),
+        update_note_selection_box=mock.Mock(),
+        update_selection_outline=mock.Mock(),
+    )
+
+
 def _color_service_for(canvas) -> CanvasColorMutationService:
     graph_service = SimpleNamespace(
         bond_sets_for_atoms=mock.Mock(return_value=(set(), set()))
     )
+    selection = getattr(getattr(canvas, "services", None), "selection", None)
+    if selection is None:
+        selection = _stub_note_selection_controller()
     return CanvasColorMutationService(
         canvas,
         note_controller=CanvasNoteController(
-            canvas, history_service=NonCallableMock(spec=())
+            canvas,
+            selection_controller=selection,
+            history_service=NonCallableMock(spec=()),
         ),
         graph_service=graph_service,
     )
@@ -242,6 +256,18 @@ class UIServiceTailCoverageTest(unittest.TestCase):
                 history_service=_history_service(),
                 selection=SimpleNamespace(
                     select_note=mock.Mock(),
+                    toggle_note_selection=mock.Mock(
+                        side_effect=lambda target: (
+                            canvas.runtime_state.selection_state.selected_notes.remove(
+                                target
+                            )
+                            if target
+                            in canvas.runtime_state.selection_state.selected_notes
+                            else canvas.runtime_state.selection_state.selected_notes.append(
+                                target
+                            )
+                        )
+                    ),
                     update_note_selection_box=mock.Mock(),
                     update_selection_outline=mock.Mock(),
                 ),
@@ -250,7 +276,9 @@ class UIServiceTailCoverageTest(unittest.TestCase):
         canvas.runtime_state.selection_state.selected_notes = [item]
         canvas.scene().addItem(item)
         controller = CanvasNoteController(
-            canvas, history_service=NonCallableMock(spec=())
+            canvas,
+            selection_controller=canvas.services.selection,
+            history_service=NonCallableMock(spec=()),
         )
 
         controller.handle_note_focus_out(item)
@@ -330,7 +358,9 @@ class UIServiceTailCoverageTest(unittest.TestCase):
             ),
         )
         controller = CanvasNoteController(
-            canvas, history_service=NonCallableMock(spec=())
+            canvas,
+            selection_controller=canvas.services.selection,
+            history_service=NonCallableMock(spec=()),
         )
         with (
             mock.patch("chemvas.ui.annotations.text.update_note_box") as update_box,

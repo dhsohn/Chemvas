@@ -9,6 +9,8 @@ if TYPE_CHECKING:
     from PyQt6.QtCore import Qt
     from PyQt6.QtWidgets import QGraphicsTextItem
 
+    from chemvas.ui.annotations.items import NoteItem
+
 COMMITTED_NOTE_TEXT_ROLE = 0xC001
 COMMITTED_NOTE_HTML_ROLE = 0xC002
 
@@ -52,7 +54,7 @@ class NoteTextState:
         set_committed_note_html_for(item, self.committed_html)
 
 
-def new_note_item_for(canvas):
+def new_note_item_for(canvas) -> NoteItem:
     from chemvas.ui.annotations.items import NoteItem
 
     return NoteItem(

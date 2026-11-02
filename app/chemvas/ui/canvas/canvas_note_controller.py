@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import replace
 from functools import partial
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 from PyQt6.QtCore import QPointF, Qt
 from PyQt6.QtGui import (
@@ -80,20 +80,12 @@ class CanvasNoteController:
         self,
         canvas: CanvasView,
         *,
-        selection_controller: SelectionController | None = None,
+        selection_controller: SelectionController,
         history_service: CanvasHistoryService,
     ) -> None:
         self.canvas = canvas
         self.history = history_service
         self.selection_controller = selection_controller
-
-    def _selection_controller(self):
-        if self.selection_controller is not None:
-            return self.selection_controller
-        try:
-            return self.canvas.services.selection
-        except AttributeError:
-            return None
 
     def create_text_note(self, pos: QPointF, text: str) -> QGraphicsTextItem:
         item = new_note_item_for(self.canvas)
@@ -145,14 +137,9 @@ class CanvasNoteController:
             # Route through the selection owner so notes-only groups deselect as a
             # unit and the group box outline refreshes; a direct state removal
             # would strand the grouped companions in the selection.
-            toggle_note_selection = getattr(
-                self._selection_controller(), "toggle_note_selection", None
-            )
-            if callable(toggle_note_selection):
-                toggle_note_selection(item)
-                return
-            self.canvas.runtime_state.selection_state.remove_selected_note(item)
-        self.canvas.services.selection.update_note_selection_box(item)
+            self.selection_controller.toggle_note_selection(item)
+            return
+        self.selection_controller.update_note_selection_box(item)
 
     def _push_history_or_rollback(
         self,
@@ -478,7 +465,7 @@ class CanvasNoteController:
         try:
             self._deselect_note(item)
             self.canvas.services.scene_item_controller.remove_scene_item(item)
-            self.canvas.services.selection.update_selection_outline()
+            self.selection_controller.update_selection_outline()
         except Exception as original_error:
             self._restore_scene_runtime_step(runtime_snapshot, original_error)
             raise
@@ -635,7 +622,7 @@ class CanvasNoteController:
 
         def _resize() -> None:
             self.update_note_box(item)
-            self.canvas.services.selection.update_note_selection_box(item)
+            self.selection_controller.update_note_selection_box(item)
             if item.hasFocus():
                 # Live editor changes are not document-history commands yet.
                 notify_document_change_for(self.canvas, edited_note=item)
@@ -651,9 +638,7 @@ class CanvasNoteController:
             if document is not None:
                 document.clearUndoRedoStacks()
         if item not in self.canvas.runtime_state.selection_state.selected_notes:
-            selection_controller = self._selection_controller()
-            if selection_controller is not None:
-                selection_controller.select_note(item, additive=False)
+            self.selection_controller.select_note(item, additive=False)
         self._ensure_note_box_autoresize(item)
         item.setTextInteractionFlags(Qt.TextInteractionFlag.TextEditorInteraction)
         item.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsFocusable, True)
@@ -747,7 +732,9 @@ class CanvasNoteController:
             },
         }
 
-    def _merge_text_char_format(self, mutate) -> None:
+    def _merge_text_char_format(
+        self, mutate: Callable[[QTextCharFormat, QTextCharFormat], None]
+    ) -> None:
         def apply(item: QGraphicsTextItem) -> None:
             cursor = self._text_format_cursor(item)
             fmt = QTextCharFormat()
@@ -881,13 +868,17 @@ class CanvasNoteController:
     ) -> object | None:
         scene_getter = _capture_optional_attribute(self.canvas, "scene")
         if callable(scene_getter):
-            return scene_getter()
+            return cast("Callable[[], object]", scene_getter)()
         if not snapshots:
             return None
         item_scene = _capture_optional_attribute(snapshots[0].item, "scene")
-        return item_scene() if callable(item_scene) else None
+        if callable(item_scene):
+            return cast("Callable[[], object]", item_scene)()
+        return None
 
-    def _apply_to_target_notes(self, mutate) -> None:
+    def _apply_to_target_notes(
+        self, mutate: Callable[[QGraphicsTextItem], None]
+    ) -> None:
         editing = self._editing_note()
         if editing is not None:
             editing_snapshot = _EditingNoteSnapshot.capture(editing)
@@ -895,7 +886,7 @@ class CanvasNoteController:
             try:
                 mutate(editing)
                 self.update_note_box(editing)
-                self.canvas.services.selection.update_note_selection_box(editing)
+                self.selection_controller.update_note_selection_box(editing)
                 rect_transaction.release()
             except Exception as original_error:
                 self._restore_editing_note_snapshot(editing_snapshot, original_error)
@@ -928,7 +919,7 @@ class CanvasNoteController:
                 attempted_snapshots.append(batch_snapshot)
                 mutate(item)
                 self.update_note_box(item)
-                self.canvas.services.selection.update_note_selection_box(item)
+                self.selection_controller.update_note_selection_box(item)
                 after_state = note_state_dict_for(self.canvas, item)
                 if batch_snapshot.before_state != after_state:
                     commands.append(
@@ -939,7 +930,7 @@ class CanvasNoteController:
                         )
                     )
                     changed_snapshots.append(batch_snapshot)
-            if not commands or self.history is None:
+            if not commands:
                 rect_transaction.release()
                 return
             command: HistoryCommand
@@ -1003,7 +994,7 @@ class CanvasNoteController:
 
     def apply_note_style(self, item: QGraphicsTextItem) -> None:
         apply_note_style(item, self.canvas.runtime_state.text_style_state)
-        self.canvas.services.selection.update_note_selection_box(item)
+        self.selection_controller.update_note_selection_box(item)
 
     def apply_note_appearance(
         self, item: QGraphicsTextItem, *, line_spacing: bool
@@ -1012,7 +1003,7 @@ class CanvasNoteController:
         apply_note_appearance(
             item, self.canvas.runtime_state.text_style_state, line_spacing=line_spacing
         )
-        self.canvas.services.selection.update_note_selection_box(item)
+        self.selection_controller.update_note_selection_box(item)
 
     def update_note_box(self, item: QGraphicsTextItem) -> None:
         update_note_box(item, self.canvas.runtime_state.text_style_state)

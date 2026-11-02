@@ -20,6 +20,7 @@ from chemvas.ui.annotations.state import scene_item_history_state
 if TYPE_CHECKING:
     from collections.abc import Callable
     from contextlib import AbstractContextManager
+    from typing import Self
 
     from chemvas.core.model_commands import (
         SetAtomPositionsCommand,
@@ -440,7 +441,7 @@ class _SceneItemsCommand(HistoryCommand):
     item_ids: list[int] = field(default_factory=list)
 
     @classmethod
-    def from_items(cls, item_states: list[dict], items: list):
+    def from_items(cls, item_states: list[dict], items: list) -> Self:
         return cls(
             [
                 dict(

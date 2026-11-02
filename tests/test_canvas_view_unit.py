@@ -100,6 +100,15 @@ class _FakeNoteCanvas:
             replay_context=nullcontext,
         )
         self.history_service.push = self.push_command
+
+        def toggle_note_selection(item) -> None:
+            notes = self.runtime_state.selection_state.selected_notes
+            if item in notes:
+                self.runtime_state.selection_state.remove_selected_note(item)
+            else:
+                self.runtime_state.selection_state.add_selected_note(item)
+            self.record_note_selection_box_updated(item)
+
         self.services = canvas_runtime_services(
             history_service=self.history_service,
             scene_item_controller=SimpleNamespace(
@@ -108,10 +117,13 @@ class _FakeNoteCanvas:
             selection=SimpleNamespace(
                 update_note_selection_box=self.record_note_selection_box_updated,
                 update_selection_outline=mock.Mock(),
+                toggle_note_selection=toggle_note_selection,
+                select_note=mock.Mock(),
             ),
         )
         self.services.note_controller = CanvasNoteController(
             self,
+            selection_controller=self.services.selection,
             history_service=self.services.history_service,
         )
 
