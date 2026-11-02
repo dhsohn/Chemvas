@@ -16,16 +16,22 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
+from .marks import CHARGE_MARK_POLARITY
+
 if TYPE_CHECKING:
     import xml.etree.ElementTree as ET
 
+# Native SymbolType names for charge marks; formal-charge deltas live in
+# CHARGE_MARK_POLARITY.
 MARK_SYMBOLS = {
-    "plus": ("Plus", 1),
-    "circled_plus": ("CirclePlus", 1),
-    "minus": ("Minus", -1),
-    "circled_minus": ("CircleMinus", -1),
+    "plus": "Plus",
+    "circled_plus": "CirclePlus",
+    "minus": "Minus",
+    "circled_minus": "CircleMinus",
 }
-_SYMBOL_CHARGES = dict(MARK_SYMBOLS.values())
+_SYMBOL_CHARGES = {
+    symbol: CHARGE_MARK_POLARITY[kind] for kind, symbol in MARK_SYMBOLS.items()
+}
 _GENERIC = re.compile(r"R[0-9]*|X|A|Q")
 
 
@@ -119,7 +125,7 @@ def charge_edit_plan(
         key = str(mark["atom_id"])
         if key not in atoms:
             raise ValueError("Invalid Chemvas document state: mark atom is invalid.")
-        marked.setdefault(key, []).append(MARK_SYMBOLS[kind][1])
+        marked.setdefault(key, []).append(CHARGE_MARK_POLARITY[kind])
 
     cleared = set(deleted.values())
     edits: dict[str, int] = {}

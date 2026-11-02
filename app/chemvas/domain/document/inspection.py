@@ -22,6 +22,7 @@ from chemvas.domain.atom_aliases import (
 from .cdxml_charge_edits import charge_edit_plan
 from .cdxml_source import parse_native_xml
 from .graph import connected_atom_components
+from .marks import CHARGE_MARK_POLARITY, annotation_totals
 from .state import deserialize_model_state
 
 if TYPE_CHECKING:
@@ -43,14 +44,6 @@ class ComponentSummary:
 class ComponentInventory:
     model: MoleculeModel
     components: tuple[ComponentSummary, ...]
-
-
-_CHARGE_MARKS = {
-    "plus": 1,
-    "circled_plus": 1,
-    "minus": -1,
-    "circled_minus": -1,
-}
 
 
 @dataclass(frozen=True)
@@ -121,7 +114,7 @@ def document_annotations(
 def _resolve_annotations(
     model: MoleculeModel, marks: Sequence[object], native_charges: Mapping[int, int]
 ) -> dict[int, dict[str, int]]:
-    mark_totals: dict[int, dict[str, int]] = {}
+    kinds_by_atom: dict[int, list[str]] = {}
     electronic_marked_atom_ids: set[int] = set()
     charge_marked_atom_ids: set[int] = set()
     for raw_mark in marks:
@@ -135,17 +128,20 @@ def _resolve_annotations(
             raise ValueError("Invalid Chemvas document state: mark atom is invalid.")
         if not isinstance(kind, str):
             raise ValueError("Invalid Chemvas document state: mark kind is invalid.")
-        if kind not in _CHARGE_MARKS and kind != "radical":
+        if kind not in CHARGE_MARK_POLARITY and kind != "radical":
             continue
         electronic_marked_atom_ids.add(atom_id)
-        values = mark_totals.setdefault(
-            atom_id, {"formal_charge": 0, "radical_electrons": 0}
-        )
-        values["formal_charge"] += _CHARGE_MARKS.get(kind, 0)
-        if kind in _CHARGE_MARKS:
+        kinds_by_atom.setdefault(atom_id, []).append(kind)
+        if kind in CHARGE_MARK_POLARITY:
             charge_marked_atom_ids.add(atom_id)
-        if kind == "radical":
-            values["radical_electrons"] += 1
+
+    mark_totals: dict[int, dict[str, int]] = {}
+    for atom_id, kinds in kinds_by_atom.items():
+        formal_charge, radical_electrons = annotation_totals(kinds)
+        mark_totals[atom_id] = {
+            "formal_charge": formal_charge,
+            "radical_electrons": radical_electrons,
+        }
 
     # Native charge attributes own the electronic value. Their visible graphics
     # are projections, not additional charges; do not manufacture canvas marks.

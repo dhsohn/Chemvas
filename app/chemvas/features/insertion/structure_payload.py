@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from chemvas.domain.document import Bond, MoleculeModel
+from chemvas.domain.document.marks import CHARGE_MARK_POLARITY, annotation_totals
 
 Bounds = tuple[float, float, float, float]
 AtomAnnotations = dict[int, dict[str, int]]
@@ -72,7 +73,7 @@ def build_atom_annotations(
         new_id = id_map.get(old_id)
         if new_id is None:
             continue
-        formal_charge, radical_electrons = _annotation_totals(
+        formal_charge, radical_electrons = annotation_totals(
             mark_kinds_by_atom.get(old_id, ())
         )
         if formal_charge or radical_electrons:
@@ -168,19 +169,6 @@ def _append_bond_copy(
     )
 
 
-def _annotation_totals(mark_kinds: Iterable[str]) -> tuple[int, int]:
-    formal_charge = 0
-    radical_electrons = 0
-    for kind in mark_kinds:
-        if kind in {"plus", "circled_plus"}:
-            formal_charge += 1
-        elif kind in {"minus", "circled_minus"}:
-            formal_charge -= 1
-        elif kind == "radical":
-            radical_electrons += 1
-    return formal_charge, radical_electrons
-
-
 @dataclass(frozen=True)
 class MarkRebindPlan:
     old_id: int | None
@@ -254,7 +242,9 @@ def opposite_charge_mark(items: Sequence[Any], delta: int) -> Any | None:
     """A charge shortcut cancels the last opposite mark before adding a new one."""
     if delta not in {-1, 1}:
         raise ValueError("Charge shortcuts require a change of +1 or -1.")
-    opposite = {"minus", "circled_minus"} if delta > 0 else {"plus", "circled_plus"}
+    opposite = {
+        kind for kind, polarity in CHARGE_MARK_POLARITY.items() if polarity == -delta
+    }
     return next(
         (
             item
