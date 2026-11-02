@@ -6,9 +6,32 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping
+    from collections.abc import Iterable, Mapping
 
     from chemvas.domain.document.annotation_collection import AnnotationCollection
+
+# Formal-charge delta for each charge mark kind. Radical marks are counted
+# separately as unpaired electrons, not as a signed charge.
+CHARGE_MARK_POLARITY = {
+    "plus": 1,
+    "circled_plus": 1,
+    "minus": -1,
+    "circled_minus": -1,
+}
+
+
+def annotation_totals(mark_kinds: Iterable[str]) -> tuple[int, int]:
+    """Sum formal charge and radical electrons for an iterable of mark kinds."""
+    formal_charge = 0
+    radical_electrons = 0
+    for kind in mark_kinds:
+        if kind == "radical":
+            radical_electrons += 1
+            continue
+        delta = CHARGE_MARK_POLARITY.get(kind)
+        if delta is not None:
+            formal_charge += delta
+    return formal_charge, radical_electrons
 
 
 @dataclass(frozen=True, slots=True)

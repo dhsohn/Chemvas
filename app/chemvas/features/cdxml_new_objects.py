@@ -7,6 +7,7 @@ import xml.etree.ElementTree as ET
 from typing import Any
 
 from chemvas.domain.document.cdxml_charge_edits import MARK_SYMBOLS
+from chemvas.domain.document.marks import CHARGE_MARK_POLARITY
 
 _GLYPH_SIZE = 7.5
 _MARK_TEXT = {1: {"+", "⊕"}, -1: {"-", "−", "⊖"}}
@@ -110,7 +111,8 @@ def _append_mark(
         raise ValueError(
             f"New {kind} marks are not yet supported in a preserved CDXML document; the file was not replaced."
         )
-    symbol, charge = MARK_SYMBOLS[kind]
+    symbol = MARK_SYMBOLS[kind]
+    charge = CHARGE_MARK_POLARITY[kind]
     if item.get("text") not in {None, *_MARK_TEXT[charge]}:
         raise ValueError("Custom charge mark text has no native CDXML representation.")
     x, y = item["x"], item["y"]

@@ -1470,6 +1470,55 @@ DOCUMENT_SETTINGS_KEY_MEMBERS = frozenset(
     }
 )
 DOCUMENT_STATE_MODULE = "app/chemvas/domain/document/schema.py"
+DOCUMENT_MARKS_MODULE = "app/chemvas/domain/document/marks.py"
+CHARGE_MARK_POLARITY_MEMBERS = frozenset(
+    {"plus", "circled_plus", "minus", "circled_minus"}
+)
+
+
+def _int_constant(node: ast.expr) -> int | None:
+    """An integer the source spells as a literal, including a leading minus."""
+    if isinstance(node, ast.Constant) and isinstance(node.value, int):
+        return node.value
+    if (
+        isinstance(node, ast.UnaryOp)
+        and isinstance(node.op, ast.USub)
+        and isinstance(node.operand, ast.Constant)
+        and isinstance(node.operand.value, int)
+    ):
+        return -node.operand.value
+    return None
+
+
+def _modules_listing_charge_polarity(members: frozenset[str]) -> list[str]:
+    """Modules with a dict that maps every charge-mark kind to a ±1 delta.
+
+    Kind-name sets elsewhere (tools, schema, scene clearance) are not polarity
+    tables. Only a mapping whose values are the formal-charge deltas counts.
+    """
+    owners: list[str] = []
+    for path in _app_python_files():
+        for node in _module_nodes(path.read_text(encoding="utf-8")):
+            if not isinstance(node, ast.Dict) or not node.keys:
+                continue
+            polarity: dict[str, int] = {}
+            for key, value in zip(node.keys, node.values, strict=True):
+                if key is None or not isinstance(key, ast.Constant):
+                    polarity = {}
+                    break
+                if not isinstance(key.value, str):
+                    polarity = {}
+                    break
+                delta = _int_constant(value)
+                if delta not in {-1, 1}:
+                    polarity = {}
+                    break
+                polarity[key.value] = delta
+            if members <= polarity.keys() and set(polarity.values()) <= {-1, 1}:
+                owners.append(
+                    f"{path.relative_to(APP_ROOT.parents[0]).as_posix()}:{node.lineno}"
+                )
+    return owners
 
 
 def test_arrow_kinds_are_listed_in_one_module() -> None:
@@ -1484,6 +1533,18 @@ def test_arrow_kinds_are_listed_in_one_module() -> None:
     owners = _modules_listing(ARROW_KIND_MEMBERS)
 
     assert [owner.rsplit(":", 1)[0] for owner in owners] == [DOCUMENT_STATE_MODULE]
+
+
+def test_charge_mark_polarity_is_listed_in_one_module() -> None:
+    """Formal-charge deltas for charge marks are spelled out exactly once.
+
+    Inspection, native charge edits and structure export used to each keep a
+    copy. A kind that flips sign in one table but not another silently
+    disagrees across save, inspect and rebind.
+    """
+    owners = _modules_listing_charge_polarity(CHARGE_MARK_POLARITY_MEMBERS)
+
+    assert [owner.rsplit(":", 1)[0] for owner in owners] == [DOCUMENT_MARKS_MODULE]
 
 
 def test_document_settings_keys_are_listed_in_one_module() -> None:
