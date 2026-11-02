@@ -19,7 +19,10 @@ from dataclasses import dataclass
 from itertools import pairwise
 from typing import TYPE_CHECKING
 
-from chemvas.domain.atom_aliases import ATOM_ALIAS_DEFINITIONS
+from chemvas.domain.atom_aliases import (
+    AMBIGUOUS_ELEMENT_LABELS,
+    ATOM_ALIAS_DEFINITIONS,
+)
 from chemvas.domain.document import (
     Arrow,
     Bond,
@@ -101,9 +104,6 @@ del _z, _sym
 # such as ``H\u1d43`` - needs an explicit caller-supplied ``CdxmlLabelBinding``.
 # Without one the export refuses; the label text, its colour, its neighbours
 # and any legend are never used to guess the meaning.
-
-# Element symbols that are also common drawn group labels.
-_AMBIGUOUS_ELEMENT_LABELS = frozenset({"Ar"})
 
 # Superscript lowercase letters accepted as a hydrogen identifier (H\u1d43,
 # H\u1d47, ...). Digits, signs and other marks are excluded so an identifier
@@ -760,7 +760,7 @@ def _resolve_label_plan(
             f"label '{label}' is an atom alias (abbreviation) without a verified "
             "CDXML fragment definition, not a pure element",
         )
-    if label in _AMBIGUOUS_ELEMENT_LABELS:
+    if label in AMBIGUOUS_ELEMENT_LABELS:
         raise _refuse_atom(
             atom_id,
             f"label '{label}' is ambiguous (the element or a drawn group) and the "
@@ -811,7 +811,7 @@ def _bound_label_plan(
             atom_id, f"label '{label}' does not match bound element '{symbol}'"
         )
     if binding.meaning in ("generic_aryl", "aryl_fragment"):
-        if label not in _AMBIGUOUS_ELEMENT_LABELS:
+        if label not in AMBIGUOUS_ELEMENT_LABELS:
             raise _refuse_atom(
                 atom_id,
                 f"an aryl binding applies only to the label 'Ar', not '{label}'",

@@ -15,6 +15,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Refuse alias and ambiguous atom labels (Ac, Ts, Ar) when editing imported
+  ChemDraw CDXML in place, matching fresh export; they are no longer written as
+  actinium, tennessine or argon. Expand short ``#rgb`` colors such as ``#f00``
+  when allocating native palette indices so apply-patch and desktop save no
+  longer crash on document-legal colors.
 - Keep absolute black in edited native CDXML captions when the document
   foreground is a custom color, instead of rewriting it as index 0 which
   importers remap through ``fgcolor``. Quote native caption ``font-family``

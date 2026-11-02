@@ -12,10 +12,18 @@ from __future__ import annotations
 
 import xml.etree.ElementTree as ET
 
+from chemvas.domain.document.state_values import is_hex_color
+
 
 def allocate_native_color_index(root: ET.Element, color: str) -> str:
     """Return a CDXML color index for ``color``, allocating a table row if needed."""
+    if not is_hex_color(color):
+        raise ValueError(
+            f"native color must be #rgb or #rrggbb hexadecimal, got {color!r}"
+        )
     value = color.lower()
+    if len(value) == 4:
+        value = "#" + "".join(digit * 2 for digit in value[1:])
     if value == "#000000" and root.get("fgcolor", "0") == "0":
         return "0"
     if value == "#ffffff":

@@ -127,3 +127,86 @@ def test_external_note_patch_roundtrip_preserves_charge_and_source(
         assert report["components"][0]["formal_charge"] == -1
         assert report["note_count"] == int(note) + 2
         assert [n["text"] for n in report["notes"]][-2:] == ["memo", "second"]
+
+
+_CO_NATIVE = (
+    b'<CDXML LabelFont="3" LabelSize="10" BondLength="20">'
+    b'<fonttable><font id="3" name="Arial"/></fonttable>'
+    b'<page id="1" BoundingBox="0 0 200 200"><fragment id="2">'
+    b'<n id="3" p="50 50"/><n id="4" p="70 50" Element="8">'
+    b'<t p="70 50"><s font="3" size="10" face="96">O</s></t></n>'
+    b'<b id="5" B="3" E="4"/></fragment></page></CDXML>'
+)
+
+
+def _sha_patch(source_bytes: bytes, operations: list[dict[str, object]]) -> str:
+    return json.dumps(
+        {
+            "format": "chemvas-graph-patch",
+            "version": 1,
+            "source_sha256": hashlib.sha256(source_bytes).hexdigest(),
+            "operations": operations,
+        }
+    )
+
+
+@pytest.mark.usefixtures("qt_application")
+def test_apply_patch_short_hex_atom_color_on_native_document(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    source = tmp_path / "native.cdxml"
+    source.write_bytes(_CO_NATIVE)
+    patch = tmp_path / "patch.json"
+    patch.write_text(
+        _sha_patch(
+            _CO_NATIVE,
+            [{"op": "update_atom", "atom_id": 0, "changes": {"color": "#f00"}}],
+        )
+    )
+    output = tmp_path / "colored.cdxml"
+    assert (
+        cli.run(["apply-patch", str(source), str(patch), "--output", str(output)]) == 0
+    )
+    capsys.readouterr()
+    assert output.is_file()
+    native = output.read_bytes()
+    marker = b"\n<!-- ChemvasDocument:"
+    assert marker in native
+    root = ET.fromstring(native[: native.index(marker)])
+    color_index = root.find('.//n[@id="3"]').get("color")
+    assert color_index is not None
+    entry = root.find("colortable")[int(color_index) - 2]
+    assert (
+        round(float(entry.get("r")) * 255),
+        round(float(entry.get("g")) * 255),
+        round(float(entry.get("b")) * 255),
+    ) == (255, 0, 0)
+    reopened = parse_cdxml_document(
+        native[: native.index(marker)], preserve_source=True
+    )
+    atoms = reopened.state["model"]["atoms"]
+    color = atoms[0]["color"] if 0 in atoms else atoms["0"]["color"]
+    assert color == "#ff0000"
+
+
+@pytest.mark.parametrize("symbol", ["Ac", "Ts", "Ar"])
+@pytest.mark.usefixtures("qt_application")
+def test_apply_patch_refuses_ambiguous_native_element_labels(
+    tmp_path: Path, symbol: str, capsys: pytest.CaptureFixture[str]
+) -> None:
+    source = tmp_path / "native.cdxml"
+    source.write_bytes(_CO_NATIVE)
+    patch = tmp_path / "patch.json"
+    patch.write_text(
+        _sha_patch(
+            _CO_NATIVE,
+            [{"op": "update_atom", "atom_id": 0, "changes": {"element": symbol}}],
+        )
+    )
+    output = tmp_path / "rejected.cdxml"
+    with pytest.raises(SystemExit) as error:
+        cli.run(["apply-patch", str(source), str(patch), "--output", str(output)])
+    assert error.value.code == 2
+    assert "elemental label" in capsys.readouterr().err
+    assert not output.exists()
+    assert source.read_bytes() == _CO_NATIVE
