@@ -269,6 +269,7 @@ class SceneDecorationServiceTest(unittest.TestCase):
         lifecycle = SceneItemLifecycleService(
             canvas,
             graph_service=SimpleNamespace(),
+            selection_controller=SimpleNamespace(),
         )
         canvas.services.scene_item_controller = lifecycle
         bind_mark_double(canvas, mark)

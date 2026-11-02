@@ -11,23 +11,16 @@ from chemvas.ui.annotations.state import (
     apply_scene_item_state as apply_scene_item_state_helper,
 )
 from chemvas.ui.scene.note_item_access import new_note_item_for
-from chemvas.ui.scene.scene_item_lifecycle_service import SceneItemLifecycleService
 
 if TYPE_CHECKING:
     from chemvas.ui.canvas.canvas_view import CanvasView
 
 
 class SceneItemController:
-    def __init__(
-        self, canvas: CanvasView, *, graph_service, lifecycle_service=None
-    ) -> None:
+    def __init__(self, canvas: CanvasView, *, graph_service, lifecycle_service) -> None:
         self.canvas = canvas
         self.graph_service = graph_service
-        self.lifecycle_service = (
-            lifecycle_service
-            if lifecycle_service is not None
-            else SceneItemLifecycleService(canvas, graph_service=graph_service)
-        )
+        self.lifecycle_service = lifecycle_service
 
     def create_scene_item_from_state(self, state: dict):
         item = create_scene_item_from_state_helper(

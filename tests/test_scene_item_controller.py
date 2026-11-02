@@ -35,6 +35,7 @@ from chemvas.ui.canvas.canvas_mark_registry import CanvasMarkRegistry
 from chemvas.ui.canvas.canvas_mark_scene_service import CanvasMarkSceneService
 from chemvas.ui.canvas.canvas_scene_items_state import CanvasSceneItemsState
 from chemvas.ui.scene.scene_item_controller import SceneItemController
+from chemvas.ui.scene.scene_item_lifecycle_service import SceneItemLifecycleService
 from chemvas.ui.tools.handle_state import CanvasHandleState
 from chemvas.ui.transactions.scene_rect import scene_rect_is_automatic
 
@@ -77,6 +78,7 @@ class _FakeCanvas:
             selection=SimpleNamespace(
                 update_note_selection_box=self.record_note_selection_box_updated,
                 update_selection_outline=lambda: None,
+                discard_removed_note=self.discard_removed_note,
             ),
             scene_decoration_build_service=SimpleNamespace(
                 build_mark_item=self.record_build_mark_item,
@@ -189,6 +191,11 @@ class _FakeCanvas:
     def record_note_selection_box_updated(self, item) -> None:
         self.updated_note_boxes.append(item)
 
+    def discard_removed_note(self, item) -> bool:
+        was_selected = self.runtime_state.selection_state.remove_selected_note(item)
+        self.record_note_selection_box_updated(item)
+        return was_selected
+
     def clear_handles(self) -> None:
         self.clear_handles_calls += 1
         self.handle_state.target = None
@@ -231,6 +238,11 @@ class SceneItemControllerTest(unittest.TestCase):
         self.controller = SceneItemController(
             self.canvas,
             graph_service=self.canvas.services.graph_service,
+            lifecycle_service=SceneItemLifecycleService(
+                self.canvas,
+                graph_service=self.canvas.services.graph_service,
+                selection_controller=self.canvas.services.selection,
+            ),
         )
 
     def test_attach_scene_item_updates_registries_without_duplicates(self) -> None:
