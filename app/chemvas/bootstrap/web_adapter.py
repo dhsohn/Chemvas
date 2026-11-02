@@ -7957,9 +7957,7 @@ class BrowserHandler(BaseHTTPRequestHandler):
             )
             from chemvas.features.cdxml_document import parse_cdxml_document
 
-            parsed = parse_cdxml_document(
-                request["cdxml"].encode("utf-8"), preserve_source=True
-            )
+            parsed = parse_cdxml_document(request["cdxml"].encode("utf-8"))
             result = document_info(
                 build_document_payload(parsed.state, CANVAS_FILE_VERSION), render=False
             )

@@ -24,7 +24,7 @@ NATIVE = b"""<CDXML LabelFont="3" LabelSize="10" CaptionFont="3" CaptionSize="10
 
 
 def imported():
-    return parse_cdxml_document(NATIVE, preserve_source=True).state
+    return parse_cdxml_document(NATIVE).state
 
 
 def native(state):
@@ -117,14 +117,14 @@ _C_TO_N_NATIVE = (
 
 @pytest.mark.parametrize("symbol", ["Ac", "Ts", "Ar"])
 def test_native_writer_refuses_ambiguous_and_alias_element_labels(symbol):
-    state = parse_cdxml_document(_ELEMENT_EDIT_NATIVE, preserve_source=True).state
+    state = parse_cdxml_document(_ELEMENT_EDIT_NATIVE).state
     state["model"]["atoms"][0]["element"] = symbol
     with pytest.raises(ValueError, match="requires an elemental label"):
         update_native_document(state)
 
 
 def test_native_writer_refuses_adding_bonded_alias_label():
-    state = parse_cdxml_document(_ELEMENT_EDIT_NATIVE, preserve_source=True).state
+    state = parse_cdxml_document(_ELEMENT_EDIT_NATIVE).state
     state["model"]["atoms"][2] = {
         "element": "Ac",
         "x": 90.0,
@@ -141,7 +141,7 @@ def test_native_writer_refuses_adding_bonded_alias_label():
 
 
 def test_native_writer_element_to_element_edit_matches_prior_bytes():
-    state = parse_cdxml_document(_ELEMENT_EDIT_NATIVE, preserve_source=True).state
+    state = parse_cdxml_document(_ELEMENT_EDIT_NATIVE).state
     state["model"]["atoms"][0]["element"] = "N"
     state["model"]["atoms"][0]["explicit_label"] = True
     assert update_native_document(state) == _C_TO_N_NATIVE
@@ -238,7 +238,7 @@ def test_deleting_native_charge_graphic_does_not_leave_hidden_charge():
         b'<curve id="14"',
         b'<graphic id="18" GraphicType="Symbol" SymbolType="Plus" BoundingBox="45 45 50 50"><represent attribute="Charge" object="4"/></graphic><curve id="14"',
     )
-    state = parse_cdxml_document(raw, preserve_source=True).state
+    state = parse_cdxml_document(raw).state
     index = state["cdxml_source"]["items"]["images"].index("18")
     state["images"].pop(index)
     state["cdxml_source"]["items"]["images"].pop(index)
@@ -264,7 +264,7 @@ def embedded_native():
 
 
 def test_embedded_png_display_and_native_metafile_survive_move():
-    state = parse_cdxml_document(embedded_native(), preserve_source=True).state
+    state = parse_cdxml_document(embedded_native()).state
     index = state["cdxml_source"]["items"]["images"].index("30")
     image = state["images"][index]
     assert (image["pixel_width"], image["pixel_height"]) == (3, 2)
@@ -280,12 +280,12 @@ def test_invalid_embedded_png_is_refused_without_metafile_execution():
     root = ET.fromstring(raw)
     root.find(".//embeddedobject").set("PNG", "not-hex")
     with pytest.raises(ValueError, match="PNG encoding"):
-        parse_cdxml_document(ET.tostring(root), preserve_source=True)
+        parse_cdxml_document(ET.tostring(root))
 
 
 def test_empty_native_curve_is_preserved_without_display_object():
     raw = NATIVE.replace(b"</page>", b'<curve id="31" CurveType="12"/></page>')
-    state = parse_cdxml_document(raw, preserve_source=True).state
+    state = parse_cdxml_document(raw).state
     assert len(state["images"]) == 1
     assert len(state["arrows"]) == 1
     assert native(state).find('.//curve[@id="31"]').get("CurveType") == "12"
@@ -293,7 +293,7 @@ def test_empty_native_curve_is_preserved_without_display_object():
 
 def test_large_native_workspace_retains_exact_coordinates():
     raw = NATIVE.replace(b"0 0 400 300", b"0 0 4320 5758")
-    state = parse_cdxml_document(raw, preserve_source=True).state
+    state = parse_cdxml_document(raw).state
     assert state["settings"]["sheet_custom_size_mm"] == pytest.approx(
         [1524, 5758 * 25.4 / 72]
     )
@@ -305,7 +305,7 @@ def test_native_negative_quarter_arc_does_not_draw_three_quarters():
         b'Head3D="200 80 0" Tail3D="150 80 0"',
         b'Head3D="613.88 837 0" Tail3D="623.25 702 0" Center3D="551.06 764.81 0" AngularSize="-90"',
     )
-    state = parse_cdxml_document(raw, preserve_source=True).state
+    state = parse_cdxml_document(raw).state
     arrow = state["images"][1]
     assert arrow["width"] < 45
     assert 130 < arrow["height"] < 150
@@ -322,7 +322,7 @@ def test_native_background_fill_stays_below_bonds():
             b'<graphic id="32" Z="10" GraphicType="Rectangle" RectangleType="Filled" BoundingBox="10 10 100 100"/></page>',
         )
     )
-    state = parse_cdxml_document(raw, preserve_source=True).state
+    state = parse_cdxml_document(raw).state
     index = state["cdxml_source"]["items"]["images"].index("32")
     assert state["images"][index]["z"] < 0
     assert native(state).find('.//graphic[@id="32"]').get("Z") == "10"
@@ -342,7 +342,7 @@ def test_molecular_area_uses_cdxml_color_mapping(index, expected):
     <n id="3" p="10 10"/><n id="4" p="80 10"/><n id="5" p="40 80"/>
     </fragment><ColoredMolecularArea id="6" BasisObjects="3 4 5" bgcolor="{index}"/>
     </page></CDXML>'''.encode()
-    state = parse_cdxml_document(raw, preserve_source=True).state
+    state = parse_cdxml_document(raw).state
     with Image.open(
         io.BytesIO(base64.b64decode(state["images"][0]["data_base64"]))
     ) as image:
@@ -359,4 +359,4 @@ def test_missing_molecular_area_color_is_refused(index):
     </fragment><ColoredMolecularArea id="6" BasisObjects="3 4 5" bgcolor="{index}"/>
     </page></CDXML>'''.encode()
     with pytest.raises(ValueError, match="missing color"):
-        parse_cdxml_document(raw, preserve_source=True)
+        parse_cdxml_document(raw)

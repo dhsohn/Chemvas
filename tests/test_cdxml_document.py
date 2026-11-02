@@ -1,6 +1,7 @@
 import hashlib
 import json
 import os
+from copy import deepcopy
 from unittest.mock import Mock
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
@@ -9,11 +10,13 @@ import pytest
 from PyQt6.QtWidgets import QApplication
 
 from chemvas.bootstrap.main_window import build_main_window
+from chemvas.domain.document.inspection import inspect_component_inventory
 from chemvas.features.cdxml_document import (
     embed_document,
     parse_cdxml_document,
     read_cdxml_document,
 )
+from chemvas.features.cdxml_native_writer import update_native_document
 from chemvas.ui.window.main_window_ports import active_canvas_for_window
 
 # Keep Qt global caches and widget lifetimes within one application per process.
@@ -36,11 +39,16 @@ def test_native_atoms_bonds_text_arrow():
     assert doc.state["arrows"][0]["kind"] == "arrow"
 
 
+def test_snapshot_less_native_file_yields_cdxml_source():
+    state = parse_cdxml_document(NATIVE).state
+    assert "cdxml_source" in state
+    assert "<n id=" in state["cdxml_source"]["xml"]
+
+
 @pytest.mark.parametrize(
     "raw",
     [
         b"<CDXML><page/><page/></CDXML>",
-        NATIVE.replace(b'Element="8"', b'Element="8" Isotope="18"'),
         NATIVE.replace(b'p="120 100"', b'p="nan 100"'),
         NATIVE.replace(b'E="4"', b'E="999"'),
         NATIVE.replace(b'<fragment id="2">', b'<fragment id="3">'),
@@ -103,15 +111,51 @@ def test_wedge_end_preserves_narrow_end_and_charge():
     state = parse_cdxml_document(raw).state
     bond = state["model"]["bonds"][0]
     assert (bond["a"], bond["b"], bond["style"]) == (1, 0, "wedge")
-    assert state["marks"][0]["kind"] == "minus"
+    inventory = inspect_component_inventory(state)
+    assert inventory.components[0].formal_charge == -1
+    assert inventory.model.atom_annotations[1] == {"formal_charge": -1}
+    assert state["marks"] == []
 
 
-def test_group_and_graphics_are_editable():
+def test_native_group_survives_as_source_with_raster_rectangle_and_editable_line():
     raw = b'<CDXML><page Width="400" Height="300"><group id="2"><graphic id="3" GraphicType="Rectangle" BoundingBox="10 10 50 60"/><graphic id="4" GraphicType="Line" BoundingBox="80 80 120 80"/></group></page></CDXML>'
     state = parse_cdxml_document(raw).state
-    assert state["shapes"][0]["shape_kind"] == "rect"
+    assert state.get("groups") in (None, [])
+    assert state["shapes"] == []
+    image = state["images"][0]
+    assert image["kind"] == "image"
+    assert (image["x"], image["y"], image["width"], image["height"]) == (
+        -191.5,
+        -141.5,
+        43.0,
+        53.0,
+    )
     assert state["arrows"][0]["kind"] == "line"
-    assert state["groups"] == [{"atoms": [], "items": [["shapes", 0], ["arrows", 0]]}]
+    assert '<group id="2"' in state["cdxml_source"]["xml"]
+
+
+@pytest.mark.parametrize(
+    ("node_attrs", "bond_attrs", "needle"),
+    [
+        (b'Element="8" NumHydrogens="2"', None, 'NumHydrogens="2"'),
+        (b'Element="8" AS="R"', b'Display="WedgeBegin"', 'AS="R"'),
+        (b'Element="8" Isotope="18"', None, 'Isotope="18"'),
+        (b'Element="8" NodeType="GenericNickname"', None, 'NodeType="GenericNickname"'),
+    ],
+)
+def test_chemical_properties_survive_preserving_import_and_unrelated_edit(
+    node_attrs: bytes, bond_attrs: bytes | None, needle: str
+) -> None:
+    raw = NATIVE.replace(b'Element="8"', node_attrs)
+    if bond_attrs is not None:
+        raw = raw.replace(b'Order="2" DoublePosition="Center"', bond_attrs)
+    state = parse_cdxml_document(raw).state
+    assert needle in state["cdxml_source"]["xml"]
+    edited = deepcopy(state)
+    # Recolor the arrow: an edit outside the fragment. Atom moves and bond edits
+    # deliberately drop computed AS/CIP labels on the touched nodes.
+    edited["arrows"][0]["color"] = "#ff0000"
+    assert needle in update_native_document(edited).decode()
 
 
 def test_failed_import_leaves_existing_canvas_unchanged(tmp_path):
@@ -254,19 +298,6 @@ def test_save_as_cdxml_filter_adds_cdxml_extension(tmp_path):
     finally:
         window.close()
         app.processEvents()
-
-
-@pytest.mark.parametrize(
-    "replacement",
-    [
-        b'Element="8" NumHydrogens="2"',
-        b'Element="8" AS="R"',
-        b'Element="8" NodeType="GenericNickname"',
-    ],
-)
-def test_chemical_properties_are_not_silently_discarded(replacement):
-    with pytest.raises(ValueError, match="Unsupported CDXML"):
-        parse_cdxml_document(NATIVE.replace(b'Element="8"', replacement))
 
 
 def test_declared_byte_budget_is_enforced(monkeypatch):

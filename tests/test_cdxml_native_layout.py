@@ -29,7 +29,7 @@ def app():
 
 
 def state():
-    return parse_cdxml_document(SOURCE, preserve_source=True).state
+    return parse_cdxml_document(SOURCE).state
 
 
 def test_per_bond_dimensions_and_reset_survive_redraw_and_move():
@@ -90,7 +90,6 @@ def test_caption_edit_retains_native_size_in_saved_xml():
 def test_invalid_native_bond_dimensions_fail_closed(value):
     document = parse_cdxml_document(
         SOURCE.replace(b'LineWidth="0.3"', f'LineWidth="{value}"'.encode()),
-        preserve_source=True,
     ).state
     with pytest.raises(ValueError, match="native bond"):
         with detached_document_scene(document):
@@ -102,7 +101,6 @@ def test_rotated_caption_keeps_its_native_baseline_anchor():
         SOURCE.replace(
             b'Justification="Center"', b'Justification="Center" RotationAngle="4521984"'
         ),
-        preserve_source=True,
     ).state
     with detached_document_scene(document) as context:
         item = next(iter(context.state.scene_items_state.note_items.values()))
@@ -185,7 +183,7 @@ def test_round_dashed_frame_retains_empty_corner_and_gaps():
         b'RectangleType="Filled"',
         b'RectangleType="RoundEdge Dashed" CornerRadius="600"',
     )
-    document = parse_cdxml_document(raw, preserve_source=True).state
+    document = parse_cdxml_document(raw).state
     image = document["images"][0]
     # Inspect projected alpha, independently of the path construction.
     raster = Image.open(io.BytesIO(base64.b64decode(image["data_base64"])))

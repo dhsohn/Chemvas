@@ -275,7 +275,7 @@ def test_unsupported_stroke_remains_an_image() -> None:
         b'<arrow id="10" Tail3D="20 50 0" Head3D="100 50 0" Center3D="60 50 0" AngularSize="180"/>'
         b"</page></CDXML>"
     )
-    state = parse_cdxml_document(raw, preserve_source=True).state
+    state = parse_cdxml_document(raw).state
     assert state["arrows"] == []
     assert len(state["images"]) == 1
     before = deepcopy(state)

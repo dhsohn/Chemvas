@@ -31,7 +31,7 @@ def _external(charge: str, *, note: bool = False) -> bytes:
 
 @pytest.mark.parametrize("charge", [-2, -1, 0, 1, 2])
 def test_native_charge_inspection_is_detached_and_repeatable(charge: int) -> None:
-    state = parse_cdxml_document(_external(str(charge)), preserve_source=True).state
+    state = parse_cdxml_document(_external(str(charge))).state
     before = deepcopy(state)
     inventory = inspect_component_inventory(state)
     assert inventory.components[0].formal_charge == charge
@@ -47,7 +47,7 @@ def test_native_charge_inspection_is_detached_and_repeatable(charge: int) -> Non
 
 
 def test_invalid_native_charge_does_not_report_zero() -> None:
-    state = parse_cdxml_document(_external("invalid"), preserve_source=True).state
+    state = parse_cdxml_document(_external("invalid")).state
     with pytest.raises(ValueError):
         inspect_document_graph(state)
 
@@ -56,7 +56,7 @@ def test_invalid_native_charge_does_not_report_zero() -> None:
 def test_native_charge_does_not_double_count_or_hide_conflicting_marks(
     kind: str,
 ) -> None:
-    state = parse_cdxml_document(_external("1"), preserve_source=True).state
+    state = parse_cdxml_document(_external("1")).state
     state["marks"] = [{"atom_id": 0, "kind": kind}]
     if kind == "minus":
         with pytest.raises(ValueError, match="Conflicting native charge"):
@@ -68,7 +68,7 @@ def test_native_charge_does_not_double_count_or_hide_conflicting_marks(
 
 
 def test_deleted_native_atom_does_not_contribute_charge() -> None:
-    state = parse_cdxml_document(_external("1"), preserve_source=True).state
+    state = parse_cdxml_document(_external("1")).state
     state["model"]["atoms"] = {}
     assert inspect_document_graph(state)["components"] == []
 
@@ -122,7 +122,7 @@ def test_external_note_patch_roundtrip_preserves_charge_and_source(
     # Check both snapshot reopening and a consumer that reads native XML only.
     native = ET.tostring(root)
     for content in (output.read_bytes(), native):
-        state = parse_cdxml_document(content, preserve_source=True).state
+        state = parse_cdxml_document(content).state
         report = inspect_document_graph(state)
         assert report["components"][0]["formal_charge"] == -1
         assert report["note_count"] == int(note) + 2
@@ -181,9 +181,7 @@ def test_apply_patch_short_hex_atom_color_on_native_document(
         round(float(entry.get("g")) * 255),
         round(float(entry.get("b")) * 255),
     ) == (255, 0, 0)
-    reopened = parse_cdxml_document(
-        native[: native.index(marker)], preserve_source=True
-    )
+    reopened = parse_cdxml_document(native[: native.index(marker)])
     atoms = reopened.state["model"]["atoms"]
     color = atoms[0]["color"] if 0 in atoms else atoms["0"]["color"]
     assert color == "#ff0000"

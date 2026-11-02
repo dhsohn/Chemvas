@@ -87,7 +87,7 @@ def dual_charge_document() -> bytes:
 
 
 def imported(raw: bytes):
-    return parse_cdxml_document(raw, preserve_source=True).state
+    return parse_cdxml_document(raw).state
 
 
 def native_xml(state):
@@ -658,7 +658,7 @@ def test_replacement_graphic_reimports_at_front_z(tmp_path):
     assert int(replacement.get("Z")) > int(root.find('.//n[@id="27"]').get("Z"))
     path = tmp_path / "replacement-z.cdxml"
     path.write_bytes(saved)
-    reopened = parse_cdxml_document(path.read_bytes(), preserve_source=True).state
+    reopened = parse_cdxml_document(path.read_bytes()).state
     index = reopened["cdxml_source"]["items"]["images"].index(replacement.get("id"))
     assert reopened["images"][index]["z"] == 1.0
 
@@ -693,7 +693,7 @@ def test_mark_center_stable_through_raw_reimport(tmp_path):
     assert graphic_id is not None
     path = tmp_path / "charge.cdxml"
     path.write_bytes(raw)
-    reopened = parse_cdxml_document(path.read_bytes(), preserve_source=True).state
+    reopened = parse_cdxml_document(path.read_bytes()).state
     assert reopened.get("marks", []) == []
     index = reopened["cdxml_source"]["items"]["images"].index(graphic_id)
     image = reopened["images"][index]
