@@ -104,9 +104,7 @@ def geometry_controller_for_window(window: MainWindowLike) -> CanvasGeometryCont
 
 
 def history_service_for_window(window: MainWindowLike):
-    from chemvas.ui.canvas.canvas_window_access import history_service_for_canvas
-
-    return history_service_for_canvas(active_canvas_for_window(window))
+    return active_canvas_for_window(window).services.history_service
 
 
 def scene_clipboard_controller_for_window(

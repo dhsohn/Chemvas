@@ -121,6 +121,7 @@ def test_canvas_setup_shares_one_instance_per_runtime(canvas) -> None:
     services = canvas.services
 
     assert services.history_service is canvas.runtime_state.history_service
+    assert services.tool_mode_controller.history is services.history_service
     assert services.arrow_build_service is canvas.render_context.arrows
     assert services.scene_decoration_build_service is canvas.render_context.decorations
     assert services.tool_controller.active is not None

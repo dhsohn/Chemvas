@@ -399,6 +399,34 @@ def test_canvas_runtime_state_attach_does_not_mirror_runtime_services_to_canvas(
     assert _matching_lines(pattern, [runtime_state]) == []
 
 
+def test_history_service_has_one_runtime_read_spelling() -> None:
+    """Callers use ``canvas.services.history_service``; setup alone seeds it.
+
+    ``history_service_for_canvas`` was a second spelling that preferred
+    ``runtime_state.history_service`` via ``getattr``. The field stays on
+    runtime state (moving that owner needs an ADR), but production reads go
+    through services except the one wiring site in canvas view setup.
+    """
+    setup = APP_ROOT / "chemvas" / "ui" / "canvas" / "canvas_view_setup.py"
+    readers = [path for path in _app_python_files() if path != setup]
+    getattr_history = re.compile(r"""getattr\([^)]*[\"']history_service[\"']""")
+    # The removed helper read history through getattr on runtime_state.
+    assert getattr_history.search(
+        'service = getattr(runtime_state, "history_service", None)'
+    )
+    assert (
+        _matching_lines(
+            re.compile(r"\bhistory_service_for_canvas\b"), _app_python_files()
+        )
+        == []
+    )
+    assert (
+        _matching_lines(re.compile(r"\bruntime_state\.history_service\b"), readers)
+        == []
+    )
+    assert _matching_lines(getattr_history, readers) == []
+
+
 def _runtime_state_fields(node: ast.AST) -> set[str]:
     return {
         child.attr

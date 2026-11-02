@@ -217,6 +217,7 @@ def build_canvas_services(
         insert_controller=insert_controller,
         hover_refresh=hover_controller.refresh,
         set_active_tool=tool_controller.set_active,
+        history_service=history_service,
     )
     pointer_controller = CanvasPointerController(
         canvas,

@@ -12,7 +12,6 @@ from chemvas.ui.canvas.canvas_tool_settings_state import (
     normalized_arrow_style,
     set_tool_setting_for,
 )
-from chemvas.ui.canvas.canvas_window_access import history_service_for_canvas
 from chemvas.ui.history.history_commands import (
     SetAnnotationSettingsCommand,
     UpdateSceneItemCommand,
@@ -24,6 +23,7 @@ from chemvas.ui.transactions.document import document_transaction
 if TYPE_CHECKING:
     from collections.abc import Callable
 
+    from chemvas.ui.canvas.canvas_history_service import CanvasHistoryService
     from chemvas.ui.canvas.canvas_view import CanvasView
     from chemvas.ui.insert.insert_controller import InsertController
 
@@ -31,10 +31,9 @@ if TYPE_CHECKING:
 def _atomic_shape_style_change(operation):
     @wraps(operation)
     def run(controller, *args, **kwargs):
-        history = history_service_for_canvas(controller.canvas)
         with document_transaction(
             controller.canvas,
-            history_service=history,
+            history_service=controller.history,
         ):
             return operation(controller, *args, **kwargs)
 
@@ -54,25 +53,24 @@ class CanvasToolModeController:
         self,
         canvas: CanvasView,
         *,
-        insert_controller: InsertController | None = None,
-        hover_refresh: Callable[..., None] | None = None,
-        set_active_tool: Callable[[str], None] | None = None,
+        insert_controller: InsertController,
+        hover_refresh: Callable[..., None],
+        set_active_tool: Callable[[str], None],
+        history_service: CanvasHistoryService,
     ) -> None:
         self.canvas = canvas
         self.insert_controller = insert_controller
-        self._hover_refresh = hover_refresh or (lambda **_kwargs: None)
-        self._set_active_tool = set_active_tool or (lambda _name: None)
+        self.history = history_service
+        self._hover_refresh = hover_refresh
+        self._set_active_tool = set_active_tool
 
     @property
     def settings(self):
         return self.canvas.runtime_state.tool_settings_state
 
     def _cancel_active_insert_modes(self) -> None:
-        insert_controller = self.insert_controller
-        if insert_controller is None:
-            return
         if self.canvas.runtime_state.insert_state.template_active:
-            insert_controller.cancel_template_insert()
+            self.insert_controller.cancel_template_insert()
 
     def _emit_tool_changed(self) -> None:
         callback = self.canvas.runtime_state.callback_state.tool_change
@@ -90,7 +88,7 @@ class CanvasToolModeController:
     def set_tool(self, tool_name: str) -> None:
         self._cancel_active_insert_modes()
         self._set_active_tool(tool_name)
-        if tool_name == "benzene" and self.insert_controller is not None:
+        if tool_name == "benzene":
             self.insert_controller.begin_ring_template_insert(6, "benzene")
         self._refresh_tool_mode()
 
@@ -141,16 +139,14 @@ class CanvasToolModeController:
         if not changed:
             return
         before = {name: getattr(self.settings, name) for name in changed}
-        history = history_service_for_canvas(self.canvas)
-        with document_transaction(self.canvas, history_service=history):
+        with document_transaction(self.canvas, history_service=self.history):
             apply_annotation_style_for(self.canvas, changed)
-            if history is not None:
-                history.push(
-                    SetAnnotationSettingsCommand(
-                        before,
-                        changed,
-                    )
+            self.history.push(
+                SetAnnotationSettingsCommand(
+                    before,
+                    changed,
                 )
+            )
 
     def set_shape_type(self, shape_type: str) -> None:
         if shape_type not in SHAPE_KINDS:
@@ -172,7 +168,6 @@ class CanvasToolModeController:
         shapes = self._selected_shape_items()
         if not shapes:
             return False
-        history = history_service_for_canvas(self.canvas)
         for item in shapes:
             before = shape_state_dict_for(self.canvas, item)
             new_state = dict(before)
@@ -181,8 +176,8 @@ class CanvasToolModeController:
                 item, new_state
             )
             after = shape_state_dict_for(self.canvas, item)
-            if before != after and history is not None:
-                history.push(
+            if before != after:
+                self.history.push(
                     UpdateSceneItemCommand(require_scene_record_id(item), before, after)
                 )
         self.canvas.services.selection.update_selection_outline()
