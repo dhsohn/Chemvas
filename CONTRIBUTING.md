@@ -39,13 +39,15 @@ Each run reports line and branch coverage separately and writes `SUMMARY.md`,
 `coverage.json`, `coverage.txt`, and an HTML report to a new `htmlcov/check.*/`
 directory. Data from earlier runs is never appended. CLI subprocesses are included;
 the dependency-isolation probe using `python -I -S` deliberately disables coverage
-startup. The report identifies full or selected test scope and whether RDKit is
-installed. Coverage uses the existing exclusions and includes unexecuted production
-modules in the denominator. Selected-file results are not a full-suite baseline.
+startup. The report identifies full or selected test scope, the candidate git
+commit and whether the tree was dirty, and the Python, PyQt6 and Qt versions of
+the gate interpreter. Coverage uses the existing exclusions and includes
+unexecuted production modules in the denominator. Selected-file results are not
+a full-suite baseline.
 
 GitHub CI runs `quality` (Ruff, format, mypy), `package-smoke`, and secret scanning.
-OS suites run locally through `make check`, not on GitHub. Report both line and branch percentages, platform, scope and RDKit
-availability with a change's verification results. A failed test remains a gate
+OS suites run locally through `make check`, not on GitHub. Report both line and branch percentages, platform, scope, candidate commit and dependency versions
+with a change's verification results. A failed test remains a gate
 failure even if a coverage report was generated. `scripts/run_test_files.sh`
 runs each `test_*.py` file in its own pytest process, several files at a time.
 `scripts/check.sh` runs the host-native files from its own list one at a time

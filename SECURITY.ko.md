@@ -24,7 +24,7 @@ GitHub의 비공개 제보 기능을 사용합니다:
 가능한 한 다음 정보를 포함합니다:
 
 - Chemvas 버전(`chemvas --version` 또는 **About Chemvas** 대화상자), Python 버전,
-  운영체제, RDKit 추가 기능 설치 여부
+  PyQt6·Qt 버전, 운영체제
 - 영향을 받는 진입점: 데스크톱 앱, 특정 CLI 명령, Python API 중 무엇인지
 - 문제를 일으키는 최소 입력 파일(`.cdxml`, Chemvas SVG, composition/patch/plan
   JSON, 이미지)과 정확한 재현 절차 또는 명령
@@ -61,7 +61,7 @@ Chemvas는 로컬 데스크톱 앱이자 헤드리스 CLI이며 네트워크 서
 
 범위에 포함되지 않는 것:
 
-- Chemvas가 악화시키지 않는 Qt/PyQt6, RDKit, Pillow 등 의존성의 취약점. 제보자가
+- Chemvas가 악화시키지 않는 Qt/PyQt6, Pillow 등 의존성의 취약점. 제보자가
   해당 업스트림 프로젝트에 직접 제보합니다.
 - 공격자가 이미 같은 사용자 권한으로 코드를 실행할 수 있어야 성립하는 공격
 - 문서화된 한도 안에 있는 큰 입력의 처리 속도 저하

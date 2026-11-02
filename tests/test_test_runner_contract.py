@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -227,6 +228,11 @@ def test_coverage_keeps_child_execution_and_reports_failed_runs(tmp_path, fail):
         check=True,
     )
     assert ("FAILED (partial execution)" if fail else "tests passed") in report.stdout
+    summary = (output / "SUMMARY.md").read_text(encoding="utf-8")
+    assert "RDKit" not in summary
+    assert "Commit:" in summary
+    assert "working tree" in summary
+    assert re.search(r"(?m)^Python \S+; PyQt6 \S+; Qt \S+$", summary)
     data = read_payload((output / "coverage.json").read_text())
     files = {Path(name).as_posix(): info for name, info in data["files"].items()}
     assert set(files) == {
@@ -248,4 +254,4 @@ def test_coverage_keeps_child_execution_and_reports_failed_runs(tmp_path, fail):
     assert data["meta"]["branch_coverage"]
     assert (output / "html/index.html").is_file()
     assert step_summary.read_text().startswith("Earlier step\nCoverage:")
-    assert (output / "SUMMARY.md").read_text() in step_summary.read_text()
+    assert summary in step_summary.read_text()
