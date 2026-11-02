@@ -363,19 +363,17 @@ class CanvasHistoryOperations(HistoryTransactionOperations[DocumentSavepoint]):
             for index, key in entries:
                 ids.insert(index, key)
             document.reorder(ids)
+        registry = mark_registry_for(self.__canvas)
         for atom_id, entries in order.mark_bindings.items():
-            marks = mark_registry_for(self.__canvas).get_for_atom(atom_id)
             if not entries:
                 continue
-            if marks is None:
-                raise RuntimeError("Restored marks require an owner registry")
-            restored = [
-                (index, find_projection(self.__canvas, key)) for index, key in entries
-            ]
-            for _, item in restored:
-                marks.remove(item)
-            for index, item in restored:
-                marks.insert(index, item)
+            registry.reorder_for_atom(
+                atom_id,
+                [
+                    (index, find_projection(self.__canvas, key))
+                    for index, key in entries
+                ],
+            )
         structure = dict(self._structure_stacking_items())
         for siblings in order.siblings:
             resolved = []
@@ -417,12 +415,10 @@ class CanvasHistoryOperations(HistoryTransactionOperations[DocumentSavepoint]):
         registry = mark_registry_for(self.__canvas)
         model_annotations = self.__canvas.model.atom_annotations
         for atom_id, items in marks.items():
-            if items:
-                registry.by_atom.setdefault(atom_id, [])[:] = [
-                    resolve_projection(self.__canvas, key) for key in items
-                ]
-            else:
-                registry.by_atom.pop(atom_id, None)
+            registry.replace_for_atom(
+                atom_id,
+                [resolve_projection(self.__canvas, key) for key in items],
+            )
             if atom_id in annotations:
                 model_annotations[atom_id] = dict(annotations[atom_id])
             else:

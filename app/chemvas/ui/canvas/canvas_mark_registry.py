@@ -15,6 +15,36 @@ class CanvasMarkRegistry:
         if item not in marks:
             marks.append(item)
 
+    def discard(self, atom_id: int, item: Any) -> None:
+        marks = self.by_atom.get(atom_id)
+        if marks is None:
+            return
+        if item in marks:
+            marks.remove(item)
+        if not marks:
+            self.by_atom.pop(atom_id, None)
+
+    def replace_for_atom(self, atom_id: int, items: list[Any]) -> None:
+        deduped: list[Any] = []
+        for item in items:
+            if item not in deduped:
+                deduped.append(item)
+        if deduped:
+            self.by_atom[atom_id] = deduped
+        else:
+            self.by_atom.pop(atom_id, None)
+
+    def reorder_for_atom(self, atom_id: int, placements: list[tuple[int, Any]]) -> None:
+        marks = self.by_atom.get(atom_id)
+        if marks is None:
+            raise RuntimeError("Restored marks require an owner registry")
+        if not placements:
+            return
+        for _, item in placements:
+            marks.remove(item)
+        for index, item in placements:
+            marks.insert(index, item)
+
     def pop_for_atom(self, atom_id: int) -> list[Any]:
         return self.by_atom.pop(atom_id, [])
 

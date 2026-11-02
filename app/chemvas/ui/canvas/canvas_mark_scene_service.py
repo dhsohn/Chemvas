@@ -360,11 +360,7 @@ class CanvasMarkSceneService:
         data = item.data(1) or {}
         atom_id = data.get("atom_id")
         if isinstance(atom_id, int):
-            marks = self.marks.get_for_atom(atom_id)
-            if marks is not None and item in marks:
-                marks.remove(item)
-            if marks is not None and not marks:
-                self.marks.by_atom.pop(atom_id, None)
+            self.marks.discard(atom_id, item)
         remove_item_from_canvas_scene(self.canvas, item)
         if isinstance(atom_id, int):
             self.sync_marks_for_atom(atom_id)

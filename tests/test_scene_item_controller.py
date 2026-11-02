@@ -183,9 +183,9 @@ class _FakeCanvas:
         data = item.data(1) or {}
         atom_id = data.get("atom_id") if isinstance(data, dict) else None
         if isinstance(atom_id, int):
-            marks = self.mark_registry.by_atom.get(atom_id)
-            if marks and item in marks:
-                marks.remove(item)
+            # Match ``CanvasMarkSceneService.remove_mark_item``: discard the
+            # item and drop an emptied atom entry.
+            self.mark_registry.discard(atom_id, item)
         self._scene.removeItem(item)
 
     def record_note_selection_box_updated(self, item) -> None:
