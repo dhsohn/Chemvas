@@ -6,35 +6,42 @@ import json
 from copy import deepcopy
 from typing import Any
 
+from chemvas.domain.document.cdxml_source import CdxmlSource, native_ids_for_collection
 from chemvas.ui.canvas.canvas_document_state import GROUP_COLLECTION_STATES
 
 
 def restore_cdxml_source(canvas: Any, state: dict) -> None:
     metadata = canvas.runtime_state.document_metadata_state
-    metadata.cdxml_source = deepcopy(state.get("cdxml_source"))
-    metadata.cdxml_item_bindings = {}
-    if metadata.cdxml_source is None:
+    source_obj = state.get("cdxml_source")
+    if source_obj is None:
+        metadata.cdxml_source = None
+        metadata.cdxml_item_bindings = {}
         return
-    for kind, identities in metadata.cdxml_source["items"].items():
+    source: CdxmlSource = deepcopy(source_obj)
+    bindings: dict[str, dict[int, str | None]] = {}
+    for kind, identities in source["items"].items():
         collection = canvas.runtime_state.document_collection(
             GROUP_COLLECTION_STATES[kind]
         )
-        metadata.cdxml_item_bindings[kind] = dict(
-            zip(collection.order, identities, strict=True)
+        links = native_ids_for_collection(
+            {kind: identities}, kind, len(collection.order)
         )
+        bindings[kind] = dict(zip(collection.order, links, strict=True))
+    metadata.cdxml_source = source
+    metadata.cdxml_item_bindings = bindings
 
 
 def snapshot_cdxml_source(canvas: Any, state: dict) -> None:
     metadata = canvas.runtime_state.document_metadata_state
     if metadata.cdxml_source is None:
         return
-    source = deepcopy(metadata.cdxml_source)
+    source: CdxmlSource = deepcopy(metadata.cdxml_source)
     source["items"] = {}
     for kind, name in GROUP_COLLECTION_STATES.items():
         collection = canvas.runtime_state.document_collection(name)
-        bindings = metadata.cdxml_item_bindings.get(kind, {})
+        runtime_bindings = metadata.cdxml_item_bindings.get(kind, {})
         source["items"][kind] = [
-            bindings.get(record_id) for record_id in collection.order
+            runtime_bindings.get(record_id) for record_id in collection.order
         ]
     state["cdxml_source"] = source
 
@@ -53,4 +60,9 @@ def normalize_initial_cdxml_projection(canvas: Any, state: dict) -> None:
 
     normalized = snapshot_canvas_document_state(canvas)
     normalized.pop("cdxml_source", None)
+    for kind, identities in source["baseline_items"].items():
+        records = normalized.get(kind, [])
+        if not isinstance(records, list):
+            raise ValueError(f"Invalid CDXML {kind} bindings.")
+        native_ids_for_collection({kind: identities}, kind, len(records))
     source["baseline"] = normalized
