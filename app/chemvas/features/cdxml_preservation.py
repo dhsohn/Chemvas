@@ -7,14 +7,15 @@ its projection through native document saves and recovery.
 
 from __future__ import annotations
 
+import math
 import xml.etree.ElementTree as ET
 from copy import deepcopy
 from html import escape
-from typing import Any, override
+from typing import Any, NoReturn
 
 from chemvas.domain.document import CANVAS_FILE_VERSION, build_document_payload
 from chemvas.domain.document.cdxml_source import parse_native_xml
-from chemvas.features.cdxml_document import _ELEMENTS, _Importer
+from chemvas.features.cdxml_document import _ELEMENTS
 from chemvas.features.document_composition import compose_document_state
 
 
@@ -31,7 +32,7 @@ def _css_string_literal(value: str) -> str:
     return "'" + value.replace("\\", "\\\\").replace("'", "\\'") + "'"
 
 
-class PreservingImporter(_Importer):
+class PreservingImporter:
     def __init__(self, xml: str):
         root = parse_native_xml(xml)
         self.root = root
@@ -119,6 +120,47 @@ class PreservingImporter(_Importer):
             e for e in self.page.iter("b") if not self.has_ancestor(e, "n")
         ]
 
+    @staticmethod
+    def unsupported(e: ET.Element, reason: str) -> NoReturn:
+        raise ValueError(
+            f"Unsupported CDXML {e.tag} #{e.get('id', '?')}: {reason}. No document was opened or overwritten."
+        )
+
+    def number(self, value: str, e: ET.Element) -> float:
+        try:
+            n = float(value)
+        except ValueError as exc:
+            raise ValueError(f"Invalid CDXML number on {e.tag}") from exc
+        if not math.isfinite(n) or abs(n) > 1_000_000:
+            raise ValueError(f"CDXML number out of range on {e.tag}")
+        return n
+
+    def inherited(self, e: ET.Element, key: str, default: str) -> str:
+        current: ET.Element | None = e
+        while current is not None:
+            if key in current.attrib:
+                return current.attrib[key]
+            current = self.parents.get(current)
+        return default
+
+    def color(self, e: ET.Element, attribute: str = "color", default: str = "0") -> str:
+        index = int(self.inherited(e, attribute, default))
+        if index == 0 and "fgcolor" in self.root.attrib:
+            index = int(self.root.attrib["fgcolor"])
+        if index == 0:
+            return "#000000"
+        if index == 1:
+            return "#ffffff"
+        if index >= len(self.colors) or index < 0:
+            raise ValueError("CDXML references a missing color")
+        return self.colors[index]
+
+    def point(self, value: str, e: ET.Element, count: int = 2) -> list[float]:
+        values = [self.number(x, e) for x in value.split()]
+        if len(values) != count or (count == 3 and values[2] != 0):
+            self.unsupported(e, "invalid or three-dimensional position")
+        return [values[0] - self.offset[0], values[1] - self.offset[1]]
+
     def has_ancestor(self, e: ET.Element, tag: str) -> bool:
         p = self.parents.get(e)
         while p is not None:
@@ -127,7 +169,6 @@ class PreservingImporter(_Importer):
             p = self.parents.get(p)
         return False
 
-    @override
     def atom(self, e: ET.Element, index: int) -> dict[str, Any]:
         text = e.find("t")
         label = "".join(text.itertext()).strip() if text is not None else ""
@@ -160,7 +201,6 @@ class PreservingImporter(_Importer):
         # are imported below at their exact native location.
         return result
 
-    @override
     def bond(self, e: ET.Element) -> dict[str, Any]:
         if e.get("B") not in self.node_ids or e.get("E") not in self.node_ids:
             raise ValueError("Native bond references missing visible atom.")
@@ -259,7 +299,6 @@ class PreservingImporter(_Importer):
             + "</p>",
         )
 
-    @override
     def state(self) -> dict[str, Any]:
         from chemvas.features.cdxml_editable_arrows import editable_arrow
         from chemvas.features.cdxml_graphics import graphic_image

@@ -78,9 +78,7 @@ def _native_with_fgcolor(fgcolor: str | None) -> bytes:
 
 
 def _edited_state(fgcolor: str | None = "2"):
-    state = parse_cdxml_document(
-        _native_with_fgcolor(fgcolor), preserve_source=True
-    ).state
+    state = parse_cdxml_document(_native_with_fgcolor(fgcolor)).state
     assert state["notes"][0]["text"] == "Caption"
     state["notes"][0]["text"] = "BlackWhiteGreenAgain"
     state["notes"][0]["html"] = RICH
@@ -185,7 +183,7 @@ def test_rich_caption_colors_survive_fgcolor_modes(
     _assert_projected_rich_colors(with_snapshot)
 
     native = _strip_snapshot(saved)
-    from_native = parse_cdxml_document(native, preserve_source=True).state
+    from_native = parse_cdxml_document(native).state
     _assert_projected_rich_colors(from_native)
     assert _document_char_colors(
         with_snapshot["notes"][0]["html"]
@@ -244,7 +242,7 @@ def test_apple_system_ui_font_default_keeps_caption_colors_on_native_reopen(
         runs = root.find('.//t[@id="6"]').findall("s")
         assert [run.get("color") for run in runs] == ["4", "1", "5", "4"]
 
-        from_native = parse_cdxml_document(native, preserve_source=True).state
+        from_native = parse_cdxml_document(native).state
         html = from_native["notes"][0]["html"]
         assert "&#x27;.AppleSystemUIFont&#x27;" in html
         assert _document_char_colors(html) == EXPECTED_RICH_CHARS
@@ -273,7 +271,7 @@ def test_apple_system_ui_font_default_keeps_caption_colors_on_native_reopen(
 def test_caption_font_family_css_quoting_retains_run_color(
     family: str, html_needle: str
 ):
-    state = parse_cdxml_document(_caption_native(family), preserve_source=True).state
+    state = parse_cdxml_document(_caption_native(family)).state
     html = state["notes"][0]["html"]
     assert html_needle in html
     assert "color: #00aa55" in html
@@ -357,7 +355,7 @@ def test_allocate_native_color_index_expands_short_hex():
 
 
 def test_short_hex_atom_color_survives_native_serialize_and_reopen():
-    state = parse_cdxml_document(NATIVE, preserve_source=True).state
+    state = parse_cdxml_document(NATIVE).state
     atoms = state["model"]["atoms"]
     atom = atoms[0] if 0 in atoms else atoms["0"]
     atom["color"] = "#f00"
@@ -376,5 +374,5 @@ def test_short_hex_atom_color_survives_native_serialize_and_reopen():
         round(float(entry.get("g")) * 255),
         round(float(entry.get("b")) * 255),
     ) == (255, 0, 0)
-    reopened = parse_cdxml_document(native, preserve_source=True).state
+    reopened = parse_cdxml_document(native).state
     assert _atom_color(reopened) == "#ff0000"

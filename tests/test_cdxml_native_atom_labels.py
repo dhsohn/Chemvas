@@ -31,7 +31,7 @@ def app():
 
 
 def state():
-    return parse_cdxml_document(SOURCE, preserve_source=True).state
+    return parse_cdxml_document(SOURCE).state
 
 
 def baseline(item):
@@ -129,7 +129,7 @@ def test_native_label_follows_move_and_edit_then_restores_original_typography():
 @pytest.mark.parametrize("size", ["nan", "inf", "0", "-2", "1001"])
 def test_invalid_native_label_sizes_are_rejected(size):
     source = SOURCE.replace(b'size="5"', f'size="{size}"'.encode())
-    document = parse_cdxml_document(source, preserve_source=True).state
+    document = parse_cdxml_document(source).state
     with pytest.raises(ValueError, match="label size"):
         with detached_document_scene(document):
             pass
@@ -138,7 +138,6 @@ def test_invalid_native_label_sizes_are_rejected(size):
 def test_above_label_and_source_free_scene():
     document = parse_cdxml_document(
         SOURCE.replace(b'LabelAlignment="Below"', b'LabelAlignment="Above"'),
-        preserve_source=True,
     ).state
     with detached_document_scene(document) as context:
         assert context.state.atom_graphics_state.atom_items[1].toPlainText() == "H\nN"
@@ -168,7 +167,7 @@ def test_bare_element_above_or_below_keeps_source_text_and_full_glyph(
         run_face=run_face,
         symbol=symbol,
     ).encode()
-    document = parse_cdxml_document(raw, preserve_source=True).state
+    document = parse_cdxml_document(raw).state
     with detached_document_scene(document) as context:
         atom = context.model.atoms[0]
         item = context.state.atom_graphics_state.atom_items[0]
@@ -189,7 +188,6 @@ def test_single_line_multi_run_label_with_vertical_alignment_is_unclipped(alignm
             b'<t p="108 52.33" BoundingBox="108 48.04 113.34 53.53" '
             + f'LabelAlignment="{alignment}">'.encode(),
         ),
-        preserve_source=True,
     ).state
     with detached_document_scene(document) as context:
         atom = context.model.atoms[2]
@@ -227,9 +225,7 @@ def test_reused_native_item_drops_previous_stack_pitch():
 
 
 def test_fractional_native_font_size_survives_qt_pixel_rounding():
-    document = parse_cdxml_document(
-        SOURCE.replace(b'size="5"', b'size="4.9"'), preserve_source=True
-    ).state
+    document = parse_cdxml_document(SOURCE.replace(b'size="5"', b'size="4.9"')).state
     with detached_document_scene(document) as context:
         item = context.state.atom_graphics_state.atom_items[0]
         assert QFontInfo(item.font()).pixelSize() * item.scale() == pytest.approx(4.9)
@@ -241,7 +237,6 @@ def test_rotated_native_atom_label_keeps_baseline_anchor():
 
     document = parse_cdxml_document(
         SOURCE.replace(b'p="136 53.9"', b'p="136 53.9" RotationAngle="5308416"'),
-        preserve_source=True,
     ).state
     with detached_document_scene(document) as context:
         item = context.state.atom_graphics_state.atom_items[3]

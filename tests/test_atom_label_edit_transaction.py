@@ -148,7 +148,7 @@ _NATIVE_P = b"""<CDXML LabelSize="10" LabelFont="3" LabelFace="96" BondLength="2
 
 def _import_native_p(canvas) -> None:
     canvas.services.canvas_document_session_service.apply_state(
-        parse_cdxml_document(_NATIVE_P, preserve_source=True).state
+        parse_cdxml_document(_NATIVE_P).state
     )
     canvas.services.history_service.clear()
 

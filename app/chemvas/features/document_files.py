@@ -37,7 +37,7 @@ def read_exact_document(
         raw = stream.read(max_bytes + 1)
     if len(raw) > max_bytes:
         raise ValueError(f"input document exceeds the {max_bytes}-byte limit")
-    parsed = parse_cdxml_document(raw, preserve_source=True)
+    parsed = parse_cdxml_document(raw)
     return ExactDocumentRead(
         raw,
         DocumentFile(

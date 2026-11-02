@@ -23,7 +23,7 @@ def native_symbol(symbol: str) -> bytes:
 
 @pytest.mark.parametrize("symbol", ["CirclePlus", "CircleMinus", "Plus", "Minus"])
 def test_symbol_image_center_uses_first_bounding_box_point(symbol):
-    state = parse_cdxml_document(native_symbol(symbol), preserve_source=True).state
+    state = parse_cdxml_document(native_symbol(symbol)).state
     image = state["images"][0]
 
     assert image["x"] + image["width"] / 2 == FIRST[0] - PAGE_OFFSET[0]
@@ -31,7 +31,7 @@ def test_symbol_image_center_uses_first_bounding_box_point(symbol):
 
 
 def test_symbol_save_preserves_original_bounding_box():
-    state = parse_cdxml_document(native_symbol("Plus"), preserve_source=True).state
+    state = parse_cdxml_document(native_symbol("Plus")).state
 
     root = ET.fromstring(update_native_document(state))
 
@@ -39,9 +39,7 @@ def test_symbol_save_preserves_original_bounding_box():
 
 
 def test_symbol_translation_shifts_bounding_box_and_reimported_center():
-    state = parse_cdxml_document(
-        native_symbol("CirclePlus"), preserve_source=True
-    ).state
+    state = parse_cdxml_document(native_symbol("CirclePlus")).state
     image = state["images"][0]
     image["x"] += 19
     image["y"] -= 7
@@ -49,7 +47,7 @@ def test_symbol_translation_shifts_bounding_box_and_reimported_center():
     root = ET.fromstring(update_native_document(state))
     assert root.find(".//graphic").get("BoundingBox") == "149 233 150 234"
 
-    moved = parse_cdxml_document(ET.tostring(root), preserve_source=True).state
+    moved = parse_cdxml_document(ET.tostring(root)).state
     moved_image = moved["images"][0]
     assert moved_image["x"] + moved_image["width"] / 2 == (
         FIRST[0] + 19 - PAGE_OFFSET[0]

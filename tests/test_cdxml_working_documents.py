@@ -71,7 +71,7 @@ def test_new_document_all_elements_save_reopen(tmp_path, collection, kind):
         assert parse_cdxml_document(second).state == before
         assert second.count(b"<!-- ChemvasDocument:") == 1
         native = raw[: raw.rfind(b"\n<!-- ChemvasDocument:")]
-        projected = parse_cdxml_document(native, preserve_source=True)
+        projected = parse_cdxml_document(native)
         assert (
             projected.state["model"]["atoms"]
             or projected.state["images"]

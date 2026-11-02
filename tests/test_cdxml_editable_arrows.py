@@ -19,7 +19,7 @@ def drawing(element):
 
 
 def imported(element):
-    return parse_cdxml_document(drawing(element), preserve_source=True).state
+    return parse_cdxml_document(drawing(element)).state
 
 
 @pytest.mark.parametrize(
@@ -60,7 +60,7 @@ def test_native_strokes_are_editable_and_save_endpoint_changes(
         "33 67 0" if reverse else "113 67 0"
     )
     assert root.find(".//step").get("ReactionStepArrows") == "10"
-    reopened = parse_cdxml_document(raw, preserve_source=True).state
+    reopened = parse_cdxml_document(raw).state
     assert reopened["arrows"][0] == arrow
     assert update_native_document(reopened) == raw
 
@@ -181,12 +181,10 @@ def test_recolor_black_is_not_reinterpreted_as_native_foreground():
         b'<CDXML LineWidth="0.75">',
         b'<CDXML LineWidth="0.75" fgcolor="2"><colortable><color r="1" g="0" b="0"/></colortable>',
     )
-    state = parse_cdxml_document(raw, preserve_source=True).state
+    state = parse_cdxml_document(raw).state
     assert state["arrows"][0]["color"] == "#ff0000"
     state["arrows"][0]["color"] = "#000000"
-    reopened = parse_cdxml_document(
-        update_native_document(state), preserve_source=True
-    ).state
+    reopened = parse_cdxml_document(update_native_document(state)).state
     assert reopened["arrows"][0]["color"] == "#000000"
 
 
@@ -240,9 +238,7 @@ def test_scene_native_strokes_retain_metrics_during_edit_and_kind_change(attrs, 
             .get("LineWidth")
             is None
         )
-        external = parse_cdxml_document(
-            update_native_document(saved), preserve_source=True
-        ).state
+        external = parse_cdxml_document(update_native_document(saved)).state
         assert external["arrows"][0]["kind"] == "line_dashed"
 
 
