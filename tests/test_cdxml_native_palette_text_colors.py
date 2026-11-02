@@ -313,3 +313,68 @@ def test_allocate_native_color_index_uppercase_absent_and_reuse():
     default_fg = ET.Element("CDXML", fgcolor="0")
     assert allocate_native_color_index(default_fg, "#000000") == "0"
     assert default_fg.find("colortable") is None
+
+
+def test_allocate_native_color_index_expands_short_hex():
+    bare = ET.Element("CDXML")
+    assert allocate_native_color_index(bare, "#FFF") == "1"
+    assert allocate_native_color_index(bare, "#000") == "0"
+    assert bare.find("colortable") is None
+
+    custom = ET.Element("CDXML", fgcolor="2")
+    black = allocate_native_color_index(custom, "#000")
+    black_again = allocate_native_color_index(custom, "#000000")
+    assert black == black_again == "2"
+    table = custom.find("colortable")
+    assert table is not None
+    assert [
+        (
+            round(float(c.get("r")) * 255),
+            round(float(c.get("g")) * 255),
+            round(float(c.get("b")) * 255),
+        )
+        for c in table
+    ] == [(0, 0, 0)]
+
+    red_root = ET.Element("CDXML")
+    red = allocate_native_color_index(red_root, "#f00")
+    red_again = allocate_native_color_index(red_root, "#ff0000")
+    assert red == red_again == "2"
+    red_table = red_root.find("colortable")
+    assert red_table is not None
+    assert [
+        (
+            round(float(c.get("r")) * 255),
+            round(float(c.get("g")) * 255),
+            round(float(c.get("b")) * 255),
+        )
+        for c in red_table
+    ] == [(255, 0, 0)]
+
+    for invalid in ("red", "#ff00"):
+        with pytest.raises(ValueError, match="#rgb or #rrggbb"):
+            allocate_native_color_index(ET.Element("CDXML"), invalid)
+
+
+def test_short_hex_atom_color_survives_native_serialize_and_reopen():
+    state = parse_cdxml_document(NATIVE, preserve_source=True).state
+    atoms = state["model"]["atoms"]
+    atom = atoms[0] if 0 in atoms else atoms["0"]
+    atom["color"] = "#f00"
+    with offscreen_canvas(state, command="test-native-short-hex-color") as (
+        canvas,
+        service,
+    ):
+        saved = serialize_cdxml_document(canvas, service.snapshot_state())
+    native = _strip_snapshot(saved)
+    root = ET.fromstring(native)
+    color_index = root.find('.//n[@id="3"]').get("color")
+    assert color_index is not None
+    entry = root.find("colortable")[int(color_index) - 2]
+    assert (
+        round(float(entry.get("r")) * 255),
+        round(float(entry.get("g")) * 255),
+        round(float(entry.get("b")) * 255),
+    ) == (255, 0, 0)
+    reopened = parse_cdxml_document(native, preserve_source=True).state
+    assert _atom_color(reopened) == "#ff0000"

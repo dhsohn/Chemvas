@@ -77,6 +77,10 @@ ATOM_ALIAS_DEFINITIONS: Final[Mapping[str, AtomAliasDefinition]] = MappingProxyT
     }
 )
 
+# Periodic symbols that are also common drawn group labels (e.g. Ar = argon or aryl).
+# CDXML writers must not treat these as pure elements without a typed binding.
+AMBIGUOUS_ELEMENT_LABELS: Final[frozenset[str]] = frozenset({"Ar"})
+
 
 def alias_attachment_inventory(model: MoleculeModel) -> AliasAttachmentInventory:
     """Index present bonds and every atom's attachment context in one traversal."""
@@ -207,6 +211,7 @@ def alias_attachment_error(
 
 
 __all__ = [
+    "AMBIGUOUS_ELEMENT_LABELS",
     "ATOM_ALIAS_DEFINITIONS",
     "AliasAttachment",
     "AliasAttachmentContract",

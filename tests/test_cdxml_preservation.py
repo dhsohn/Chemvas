@@ -99,6 +99,54 @@ def test_new_generic_label_is_native_query_not_carbon():
     assert "".join(node.find("t").itertext()) == "R2"
 
 
+_ELEMENT_EDIT_NATIVE = b"""<CDXML LabelFont="3" LabelSize="10" BondLength="20"><fonttable><font id="3" name="Arial"/></fonttable><page id="1" BoundingBox="0 0 200 200"><fragment id="2"><n id="3" p="50 50"/><n id="4" p="70 50" Element="8"><t p="70 50"><s font="3" size="10" face="96">O</s></t></n><b id="5" B="3" E="4"/></fragment></page></CDXML>"""
+
+# Captured from update_native_document before the alias-label refuse fix.
+_C_TO_N_NATIVE = (
+    b'<?xml version="1.0" encoding="UTF-8"?>\n'
+    b'<CDXML LabelFont="3" LabelSize="10" BondLength="20">'
+    b'<fonttable><font id="3" name="Arial" /></fonttable>'
+    b'<page id="1" BoundingBox="0 0 200 200"><fragment id="2">'
+    b'<n id="3" p="50 50" Element="7"><t p="50 50">'
+    b'<s font="3" size="10" face="96">N</s></t></n>'
+    b'<n id="4" p="70 50" Element="8"><t p="70 50" id="6">'
+    b'<s font="3" size="10" face="96">O</s></t></n>'
+    b'<b id="5" B="3" E="4" /></fragment></page></CDXML>'
+)
+
+
+@pytest.mark.parametrize("symbol", ["Ac", "Ts", "Ar"])
+def test_native_writer_refuses_ambiguous_and_alias_element_labels(symbol):
+    state = parse_cdxml_document(_ELEMENT_EDIT_NATIVE, preserve_source=True).state
+    state["model"]["atoms"][0]["element"] = symbol
+    with pytest.raises(ValueError, match="requires an elemental label"):
+        update_native_document(state)
+
+
+def test_native_writer_refuses_adding_bonded_alias_label():
+    state = parse_cdxml_document(_ELEMENT_EDIT_NATIVE, preserve_source=True).state
+    state["model"]["atoms"][2] = {
+        "element": "Ac",
+        "x": 90.0,
+        "y": -50.0,
+        "color": "#000000",
+        "explicit_label": True,
+    }
+    state["model"]["next_atom_id"] = 3
+    state["model"]["bonds"].append(
+        {"a": 0, "b": 2, "order": 1, "style": "single", "color": "#000000"}
+    )
+    with pytest.raises(ValueError, match="requires an elemental label"):
+        update_native_document(state)
+
+
+def test_native_writer_element_to_element_edit_matches_prior_bytes():
+    state = parse_cdxml_document(_ELEMENT_EDIT_NATIVE, preserve_source=True).state
+    state["model"]["atoms"][0]["element"] = "N"
+    state["model"]["atoms"][0]["explicit_label"] = True
+    assert update_native_document(state) == _C_TO_N_NATIVE
+
+
 def test_qt_normalization_does_not_rewrite_untouched_rich_text(tmp_path):
     app = QApplication.instance() or QApplication([])
     window = build_main_window()

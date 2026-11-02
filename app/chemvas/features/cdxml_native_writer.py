@@ -7,11 +7,26 @@ import re
 import xml.etree.ElementTree as ET
 from typing import Any, cast
 
+from chemvas.domain.atom_aliases import (
+    AMBIGUOUS_ELEMENT_LABELS,
+    ATOM_ALIAS_DEFINITIONS,
+)
 from chemvas.domain.document.cdxml_charge_edits import charge_edit_plan
 from chemvas.domain.document.cdxml_source import parse_native_xml, validate_cdxml_source
 from chemvas.domain.document.inspection import document_annotations, document_model
 from chemvas.features.cdxml_document import _ELEMENTS
 from chemvas.features.cdxml_native_palette import allocate_native_color_index
+
+_GENERIC_NICKNAME = re.compile(r"R[0-9]*|X|A|Q")
+
+
+def _is_native_pure_element_label(symbol: str) -> bool:
+    """True when ``symbol`` may be written as a native ``Element`` atomic number."""
+    return (
+        symbol in _ELEMENTS
+        and symbol not in ATOM_ALIAS_DEFINITIONS
+        and symbol not in AMBIGUOUS_ELEMENT_LABELS
+    )
 
 
 def transform_native(
@@ -118,9 +133,9 @@ class _NativeWriter:
                     node.attrib.pop("CIP", None)
             if after["element"] != before["element"]:
                 symbol = after["element"]
-                if symbol not in _ELEMENTS and not re.fullmatch(
-                    r"R[0-9]*|X|A|Q", symbol
-                ):
+                if not _is_native_pure_element_label(
+                    symbol
+                ) and not _GENERIC_NICKNAME.fullmatch(symbol):
                     raise ValueError(
                         f"Changing a native atom to '{symbol}' requires an elemental label; existing contracted labels are preserved."
                     )
@@ -146,7 +161,7 @@ class _NativeWriter:
                     "Geometry",
                 ):
                     e.attrib.pop(prop, None)
-                if symbol in _ELEMENTS:
+                if _is_native_pure_element_label(symbol):
                     e.set("Element", str(_ELEMENTS.index(symbol)))
                 else:
                     e.attrib.pop("Element", None)
@@ -184,7 +199,9 @@ class _NativeWriter:
             if fragment is None:
                 fragment = ET.SubElement(self.page, "fragment", id=self.fresh())
             symbol = after["element"]
-            if symbol not in _ELEMENTS and not re.fullmatch(r"R[0-9]*|X|A|Q", symbol):
+            if not _is_native_pure_element_label(
+                symbol
+            ) and not _GENERIC_NICKNAME.fullmatch(symbol):
                 raise ValueError(
                     f"New native atom '{symbol}' requires an elemental label."
                 )
@@ -193,10 +210,14 @@ class _NativeWriter:
                 "n",
                 id=self.fresh(),
                 p=f"{after['x'] + self.offset[0]:.12g} {after['y'] + self.offset[1]:.12g}",
-                Element=str(_ELEMENTS.index(symbol)) if symbol in _ELEMENTS else "6",
+                Element=(
+                    str(_ELEMENTS.index(symbol))
+                    if _is_native_pure_element_label(symbol)
+                    else "6"
+                ),
                 color=self.color_index(after["color"]),
             )
-            if symbol not in _ELEMENTS:
+            if not _is_native_pure_element_label(symbol):
                 node.attrib.pop("Element", None)
                 node.set("NodeType", "GenericNickname")
                 node.set("GenericNickname", "R" if symbol.startswith("R") else symbol)
