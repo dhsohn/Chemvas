@@ -40,6 +40,10 @@ dependencies = [
 dev = [
     "coverage>=7.15.2,<8",
     "mypy>=2.3,<3",
+    # PyQt6 6.12.0 ships QtGui/QtDBus stubs with `*args, /`, which mypy rejects
+    # as a syntax error before checking anything. Runtime support is unchanged;
+    # drop this cap once a PyQt6 release fixes the stubs.
+    "PyQt6<6.12",
     "pytest>=8",
     "ruff>=0.16.2,<0.17",
     # Lets the packaging tests exercise setup.py's build hook directly.
