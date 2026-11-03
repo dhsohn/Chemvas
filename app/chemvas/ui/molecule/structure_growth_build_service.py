@@ -14,6 +14,8 @@ if TYPE_CHECKING:
 
     from PyQt6.QtCore import QPointF
 
+    from chemvas.domain.points import PointLike
+
 RingPoints = tuple[list["QPointF"], list[tuple[int, float, float]]]
 
 
@@ -22,11 +24,11 @@ class StructureGrowthBuildActions:
     atom_point: Callable[[int], QPointF]
     sprout_bond_endpoint: Callable[..., QPointF | None]
     add_bond_between_points: Callable[
-        [QPointF, QPointF, str, int], tuple[int, int] | None
+        [PointLike, PointLike, str, int], tuple[int, int] | None
     ]
     add_benzene_ring: Callable[..., object | None]
     has_atom: Callable[[int], bool]
-    default_bond_endpoint: Callable[[QPointF, int | None], QPointF]
+    default_bond_endpoint: Callable[[PointLike, int | None], PointLike]
     add_atom_label: Callable[..., None]
     regular_ring_points_for_atom: Callable[[int, int], RingPoints | None]
     regular_ring_points_for_bond: Callable[[int, int, QPointF], RingPoints | None]

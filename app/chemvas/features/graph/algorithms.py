@@ -13,6 +13,7 @@ from collections import deque
 from typing import TYPE_CHECKING, Protocol
 
 from chemvas.domain.document import connected_atom_components
+from chemvas.domain.points import PointLike
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable, Mapping, Sequence
@@ -30,14 +31,6 @@ class AtomCoordsLike(Protocol):
 
     x: float
     y: float
-
-
-class PointLike(Protocol):
-    """Any point read through ``x()``/``y()`` accessors (e.g. ``QPointF``)."""
-
-    def x(self) -> float: ...
-
-    def y(self) -> float: ...
 
 
 def connected_components_for_nodes(

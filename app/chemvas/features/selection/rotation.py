@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import math
-from typing import TYPE_CHECKING, Protocol
+from typing import TYPE_CHECKING
+
+from chemvas.domain.points import PointLike
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Mapping
@@ -14,11 +16,8 @@ if TYPE_CHECKING:
 ROTATION_SNAP_STEP_DEGREES = 15.0
 
 
-class Point2D(Protocol):
-    """Anything with Qt's ``QPointF`` accessors; the feature stays Qt-free."""
-
-    def x(self) -> float: ...
-    def y(self) -> float: ...
+# Anything with Qt's ``QPointF`` accessors; the feature stays Qt-free.
+Point2D = PointLike
 
 
 def selection_transform_center(
