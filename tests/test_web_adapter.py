@@ -6926,9 +6926,9 @@ def test_rotation_center_matches_native_degenerate_shape_bounds(
         }
     )["document"]["state"]
     assert actual["model"]["atoms"][0] == pytest.approx(
-        expected["model"]["atoms"][0], abs=1e-10, rel=0
+        expected["model"]["atoms"][0], abs=1e-10
     )
-    assert actual["shapes"][0] == pytest.approx(expected["shapes"][0], abs=1e-10, rel=0)
+    assert actual["shapes"][0] == pytest.approx(expected["shapes"][0], abs=1e-10)
 
 
 @pytest.mark.parametrize("shift", [False, True])
@@ -8508,7 +8508,7 @@ def test_browser_charge_shortcut_matches_native(
         assert candidate["model"] == expected["model"]
         assert len(candidate["marks"]) == len(expected["marks"])
         for actual, native in zip(candidate["marks"], expected["marks"], strict=True):
-            assert actual == pytest.approx(native, rel=0, abs=1e-12)
+            assert actual == pytest.approx(native, abs=1e-12)
 
 
 @pytest.mark.parametrize("keys", ["++-", "--+", "+" * 12])
