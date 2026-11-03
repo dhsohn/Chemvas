@@ -3622,6 +3622,9 @@ class BrowserStructureAdapter:
             state.groups.pop(group_id)
         register_group_for(self, plan.atom_ids, plan.item_ids)
 
+    def mark_spatial_index_dirty(self) -> None:
+        """No hit-test index to refresh: picks scan the candidate model."""
+
     def find_atom_near(self, x: float, y: float, max_dist: float) -> int | None:
         return nearest_atom_id(
             self.model.atoms, self.model.atoms, x=x, y=y, max_dist=max_dist
@@ -5677,9 +5680,7 @@ class BrowserStructureAdapter:
         controller = CanvasMoveController(
             cast("Any", self),
             point_factory=BrowserPoint,
-            hit_testing_service=cast(
-                "Any", SimpleNamespace(mark_spatial_index_dirty=lambda: None)
-            ),
+            hit_testing_service=self,
         )
         controller.set_atom_positions(positions, update_selection=False)
         for mark_item, state in mark_updates:
@@ -6187,9 +6188,7 @@ class BrowserStructureAdapter:
         controller = CanvasMoveController(
             cast("Any", self),
             point_factory=BrowserPoint,
-            hit_testing_service=cast(
-                "Any", SimpleNamespace(mark_spatial_index_dirty=lambda: None)
-            ),
+            hit_testing_service=self,
             ring_polygon_rebuilder=partial(
                 rebuild_ring_fill_polygons,
                 point_factory=BrowserPoint,
