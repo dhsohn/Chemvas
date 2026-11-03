@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import replace
+from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING, Any, Protocol
 
 from chemvas.domain.document import VALID_ARROW_KINDS
@@ -9,10 +9,6 @@ from chemvas.features.graph import geometry_bond_sets_for_atom_ids
 from chemvas.features.selection import translate_projected_point_3d
 from chemvas.ui.canvas.canvas_mark_registry import mark_registry_for
 from chemvas.ui.canvas.canvas_ring_fill_scene_service import rebuild_ring_fill_polygons
-from chemvas.ui.molecule.atom_coords_access import (
-    pop_atom_coords_3d_for,
-    set_atom_coords_3d_for_id,
-)
 from chemvas.ui.molecule.bond_renderer_access import update_bond_geometry_for
 
 Coords3D = tuple[float, float, float]
@@ -26,8 +22,11 @@ _MOVE_BY_ITEM_KINDS = frozenset(
 
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping
+    from collections.abc import Callable, Iterable, Mapping, MutableMapping, Sequence
 
+    from chemvas.domain.document import MoleculeModel, Shape, TSBracket
+    from chemvas.domain.points import PointLike
+    from chemvas.ui.canvas.canvas_mark_registry import CanvasMarkRegistry
     from chemvas.ui.canvas.canvas_view import CanvasView
 
 
@@ -37,10 +36,130 @@ class SpatialIndexInvalidator(Protocol):
     def mark_spatial_index_dirty(self) -> object: ...
 
 
+class ArrowRecords(Protocol):
+    def record(self, item: Any) -> Any: ...
+    def set_record(self, item: Any, record: Any) -> object: ...
+
+
+@dataclass(frozen=True, kw_only=True)
+class MovePorts:
+    """What a move reads and refreshes, named instead of a canvas.
+
+    The desktop builds these from its canvas, reading each at call time; the
+    browser editor passes its candidate model and refreshes nothing it
+    renders later.
+    """
+
+    model: Callable[[], MoleculeModel]
+    atom_bond_ids: Callable[[], MutableMapping[int, set[int]]]
+    bond_items: Callable[[int], Iterable[Any]]
+    update_bond_geometry: Callable[[int, bool], object]
+    redraw_bond: Callable[[int], bool]
+    redraw_connected_bonds: Callable[[int, int | None], object]
+    ring_items: Callable[[], Sequence[Any]]
+    update_ring_fills_for_atoms: Callable[[set[int]], object]
+    update_selection_outline: Callable[[], object]
+    # The resize/transform handles glued to an item, if it is the target.
+    handles_for: Callable[[Any], Iterable[Any]]
+    atom_label: Callable[[int], Any]
+    atom_dot: Callable[[int], Any]
+    position_label: Callable[[Any, float, float], object]
+    marks: Callable[[], CanvasMarkRegistry]
+    mark_center: Callable[[Any], PointLike]
+    # The centre is the controller's point_factory point (QPointF by default).
+    set_mark_center: Callable[[Any, Any], object]
+    coords_3d: Callable[[], MutableMapping[int, Coords3D]]
+    bond_length: Callable[[], float]
+    projection_center_3d: Callable[[], Any]
+    arrows: Callable[[], ArrowRecords]
+    shape_record: Callable[[Any], Shape]
+    set_shape_record: Callable[[Any, Shape], object]
+    ts_bracket_record: Callable[[Any], TSBracket]
+    set_ts_bracket_record: Callable[[Any, TSBracket], object]
+
+    @classmethod
+    def for_canvas(cls, canvas: CanvasView) -> MovePorts:
+        runtime = lambda: canvas.runtime_state  # noqa: E731 - late-bound accessor
+        services = lambda: canvas.services  # noqa: E731 - late-bound accessor
+
+        def handles_for(item: Any) -> Iterable[Any]:
+            handles = runtime().handle_state
+            return handles.active_handles if item is handles.target else ()
+
+        def shape_record(item: Any) -> Shape:
+            from chemvas.ui.annotations.records import require_shape_record_for
+
+            return require_shape_record_for(canvas, item)
+
+        def set_shape_record(item: Any, shape: Shape) -> object:
+            from chemvas.ui.annotations.records import set_shape_record_for
+
+            return set_shape_record_for(canvas, item, shape)
+
+        def ts_bracket_record(item: Any) -> TSBracket:
+            from chemvas.ui.annotations.records import require_ts_bracket_record_for
+
+            return require_ts_bracket_record_for(canvas, item)
+
+        def set_ts_bracket_record(item: Any, bracket: TSBracket) -> object:
+            from chemvas.ui.annotations.records import set_ts_bracket_record_for
+
+            return set_ts_bracket_record_for(canvas, item, bracket)
+
+        return cls(
+            model=lambda: canvas.model,
+            atom_bond_ids=lambda: runtime().graph_state.atom_bond_ids,
+            bond_items=lambda bond_id: runtime().bond_graphics_state.bond_items.get(
+                bond_id, []
+            ),
+            update_bond_geometry=lambda bond_id, rebuild: update_bond_geometry_for(
+                canvas, bond_id, allow_topology_rebuild=rebuild
+            ),
+            redraw_bond=lambda bond_id: canvas.bond_renderer.redraw_bond(bond_id),
+            redraw_connected_bonds=lambda atom_id, skip: (
+                canvas.bond_renderer.redraw_connected_bonds(atom_id, skip_bond_id=skip)
+            ),
+            ring_items=lambda: runtime().ring_items(),
+            update_ring_fills_for_atoms=lambda atom_ids: (
+                services().canvas_ring_fill_scene_service.update_ring_fills_for_atoms(
+                    atom_ids, ring_items=None
+                )
+            ),
+            update_selection_outline=lambda: (
+                services().selection.update_selection_outline()
+            ),
+            handles_for=handles_for,
+            atom_label=lambda atom_id: runtime().atom_graphics_state.atom_items.get(
+                atom_id
+            ),
+            atom_dot=lambda atom_id: runtime().atom_graphics_state.atom_dots.get(
+                atom_id
+            ),
+            position_label=lambda label, x, y: (
+                services().atom_label_service.position_label(label, x, y)
+            ),
+            marks=lambda: mark_registry_for(canvas),
+            mark_center=lambda item: (
+                services().scene_decoration_build_service.mark_center(item)
+            ),
+            set_mark_center=lambda item, center: (
+                services().scene_decoration_build_service.set_mark_center(item, center)
+            ),
+            coords_3d=lambda: runtime().atom_coords_3d_state.atom_coords_3d,
+            bond_length=lambda: canvas.renderer.style.bond_length_px,
+            projection_center_3d=lambda: runtime().rotation_state.projection_center_3d,
+            arrows=lambda: canvas.render_context.arrows,
+            shape_record=shape_record,
+            set_shape_record=set_shape_record,
+            ts_bracket_record=ts_bracket_record,
+            set_ts_bracket_record=set_ts_bracket_record,
+        )
+
+
 class CanvasMoveController:
     def __init__(
         self,
-        canvas: CanvasView,
+        ports: MovePorts,
         *,
         hit_testing_service: SpatialIndexInvalidator,
         ring_polygon_rebuilder=rebuild_ring_fill_polygons,
@@ -48,9 +167,13 @@ class CanvasMoveController:
     ) -> None:
         self.point_factory = point_factory
         self.ring_polygon_rebuilder = ring_polygon_rebuilder
-        self.canvas = canvas
-        self.marks = mark_registry_for(canvas)
+        self.ports = ports
+        self.marks = ports.marks()
         self.hit_testing_service = hit_testing_service
+
+    @classmethod
+    def for_canvas(cls, canvas: CanvasView, **kwargs: Any) -> CanvasMoveController:
+        return cls(MovePorts.for_canvas(canvas), **kwargs)
 
     def move_item(
         self, item, dx: float, dy: float, update_selection: bool = True
@@ -60,7 +183,7 @@ class CanvasMoveController:
             atom_id = item.data(1)
             if not isinstance(atom_id, int):
                 return
-            if self.canvas.model.atom_for_id(atom_id) is None:
+            if self.ports.model().atom_for_id(atom_id) is None:
                 return
             # Delegate to move_atom so the atom's companions move together:
             # its label/dot, attached marks, 3D coordinates, and the hit-test
@@ -75,7 +198,7 @@ class CanvasMoveController:
             bond_id = item.data(1)
             if not isinstance(bond_id, int):
                 return
-            bond = self.canvas.model.bond_for_id(bond_id)
+            bond = self.ports.model().bond_for_id(bond_id)
             if bond is None:
                 return
             self.move_atom(bond.a, dx, dy)
@@ -86,50 +209,29 @@ class CanvasMoveController:
             data = item.data(1) or {}
             atom_id = data.get("atom_id")
             if isinstance(atom_id, int):
-                atom = self.canvas.model.atom_for_id(atom_id)
+                atom = self.ports.model().atom_for_id(atom_id)
                 if atom is not None:
-                    center = (
-                        self.canvas.services.scene_decoration_build_service.mark_center(
-                            item
-                        )
-                    )
+                    center = self.ports.mark_center(item)
                     data["dx"] = center.x() - atom.x
                     data["dy"] = center.y() - atom.y
                     item.setData(1, data)
         elif kind == "shape":
-            from chemvas.ui.annotations.records import (
-                require_shape_record_for,
-                set_shape_record_for,
-            )
-
             # Move a shape by rebuilding its path in scene coordinates and keeping
             # item.pos() at the origin. Using moveBy here would leave a non-zero
             # pos that a later resize (which rebuilds the path in scene space)
             # double-applies, making the shape jump away from its handles.
-            shape = require_shape_record_for(self.canvas, item)
-            set_shape_record_for(
-                self.canvas,
-                item,
-                moved_shape(shape, dx, dy),
-            )
+            shape = self.ports.shape_record(item)
+            self.ports.set_shape_record(item, moved_shape(shape, dx, dy))
         elif kind == "ts_bracket":
-            from chemvas.ui.annotations.records import (
-                moved_ts_bracket,
-                require_ts_bracket_record_for,
-                set_ts_bracket_record_for,
-            )
+            from chemvas.ui.annotations.records import moved_ts_bracket
 
             # Like a shape: the path is rebuilt in scene coordinates and
             # item.pos() stays at the origin.
-            set_ts_bracket_record_for(
-                self.canvas,
-                item,
-                moved_ts_bracket(
-                    require_ts_bracket_record_for(self.canvas, item), dx, dy
-                ),
+            self.ports.set_ts_bracket_record(
+                item, moved_ts_bracket(self.ports.ts_bracket_record(item), dx, dy)
             )
         elif kind in VALID_ARROW_KINDS:
-            arrows = self.canvas.render_context.arrows
+            arrows = self.ports.arrows()
             record = arrows.record(item)
             arrows.set_record(
                 item,
@@ -155,13 +257,11 @@ class CanvasMoveController:
             item.moveBy(dx, dy)
         self._shift_active_handles_for(item, dx, dy)
         if update_selection:
-            self.canvas.services.selection.update_selection_outline()
+            self.ports.update_selection_outline()
 
     def _shift_active_handles_for(self, item, dx: float, dy: float) -> None:
         # Keep resize/transform handles glued to their item as it is dragged.
-        if item is not self.canvas.runtime_state.handle_state.target:
-            return
-        for handle in self.canvas.runtime_state.handle_state.active_handles:
+        for handle in self.ports.handles_for(item):
             handle.moveBy(dx, dy)
 
     def move_atoms(
@@ -186,18 +286,12 @@ class CanvasMoveController:
             refreshed_ids = (redraw_bond_ids or set()) | dependent_ids
             if translated_ids:
                 for bond_id in translated_ids:
-                    for (
-                        item
-                    ) in self.canvas.runtime_state.bond_graphics_state.bond_items.get(
-                        bond_id, []
-                    ):
+                    for item in self.ports.bond_items(bond_id):
                         item.moveBy(dx, dy)
             if refreshed_ids:
                 for bond_id in refreshed_ids:
-                    update_bond_geometry_for(
-                        self.canvas,
-                        bond_id,
-                        allow_topology_rebuild=rebuild_stale_bond_topology,
+                    self.ports.update_bond_geometry(
+                        bond_id, rebuild_stale_bond_topology
                     )
         else:
             self.redraw_bonds_for_atoms(atom_ids)
@@ -211,7 +305,7 @@ class CanvasMoveController:
                 affected_ring_items=affected_ring_items,
             )
         if update_selection:
-            self.canvas.services.selection.update_selection_outline()
+            self.ports.update_selection_outline()
 
     def redraw_bonds_for_atoms(self, atom_ids: set[int]) -> None:
         internal, dependent = self.geometry_bond_sets_for_atom_ids(atom_ids)
@@ -231,27 +325,21 @@ class CanvasMoveController:
 
         internal, dependent = self.geometry_bond_sets_for_atom_ids(atom_ids)
         for bond_id in internal | dependent:
-            update_bond_geometry_for(
-                self.canvas,
-                bond_id,
-                allow_topology_rebuild=rebuild_stale_bond_topology,
-            )
+            self.ports.update_bond_geometry(bond_id, rebuild_stale_bond_topology)
 
     def redraw_bond(self, bond_id: int) -> bool:
-        return self.canvas.bond_renderer.redraw_bond(bond_id)
+        return self.ports.redraw_bond(bond_id)
 
     def redraw_connected_bonds(
         self, atom_id: int, skip_bond_id: int | None = None
     ) -> None:
-        self.canvas.bond_renderer.redraw_connected_bonds(
-            atom_id, skip_bond_id=skip_bond_id
-        )
+        self.ports.redraw_connected_bonds(atom_id, skip_bond_id)
 
     def bond_ids_for_atom_ids(self, atom_ids: set[int]) -> set[int]:
-        graph = self.canvas.runtime_state.graph_state
+        atom_bond_ids = self.ports.atom_bond_ids()
         bond_ids: set[int] = set()
         for atom_id in atom_ids:
-            bond_ids.update(graph.atom_bond_ids.get(atom_id, ()))
+            bond_ids.update(atom_bond_ids.get(atom_id, ()))
         return bond_ids
 
     def geometry_bond_sets_for_atom_ids(
@@ -264,11 +352,13 @@ class CanvasMoveController:
         neither may keep its previous outline or simply translate it. A whole
         connected selection still retains the rigid item-translation fast path.
         """
-        model = self.canvas.model
-        graph = self.canvas.runtime_state.graph_state
+        model = self.ports.model()
 
         return geometry_bond_sets_for_atom_ids(
-            atom_ids, graph.atom_bond_ids, model.bonds, bond_for_id=model.bond_for_id
+            atom_ids,
+            self.ports.atom_bond_ids(),
+            model.bonds,
+            bond_for_id=model.bond_for_id,
         )
 
     def move_rings_for_atoms(
@@ -282,9 +372,9 @@ class CanvasMoveController:
         # A ring fill is a polygon over its atoms, so moving them refits it
         # rather than translating it; the deltas are the caller's, not ours.
         self.ring_polygon_rebuilder(
-            self.canvas.model,
+            self.ports.model(),
             atom_ids,
-            self.canvas.runtime_state.ring_items()
+            self.ports.ring_items()
             if affected_ring_items is None
             else affected_ring_items,
         )
@@ -298,25 +388,21 @@ class CanvasMoveController:
         coords_3d: Coords3D | None = None,
     ) -> bool:
         """Apply screen coordinates and their depth-preserving or exact 3D value."""
-        atom = self.canvas.model.atom_for_id(atom_id)
+        atom = self.ports.model().atom_for_id(atom_id)
         if atom is None:
             return False
         dx, dy = x - atom.x, y - atom.y
         atom.x, atom.y = x, y
-        stored = self.canvas.runtime_state.atom_coords_3d_state.atom_coords_3d
+        stored = self.ports.coords_3d()
         if coords_3d is not None:
-            set_atom_coords_3d_for_id(self.canvas, atom_id, coords_3d)
+            stored[atom_id] = coords_3d
         elif atom_id in stored:
-            set_atom_coords_3d_for_id(
-                self.canvas,
-                atom_id,
-                translate_projected_point_3d(
-                    stored[atom_id],
-                    dx,
-                    dy,
-                    bond_length_px=self.canvas.renderer.style.bond_length_px,
-                    center_3d=self.canvas.runtime_state.rotation_state.projection_center_3d,
-                ),
+            stored[atom_id] = translate_projected_point_3d(
+                stored[atom_id],
+                dx,
+                dy,
+                bond_length_px=self.ports.bond_length(),
+                center_3d=self.ports.projection_center_3d(),
             )
         return True
 
@@ -330,10 +416,10 @@ class CanvasMoveController:
 
     def _sync_atom_accessories(self, atom_id: int, x: float, y: float) -> None:
         """Relayout the label/dot and reattach marks from saved offsets."""
-        label = self.canvas.runtime_state.atom_graphics_state.atom_items.get(atom_id)
+        label = self.ports.atom_label(atom_id)
         if label is not None:
-            self.canvas.services.atom_label_service.position_label(label, x, y)
-        dot = self.canvas.runtime_state.atom_graphics_state.atom_dots.get(atom_id)
+            self.ports.position_label(label, x, y)
+        dot = self.ports.atom_dot(atom_id)
         if dot is not None:
             dot.setPos(x, y)
         marks = self.marks.get_for_atom(atom_id)
@@ -348,9 +434,7 @@ class CanvasMoveController:
                 if isinstance(dx, (int, float)) and isinstance(dy, (int, float))
                 else point_factory(x, y)
             )
-            self.canvas.services.scene_decoration_build_service.set_mark_center(
-                mark, center
-            )
+            self.ports.set_mark_center(mark, center)
 
     def apply_atom_geometry(
         self,
@@ -374,14 +458,14 @@ class CanvasMoveController:
         self.hit_testing_service.mark_spatial_index_dirty()
         affected: set[int] = set()
         for atom_id, (x, y) in positions.items():
-            atom = self.canvas.model.atom_for_id(atom_id)
+            atom = self.ports.model().atom_for_id(atom_id)
             if atom is None:
                 continue
             if coords_3d is not None and atom_id in coords_3d:
                 value = coords_3d[atom_id]
                 if value is None:
                     atom.x, atom.y = x, y
-                    pop_atom_coords_3d_for(self.canvas, atom_id)
+                    self.ports.coords_3d().pop(atom_id, None)
                 else:
                     self._set_atom_coordinates(atom_id, x, y, coords_3d=value)
             else:
@@ -392,9 +476,9 @@ class CanvasMoveController:
             if atom_id in positions:
                 continue
             if value is None:
-                pop_atom_coords_3d_for(self.canvas, atom_id)
+                self.ports.coords_3d().pop(atom_id, None)
             else:
-                set_atom_coords_3d_for_id(self.canvas, atom_id, value)
+                self.ports.coords_3d()[atom_id] = value
             affected.add(atom_id)
         return affected
 
@@ -423,29 +507,27 @@ class CanvasMoveController:
                 atom_id: coord
                 for atom_id, coord in coords_3d.items()
                 if atom_id in positions
-                or self.canvas.model.atom_for_id(atom_id) is not None
+                or self.ports.model().atom_for_id(atom_id) is not None
             }
         atom_ids = self.apply_atom_geometry(positions, coords_3d=owner_coords)
         if atom_ids:
             self.update_bond_geometries_for_atoms(
                 atom_ids, rebuild_stale_bond_topology=True
             )
-            self.canvas.services.canvas_ring_fill_scene_service.update_ring_fills_for_atoms(
-                atom_ids, ring_items=None
-            )
+            self.ports.update_ring_fills_for_atoms(atom_ids)
         if update_selection:
-            self.canvas.services.selection.update_selection_outline()
+            self.ports.update_selection_outline()
 
     def move_atom(self, atom_id: int, dx: float, dy: float) -> None:
-        atom = self.canvas.model.atom_for_id(atom_id)
+        atom = self.ports.model().atom_for_id(atom_id)
         if atom is None:
             return
         self._set_atom_coordinates(atom_id, atom.x + dx, atom.y + dy)
         self.hit_testing_service.mark_spatial_index_dirty()
-        label = self.canvas.runtime_state.atom_graphics_state.atom_items.get(atom_id)
+        label = self.ports.atom_label(atom_id)
         if label is not None:
             label.moveBy(dx, dy)
-        dot = self.canvas.runtime_state.atom_graphics_state.atom_dots.get(atom_id)
+        dot = self.ports.atom_dot(atom_id)
         if dot is not None:
             dot.moveBy(dx, dy)
         marks = self.marks.get_for_atom(atom_id)
@@ -454,4 +536,4 @@ class CanvasMoveController:
                 mark.moveBy(dx, dy)
 
 
-__all__ = ["CanvasMoveController"]
+__all__ = ["CanvasMoveController", "MovePorts"]

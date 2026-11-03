@@ -1023,7 +1023,9 @@ class CanvasViewProjectionMathTest(unittest.TestCase):
         if hit_testing_service is None:
             hit_testing_service = SimpleNamespace(mark_spatial_index_dirty=mock.Mock())
             view.services.hit_testing_service = hit_testing_service
-        controller = CanvasMoveController(view, hit_testing_service=hit_testing_service)
+        controller = CanvasMoveController.for_canvas(
+            view, hit_testing_service=hit_testing_service
+        )
         view.services.move_controller = controller
         return controller
 
@@ -1161,7 +1163,7 @@ class CanvasViewProjectionMathTest(unittest.TestCase):
                 mark_registry=CanvasMarkRegistry(),
             ),
         )
-        CanvasMoveController(
+        CanvasMoveController.for_canvas(
             redraw_view,
             hit_testing_service=SimpleNamespace(mark_spatial_index_dirty=mock.Mock()),
         ).redraw_bonds_for_atoms({1, 2})
@@ -1271,7 +1273,7 @@ class CanvasViewProjectionMathTest(unittest.TestCase):
             bond_renderer=renderer,
             runtime_state=canvas_runtime_state(mark_registry=CanvasMarkRegistry()),
         )
-        CanvasMoveController(
+        CanvasMoveController.for_canvas(
             view,
             hit_testing_service=SimpleNamespace(mark_spatial_index_dirty=mock.Mock()),
         ).redraw_connected_bonds(1, skip_bond_id=3)

@@ -94,7 +94,7 @@ def build_canvas_services(
         selection_controller=selection,
         history_service=history_service,
     )
-    move_controller = CanvasMoveController(
+    move_controller = CanvasMoveController.for_canvas(
         canvas,
         hit_testing_service=hit_testing_service,
     )
