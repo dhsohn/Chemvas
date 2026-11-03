@@ -45,9 +45,8 @@ class ArrowRecords(Protocol):
 class MovePorts:
     """What a move reads and refreshes, named instead of a canvas.
 
-    The desktop builds these from its canvas, reading each at call time; the
-    browser editor passes its candidate model and refreshes nothing it
-    renders later.
+    ``for_canvas`` builds them from the desktop canvas, reading each at call
+    time; tests pass their own so a move runs without a scene.
     """
 
     model: Callable[[], MoleculeModel]

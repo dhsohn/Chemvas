@@ -31,7 +31,7 @@ class CanvasChemdrawShortcutService:
     DEFAULT_ORBITAL_TYPE = "s"
     DEFAULT_MARK_KIND = "plus"
 
-    # The key text decisions are shared with the browser editor.
+    # The key text decisions live in ChemdrawTextShortcuts (Qt-free).
     LABEL_HOTKEYS: ClassVar[dict[str, str]] = ChemdrawTextShortcuts.LABEL_HOTKEYS
     ATOM_HOTKEYS = ChemdrawTextShortcuts.ATOM_HOTKEYS
     BOND_HOTKEYS = ChemdrawTextShortcuts.BOND_HOTKEYS

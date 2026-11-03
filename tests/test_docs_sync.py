@@ -152,8 +152,6 @@ _CURRENT_GUIDES = (
     FIRST_SCHEME_KO,
     AGENT_CLI,
     ROOT / "docs" / "AGENT_CLI.ko.md",
-    ROOT / "docs" / "WEB_ADAPTER.md",
-    ROOT / "docs" / "WEB_ADAPTER.ko.md",
     ROOT / "docs" / "DOCUMENT_COMPATIBILITY.md",
     ROOT / "docs" / "DOCUMENT_COMPATIBILITY.ko.md",
     ROOT / "docs" / "CDXML_EXPORT.md",

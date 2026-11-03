@@ -99,15 +99,11 @@ jobs:
           assert console_scripts["chemvas"] == "chemvas.bootstrap.application:main"
           assert find_spec("core") is None
           assert find_spec("ui") is None
-          assert find_spec("chemvas.bootstrap.web_adapter") is None
-          assert find_spec("chemvas.bootstrap.web_drafts") is None
-          assert not any(path.startswith("chemvas/web/") for path in installed_files)
           for args, expected in [
               (["--version"], 0),
               (["--help"], 0),
               (["--ui", "qt", "--help"], 0),
               (["--ui", "web"], 2),
-              (["--ui", "web", "--no-browser"], 2),
           ]:
               result = subprocess.run(
                   [sys.executable, "-I", "-m", "chemvas", *args],
@@ -117,5 +113,7 @@ jobs:
               assert result.returncode == expected, (args, output)
               assert "Traceback" not in output, (args, output)
               if "--help" in args:
-                  assert "--ui web" not in output, output
+                  assert "--ui" not in output, output
+              if "web" in args:
+                  assert "has been retired" in output, output
           PY

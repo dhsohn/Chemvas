@@ -14,7 +14,7 @@ from tests.canvas_factory import build_canvas_view
 
 @dataclass(frozen=True)
 class _Point:
-    """A point that is not a QPointF, like the browser editor's."""
+    """A point that is not a QPointF, as a headless caller may pass."""
 
     px: float
     py: float

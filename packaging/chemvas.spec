@@ -24,13 +24,6 @@ from chemvas import __version__ as CHEMVAS_VERSION
 executable_icon = str(PACKAGING_ICONS / ("chemvas.ico" if sys.platform == "win32" else "chemvas.icns"))
 
 bundle_data = [(str(ICON_DIR), "chemvas/assets/icon"), (str(REPO_ROOT / "LICENSE"), ".")]
-# The experimental browser editor runs from a source checkout only. Keep its
-# modules out of the bundle, as the wheel does, so `--ui web` reports that it
-# is not included instead of serving without its assets.
-SOURCE_CHECKOUT_ONLY_MODULES = [
-    "chemvas.bootstrap.web_adapter",
-    "chemvas.bootstrap.web_drafts",
-]
 # Include wheel-supplied notices on every platform, including transitive Qt/sip.
 # This preserves upstream texts; release licensing review remains separate.
 for distribution in ("PyQt6", "Pillow"):
@@ -74,7 +67,6 @@ a = Analysis(
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
-    excludes=SOURCE_CHECKOUT_ONLY_MODULES,
     noarchive=False,
 )
 pyz = PYZ(a.pure, a.zipped_data)

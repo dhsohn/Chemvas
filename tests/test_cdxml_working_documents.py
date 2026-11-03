@@ -146,11 +146,10 @@ def test_mixed_document_renders_identically_after_reopen(tmp_path):
 
 
 def test_visual_projection_keeps_native_molecule_paint_order():
-    from chemvas.bootstrap.web_adapter import edit_document, new_document
+    from PyQt6.QtCore import QPointF
 
-    state = edit_document(
-        {"document": new_document(), "edit": {"kind": "ring", "x": 100, "y": 100}}
-    )["document"]["state"]
+    from chemvas.adapters.qt.renderer import Renderer
+    from chemvas.ui.canvas.canvas_view import CanvasView
 
     def molecule_order(raw):
         fragment = ET.fromstring(raw).find("./page/fragment")
@@ -163,7 +162,19 @@ def test_visual_projection_keeps_native_molecule_paint_order():
             )
         ]
 
-    with offscreen_canvas(state, command="test-mixed-paint-order") as (canvas, service):
+    with offscreen_canvas(sample_state(), command="test-mixed-paint-order") as (
+        canvas,
+        service,
+    ):
+        # A blank document holding only one benzene ring drawn by the editor.
+        blank = CanvasView(renderer=Renderer())
+        service.apply_state(
+            blank.services.canvas_document_session_service.snapshot_state()
+        )
+        blank.deleteLater()
+        canvas.services.structure_build_service.add_benzene_ring(QPointF(100, 100))
+        state = service.snapshot_state()
+        assert len(state["model"]["atoms"]) == 6 and not state["orbitals"]
         before = molecule_order(
             serialize_cdxml_document(canvas, service.snapshot_state())
         )

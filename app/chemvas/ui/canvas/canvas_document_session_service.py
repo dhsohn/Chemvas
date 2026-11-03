@@ -596,7 +596,7 @@ class CanvasDocumentSessionService:
             )
         else:
             export_model, atom_annotations = build_mol_export_payload_for(self.canvas)
-        # The one MOL policy the browser export shares: writer and hard limits.
+        # The one MOL policy every export uses: writer and hard limits.
         block = export_molfile_block(export_model, atom_annotations=atom_annotations)
         atomic_write_text(path, block)
 

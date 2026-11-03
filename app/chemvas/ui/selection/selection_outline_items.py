@@ -42,7 +42,7 @@ def selection_group_outline_item(rect: QRectF, color: QColor) -> NoSelectPathIte
     outline.setZValue(20)
     pen = selection_outline_pen(color)
     pen.setWidthF(GROUP_BOX_SCREEN_PX)
-    # Qt's DashLine is GROUP_BOX_DASH_PATTERN, which the browser draws.
+    # Qt's DashLine is GROUP_BOX_DASH_PATTERN.
     pen.setStyle(Qt.PenStyle.DashLine)
     outline.setPen(pen)
     outline.setBrush(QBrush(Qt.BrushStyle.NoBrush))

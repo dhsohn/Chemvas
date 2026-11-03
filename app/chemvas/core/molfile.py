@@ -777,8 +777,7 @@ def export_molfile_block(
 
     The V2000 writer's refusals surface as they are: a drawn abbreviation
     label such as Ph or CF3 is not an MDL element, so the export stops instead
-    of inventing the group's atoms. The desktop and browser exports share this
-    one policy.
+    of inventing the group's atoms. Every MOL export shares this one policy.
     """
     if not model.atoms:
         raise ValueError("There is no molecular structure to export.")
