@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, fields
 from typing import TYPE_CHECKING, Any
 
 from PyQt6.QtCore import QRectF
@@ -25,7 +25,7 @@ from chemvas.ui.canvas.canvas_document_state import (
     snapshot_canvas_document_state,
     snapshot_canvas_document_state_with_warnings,
 )
-from chemvas.ui.canvas.canvas_scene_items_state import DOCUMENT_COLLECTION_STATES
+from chemvas.ui.canvas.canvas_runtime_state import CanvasRuntimeState
 from chemvas.ui.canvas.canvas_scene_state import scene_if_present_for
 from chemvas.ui.canvas.canvas_viewport_access import (
     ViewportSnapshot,
@@ -76,26 +76,27 @@ if TYPE_CHECKING:
     from chemvas.ui.canvas.canvas_view import CanvasView
     from chemvas.ui.export.reviewed_cdxml_snapshot import ReviewedCdxmlSnapshot
 
-_DOCUMENT_MUTATED_RUNTIME_FIELDS = (
-    "sheet_setup_state",
-    "calculation_plan_state",
-    "selection_info_state",
-    "graph_state",
-    "group_state",
-    "insert_state",
-    "atom_coords_3d_state",
-    "atom_graphics_state",
-    "bond_graphics_state",
-    "mark_registry",
-    "spatial_index_state",
-    "rotation_state",
-    "handle_state",
-    "selection_state",
-    "text_style_state",
-    "tool_settings_state",
-    "hover_preview_state",
-    "scene_items_state",
-    *DOCUMENT_COLLECTION_STATES.values(),
+# Runtime fields a document replacement leaves alone: history is restored
+# through its own stack snapshot, and the rest is per-session input, clipboard
+# and callback wiring or a cache that validates itself against the model.
+_DOCUMENT_SESSION_RUNTIME_FIELDS = frozenset(
+    {
+        "history_state",
+        "history_service",
+        "input_view_state",
+        "callback_state",
+        "scene_clipboard_state",
+        "valence_warnings",
+    }
+)
+# Every other runtime field is rollback authority by default. The scene reset
+# and the replacement build write document state (the native CDXML source and
+# its item bindings, native arrow styles, scene registries), so a new field is
+# captured without a second list that has to remember it.
+_DOCUMENT_MUTATED_RUNTIME_FIELDS = tuple(
+    field.name
+    for field in fields(CanvasRuntimeState)
+    if field.name not in _DOCUMENT_SESSION_RUNTIME_FIELDS
 )
 
 
@@ -515,6 +516,13 @@ class CanvasDocumentSessionService:
             object_states.append(snapshot)
             return snapshot
 
+        # Bind the fields themselves first: plain containers such as the native
+        # arrow styles have no object state of their own, and a rebind during
+        # the replacement must be undone as well as an in-place clear.
+        append_snapshot(
+            getattr(self.canvas, "runtime_state", None),
+            names=_DOCUMENT_MUTATED_RUNTIME_FIELDS,
+        )
         for name in _DOCUMENT_MUTATED_RUNTIME_FIELDS:
             append_snapshot(runtime_state_object_for(self.canvas, name))
 
