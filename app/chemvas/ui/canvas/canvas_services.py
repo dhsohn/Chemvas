@@ -227,7 +227,7 @@ def build_canvas_services(
         tool_controller=tool_controller,
         scene_transform_controller=scene_transform_controller,
     )
-    atom_label_service = AtomLabelService(
+    atom_label_service = AtomLabelService.for_canvas(
         canvas,
         move_controller=move_controller,
         graph_service=graph_service,
