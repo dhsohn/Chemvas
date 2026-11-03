@@ -257,8 +257,14 @@ def test_http_auth_host_origin_and_static_allowlist(server):
     assert status == 200 and b"Chemical drawing canvas" in body
     assert "frame-ancestors 'none'" in headers["Content-Security-Policy"]
     assert "Access-Control-Allow-Origin" not in headers
-    for path in ("/app.mjs", "/transport.mjs", "/scene.mjs", "/style.css"):
-        assert request(server, path)[0] == 200
+    # Every browser module the page can import is served, so a new module
+    # cannot pass the Node suite yet fail to load in the page.
+    modules = sorted(
+        f"/{source.name}" for source in (ROOT / "app/chemvas/web").glob("*.mjs")
+    )
+    assert "/document_downloads.mjs" in modules
+    for path in (*modules, "/style.css"):
+        assert request(server, path)[0] == 200, path
 
 
 def test_http_open_edit_rejects_malformed_and_oversized_documents(server):

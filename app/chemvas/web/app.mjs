@@ -1,5 +1,6 @@
-import {SessionClient, sessionDrawing} from './transport.mjs';
-import {ChemistryClipboard, copySelection, isSelectionText} from './clipboard.mjs';
+import {SessionClient, sessionDrawing, offerRecovery} from './transport.mjs';
+import {ChemistryClipboard, clipboardActions, isSelectionText} from './clipboard.mjs';
+import {documentDownloads} from './document_downloads.mjs';
 import {sceneMarkup, AtomLabelCache, clampView, itemKey, zoomView, wheelView, pointInSheet, marqueeSelection, measureDocumentLineHeight, measureNoteFont, layoutNoteText, styleNoteText, serializeNoteEditor, noteBlocks, noteBlocksHtml, noteTextOffset, noteTextPosition, formatNoteBlocks, noteFormatState, selectionFrameMarkup, gridMarkup, groupUnit, expandToGroups, groupBoxesMarkup, valenceWarningMarkup, bondHoverMarkup} from './scene.mjs';
 
 const $ = id => document.getElementById(id);
@@ -393,71 +394,14 @@ async function recoverDraft(entry) {
   finally { loading = false; render(); }
 }
 
-// After startup, say truthfully whether earlier work waits for recovery; the
-// drawing in this window is never replaced without the user's choice.
-async function offerRecovery() {
-  const previous = sessionStorage.getItem(closedSessionKey);
-  sessionStorage.removeItem(closedSessionKey);
-  if (previous && previous !== editor.info?.session) await api('session', {session: previous, action: 'close'}).catch(() => {});
-  if (!editor.info?.session) return;
-  let listing;
-  try { listing = await api('session', {session: editor.info.session, action: 'drafts'}); }
-  catch (error) { notice(error.message, true); return; }
-  if (!listing.available) { if (listing.message) notice(listing.message, true); return; }
-  // Drafts held by windows still open are theirs, not earlier work.
-  const ready = listing.drafts.filter(entry => !entry.problem && !entry.open).length;
-  if (ready && $('notice').hidden) notice(`Unsaved work from ${ready === 1 ? 'an earlier window' : `${ready} earlier windows`} can be recovered. Choose File > Recover Unsaved Work… to restore or discard it.`);
-}
 
-// Edit > Copy and Cut of the canvas selection. The server's copy reply is
-// requested inside the user gesture, so the system clipboard write starts
-// before it arrives; Cut then deletes through the usual one-step edit.
-async function copyChemistry(cut) {
-  if (!editor.document || editor.busy || loading || gesture || !selection.size || (cut && editor.readOnly)) return;
-  const items = selectedItems(), {session, revision} = editor.info;
-  const payload = api('session', {session, revision, action: 'copy', selection: items}).then(reply => reply.payload);
-  const isCurrent = () => !editor.busy && !loading && editor.info?.session === session && editor.info?.revision === revision;
-  let outcome;
-  try {
-    outcome = await copySelection({store: chemistryClipboard, payload, cut, isCurrent, remove: () => edit({kind: 'delete_selection', selection: items})});
-  } catch (error) { notice(error.message, true); return; }
-  if (outcome.removed) { selection.clear(); render(); }
-  if (outcome.stale) notice('The drawing changed before Cut finished. The selection was copied but not removed.', true);
-  else if ((!cut || outcome.removed) && !outcome.copied.system) notice('Copied for pasting in this browser window only: the browser did not allow access to the system clipboard.');
-}
-
-// Edit > Paste: a Chemvas selection from the system clipboard, else this
-// window's own copy (see pasteText). The server validates, offsets and remaps
-// it in one Undo/Redo step, and the pasted items become the selection.
-async function pasteChemistry(systemText) {
-  if (!editor.document || editor.busy || loading) return;
-  if (editor.readOnly) { notice('This drawing is read-only in the browser adapter.', true); return; }
-  const text = chemistryClipboard.textFor(systemText);
-  if (text === null) {
-    notice(systemText === null ? 'The browser did not allow reading the clipboard. Press ⌘/Ctrl+V on the canvas to paste.' : 'The clipboard does not contain a Chemvas selection.', true);
-    return;
-  }
-  if (new Blob([text]).size > ui.max_clipboard_bytes) { notice('The Chemvas clipboard selection is too large to paste.', true); return; }
-  cancelGesture();
-  if (await edit({kind: 'paste', payload: text})) {
-    selection = new Set((editor.info.pasted ?? []).map(item => `${item.target}:${item.id}`));
-    render();
-  }
-}
-
-// Edit > Paste reads the system clipboard first, which can wait on the
-// browser's permission prompt; it pastes only into the drawing it was chosen
-// for, never into one loaded, recovered or edited meanwhile.
-async function pasteFromMenu() {
-  if (!editor.document || editor.busy || loading) return;
-  const {session, revision} = editor.info;
-  const systemText = await chemistryClipboard.read();
-  if (editor.info?.session !== session || editor.info?.revision !== revision) {
-    notice('The drawing changed while the clipboard was being read. Nothing was pasted.', true);
-    return;
-  }
-  await pasteChemistry(systemText);
-}
+// Edit > Copy, Cut and Paste of the canvas selection (see clipboard.mjs).
+const {copyChemistry, pasteChemistry, pasteFromMenu} = clipboardActions({
+  editor, isLoading: () => loading, activeGesture: () => gesture,
+  selection: () => selection, setSelection: next => { selection = next; },
+  selectedItems, api, edit, notice, render, cancelGesture,
+  store: chemistryClipboard, maxBytes: () => ui.max_clipboard_bytes,
+});
 
 // The canvas takes clipboard keys and events unless text is being edited or
 // selected outside it, so fields, notes and page text keep the browser's own
@@ -1641,77 +1585,14 @@ $('file').onchange = async () => {
   if (file.size > ui.max_document_bytes) { notice(`The browser adapter opens files up to ${ui.max_document_bytes / 1048576} MiB.`, true); return; }
   await loadDocument(file.text().then(text => api('open', {cdxml: text})), file.name);
 };
-// File > Save copy: the session's document, as a download. An open note is
-// committed first, as leaving it would, and a note that was not saved stops the
-// copy; one copy runs at a time, and a reply for a document since replaced,
-// renamed, edited or busy is not its copy.
-let savingCopy = false;
-$('save').onclick = async () => {
-  if (savingCopy || !editor.document || editor.busy || loading) return;
-  savingCopy = true;
-  try {
-    if (await finishNoteEdit() === false) return;
-    if (!editor.document || editor.busy || loading) return;
-    const {session, revision} = editor.info, name = editor.name;
-    const current = () => !editor.busy && !loading && editor.info?.session === session && editor.info?.revision === revision && editor.name === name;
-    // The session holds embedded images; the browser's copy carries references.
-    try {
-      const {cdxml} = await api('session', {session, revision, action: 'save_cdxml'});
-      if (current()) {
-        download(cdxml, name.replace(/\.cdxml$/i, '') + '-web-copy.cdxml', 'chemical/x-cdxml');
-        notice('Save copy requested. Check your downloads before closing; the original file has not changed.');
-      }
-    } catch (error) { if (current()) notice(error.message, true); }
-  } finally { savingCopy = false; }
-};
-// File > Export Figure: the whole canvas as the desktop's plain SVG figure, as a
-// download. Like Export MOL, an open note is committed first and a note that was
-// not saved stops the export; one export runs at a time, a reply for a document
-// since replaced, renamed, edited or busy is not its figure, and a download
-// clears only the export's own refusal while that is still the notice shown.
-let exportingFigure = false, figureRefusal = null;
-$('export-figure').onclick = async () => {
-  if (exportingFigure || !editor.document || editor.busy || loading) return;
-  exportingFigure = true;
-  try {
-    if (await finishNoteEdit() === false) return;
-    if (!editor.document || editor.busy || loading) return;
-    const {session, revision} = editor.info, name = editor.name;
-    const current = () => !editor.busy && !loading && editor.info?.session === session && editor.info?.revision === revision && editor.name === name;
-    try {
-      const {svg} = await api('session', {session, revision, action: 'export_figure', format: 'svg', scope: 'sheet'});
-      if (current()) {
-        download(svg, name.replace(/\.cdxml$/i, '') + '.svg', 'image/svg+xml');
-        if (figureRefusal === noticeSerial) notice();
-        figureRefusal = null;
-      }
-    } catch (error) { if (current()) { notice(error.message, true); figureRefusal = noticeSerial; } }
-  } finally { exportingFigure = false; }
-};
-// File > Export MOL: the desktop's selected-only Molfile, as a download. An open
-// note is committed first, as leaving it would, and a note that was not saved
-// stops the export; one export runs at a time, and a reply for a document since
-// replaced, renamed, edited or busy is not its MOL. A download clears only the
-// export's own refusal, and only while that is still the notice shown.
-let exportingMol = false, molRefusal = null;
-$('export-mol').onclick = async () => {
-  if (exportingMol || !editor.document || editor.busy || loading) return;
-  exportingMol = true;
-  try {
-    if (await finishNoteEdit() === false) return;
-    if (!editor.document || editor.busy || loading) return;
-    const {session, revision} = editor.info, name = editor.name;
-    const current = () => !editor.busy && !loading && editor.info?.session === session && editor.info?.revision === revision && editor.name === name;
-    try {
-      const {molfile} = await api('session', {session, revision, action: 'export_mol', selection: selectedItems()});
-      if (current()) {
-        download(molfile, name.replace(/\.cdxml$/i, '') + '.mol', 'chemical/x-mdl-molfile');
-        if (molRefusal === noticeSerial) notice();
-        molRefusal = null;
-      }
-    } catch (error) { if (current()) { notice(error.message, true); molRefusal = noticeSerial; } }
-  } finally { exportingMol = false; }
-};
+// File > Save copy, Export Figure and Export MOL (see document_downloads.mjs).
+const downloads = documentDownloads({
+  editor, isLoading: () => loading, finishNoteEdit, api, download, notice,
+  noticeSerial: () => noticeSerial, selectedItems,
+});
+$('save').onclick = downloads.saveCopy;
+$('export-figure').onclick = downloads.exportFigure;
+$('export-mol').onclick = downloads.exportMol;
 for (const action of ['undo', 'redo']) $(action).onclick = async () => {
   cancelGesture(); const pending = editor[action](); render();
   try { await pending; selection = new Set(); } catch (error) { notice(error.message, true); } finally { render(); refreshHover(); }
@@ -1930,7 +1811,7 @@ document.addEventListener('keydown', event => {
   }
 });
 new ResizeObserver(() => render()).observe(canvas);
-try { ui = await api('ui'); buildControls(); await loadDocument(api('new'), newCanvasName()); void offerRecovery(); } catch (error) { notice(error.message, true); }
+try { ui = await api('ui'); buildControls(); await loadDocument(api('new'), newCanvasName()); void offerRecovery({storage: sessionStorage, closedSessionKey, session: () => editor.info?.session, api, notice, noticeShown: () => !$('notice').hidden}); } catch (error) { notice(error.message, true); }
 
 
 function actualSize() {

@@ -77,3 +77,20 @@ export class SessionClient {
   async undo() { if (this.canUndo) await this.#dispatch('undo'); }
   async redo() { if (this.canRedo) await this.#dispatch('redo'); }
 }
+
+// After startup, say truthfully whether earlier work waits for recovery; the
+// drawing in this window is never replaced without the user's choice. A page
+// that reloaded closes the session it left behind first.
+export async function offerRecovery({storage, closedSessionKey, session, api, notice, noticeShown}) {
+  const previous = storage.getItem(closedSessionKey);
+  storage.removeItem(closedSessionKey);
+  if (previous && previous !== session()) await api('session', {session: previous, action: 'close'}).catch(() => {});
+  if (!session()) return;
+  let listing;
+  try { listing = await api('session', {session: session(), action: 'drafts'}); }
+  catch (error) { notice(error.message, true); return; }
+  if (!listing.available) { if (listing.message) notice(listing.message, true); return; }
+  // Drafts held by windows still open are theirs, not earlier work.
+  const ready = listing.drafts.filter(entry => !entry.problem && !entry.open).length;
+  if (ready && !noticeShown()) notice(`Unsaved work from ${ready === 1 ? 'an earlier window' : `${ready} earlier windows`} can be recovered. Choose File > Recover Unsaved Work… to restore or discard it.`);
+}

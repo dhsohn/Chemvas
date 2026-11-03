@@ -567,6 +567,10 @@ STATIC_FILES = {
     "/app.mjs": ("app.mjs", "text/javascript; charset=utf-8"),
     "/transport.mjs": ("transport.mjs", "text/javascript; charset=utf-8"),
     "/clipboard.mjs": ("clipboard.mjs", "text/javascript; charset=utf-8"),
+    "/document_downloads.mjs": (
+        "document_downloads.mjs",
+        "text/javascript; charset=utf-8",
+    ),
     "/scene.mjs": ("scene.mjs", "text/javascript; charset=utf-8"),
 }
 BOND_ORDERS = dict(BOND_STYLE_BY_LABEL.values())
