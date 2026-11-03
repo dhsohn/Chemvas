@@ -15,6 +15,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Import qualifying page-level ChemDraw ``<group>`` elements as editor groups so
+  members move together. Save keeps the native ``<group>`` when an editor group
+  still contains every mapped native member (including after expanding
+  membership) and unwraps only when none does. Nested groups and groups with
+  unbound objects stay XML-only; new Chemvas groups and members added to a
+  native-mapped group remain in the embedded snapshot only
+  ([ADR 0068](docs/adr/0068-native-cdxml-groups.md)).
 - Import native ChemDraw black Plain and black Filled ``RectangleType`` graphics
   as editable Chemvas shapes (solid stroke) and write move, resize, recolor and
   delete back to the original ``<graphic>``. Coloured rectangles stay raster

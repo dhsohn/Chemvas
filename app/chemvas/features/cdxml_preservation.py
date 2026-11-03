@@ -366,6 +366,22 @@ class PreservingImporter:
                 if image is not None:
                     state["images"].append(image)
                     bindings["images"].append(e.get("id"))
+        from chemvas.features.cdxml_native_groups import editor_groups_from_native
+
+        by_id = {
+            element.get("id"): element
+            for element in self.root.iter()
+            if element.get("id") and element.tag not in {"font", "objecttag"}
+        }
+        groups = editor_groups_from_native(
+            self.page,
+            parents=self.parents,
+            node_ids={key: index for key, index in self.node_ids.items() if key},
+            bindings=bindings,
+            by_id=by_id,
+        )
+        if groups:
+            state["groups"] = groups
         baseline = deepcopy(state)
         state["cdxml_source"] = dict(
             xml=ET.tostring(self.root, encoding="unicode"),

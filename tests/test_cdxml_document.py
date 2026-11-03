@@ -120,7 +120,9 @@ def test_wedge_end_preserves_narrow_end_and_charge():
 def test_native_group_survives_as_source_with_raster_rectangle_and_editable_line():
     raw = b'<CDXML><page Width="400" Height="300"><group id="2"><graphic id="3" GraphicType="Rectangle" BoundingBox="10 10 50 60"/><graphic id="4" GraphicType="Line" BoundingBox="80 80 120 80"/></group></page></CDXML>'
     state = parse_cdxml_document(raw).state
-    assert state.get("groups") in (None, [])
+    # Non-black-editable rectangle stays a raster image; the line is editable.
+    # Both are bound, so the page-level native group becomes one editor group.
+    assert state["groups"] == [{"atoms": [], "items": [["images", 0], ["arrows", 0]]}]
     assert state["shapes"] == []
     image = state["images"][0]
     assert image["kind"] == "image"
