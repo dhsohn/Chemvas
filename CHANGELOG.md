@@ -21,6 +21,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Undoing the deletion of an imported CDXML arrow or caption now redraws it with
+  its native line width, arrowhead geometry and caption placement instead of the
+  editor defaults, including when it was deleted as part of a group.
+- A failed document replacement now restores an imported CDXML document's
+  retained source, item bindings and native arrow styles, instead of failing
+  its own rollback check and leaving a blank canvas.
 - Keep ChemDraw stereo descriptors (``AS``, ``BS``, ``CIP``) when saving an
   imported CDXML after recoloring atoms or bonds or moving a double bond's second
   line; a recolored bond now writes only its new color. Edits that can change

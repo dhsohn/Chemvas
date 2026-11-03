@@ -226,6 +226,79 @@ def test_delete_undo_restores_source_note_identity():
         app.processEvents()
 
 
+@pytest.mark.parametrize("grouped", [False, True])
+def test_delete_undo_recreates_native_arrow_and_caption_presentation(grouped):
+    import gc
+
+    from PyQt6.QtCore import QEvent
+
+    from chemvas.ui.scene.scene_group_operations import group_selection_for
+
+    app = QApplication.instance() or QApplication([])
+    window = build_main_window()
+    canvas = active_canvas_for_window(window)
+    session = canvas.services.canvas_document_session_service
+    history = canvas.services.history_service
+    runtime = canvas.runtime_state
+    raw = NATIVE.replace(b"<CDXML ", b'<CDXML LineWidth="0.75" ').replace(
+        b'<t id="13" p="50 100"', b'<t id="13" p="50 100" Justification="Center"'
+    )
+
+    def projections():
+        return (
+            next(iter(runtime.scene_items_state.arrow_items.values())),
+            runtime.note_items()[0],
+        )
+
+    def presentation():
+        arrow, note = projections()
+        path = arrow.path()
+        return (
+            arrow.pen().widthF(),
+            [
+                (path.elementAt(i).x, path.elementAt(i).y)
+                for i in range(path.elementCount())
+            ],
+            arrow.zValue(),
+            note.transform(),
+            note.zValue(),
+        )
+
+    def delete_and_release():
+        for item in projections():
+            item.setSelected(True)
+        if grouped:
+            assert group_selection_for(canvas)
+            assert len(runtime.group_state.groups) == 1
+        assert canvas.services.scene_delete_controller.delete_selected_items()
+        assert runtime.scene_items_state.arrow_items == {}
+        assert runtime.note_items() == []
+        # Only recreated projections exercise the materialization path.
+        app.sendPostedEvents(None, QEvent.Type.DeferredDelete.value)
+        gc.collect()
+        assert runtime.scene_items_state.projections == {}
+
+    try:
+        session.apply_state(parse_cdxml_document(raw).state)
+        loaded = presentation()
+        assert loaded[0] == 0.75
+        assert (loaded[3].dx(), loaded[3].dy()) != (0.0, 0.0)
+        delete_and_release()
+        deleted = session.snapshot_state()
+        history.undo()
+        restored = session.snapshot_state()
+        assert presentation() == loaded
+        history.redo()
+        assert session.snapshot_state() == deleted
+        history.undo()
+        assert session.snapshot_state() == restored
+        assert presentation() == loaded
+    finally:
+        window.services.canvas_document_service.mark_clean(canvas)
+        window.close()
+        app.processEvents()
+
+
 def test_malformed_baseline_bindings_rejected_before_save():
     state = imported()
     state["cdxml_source"]["baseline_items"]["notes"] = []

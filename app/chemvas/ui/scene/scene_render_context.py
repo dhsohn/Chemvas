@@ -88,7 +88,12 @@ class SceneRenderState:
     shape_state: AnnotationCollection[Shape] = field(
         default_factory=AnnotationCollection
     )
+    # Retained CDXML presentation keyed by annotation record ID, so a
+    # projection recreated by history draws like the one first loaded.
     native_arrow_styles: dict[int, Any] = field(default_factory=dict)
+    native_caption_placements: dict[int, tuple[float, float, str, float]] = field(
+        default_factory=dict
+    )
     arrow_state: AnnotationCollection[Arrow] = field(
         default_factory=AnnotationCollection
     )

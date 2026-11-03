@@ -16,9 +16,9 @@ from chemvas.ui.canvas.molecule_scene_renderer import (
     render_molecule,
 )
 from chemvas.ui.canvas.native_document_layout import (
+    apply_native_presentation,
     native_bond_metrics,
     native_caption_layouts,
-    place_native_caption,
 )
 from chemvas.ui.canvas.sheet_setup_logic import normalize_sheet_setup
 from chemvas.ui.scene.scene_selectability import make_item_selectable
@@ -158,9 +158,13 @@ def populate_document_scene(
     render_molecule(context)
 
     caption_layouts = native_caption_layouts(state)
+    placements = context.state.native_caption_placements
+    placements.clear()
     for index, item_state in enumerate(state["notes"]):
         item = attach({**item_state, "kind": "note"}, "note_items")
-        place_native_caption(item, caption_layouts.get(index))
+        if index in caption_layouts:
+            placements[require_scene_record_id(item)] = caption_layouts[index]
+            apply_native_presentation(context, item)
     for item_state in state["marks"]:
         mark = {
             **item_state,
@@ -200,7 +204,7 @@ def populate_document_scene(
             context.state.native_arrow_styles[require_scene_record_id(item)] = styles[
                 index
             ]
-            context.arrows.render_record(item, context.arrows.record(item))
+            apply_native_presentation(context, item)
     for item_state in state["ts_brackets"]:
         attach(item_state, "ts_bracket_items")
     for item_state in state["shapes"]:

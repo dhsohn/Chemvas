@@ -3,6 +3,7 @@ import tempfile
 import unittest
 from contextlib import nullcontext
 from copy import deepcopy
+from dataclasses import fields as dataclass_fields
 from pathlib import Path
 from types import SimpleNamespace
 from unittest import mock
@@ -33,6 +34,8 @@ from chemvas.features.export import ExportPlan
 from chemvas.ui.canvas.canvas_calculation_plan_state import CanvasCalculationPlanState
 from chemvas.ui.canvas.canvas_document_metadata_state import CanvasDocumentMetadataState
 from chemvas.ui.canvas.canvas_document_session_service import (
+    _DOCUMENT_MUTATED_RUNTIME_FIELDS,
+    _DOCUMENT_SESSION_RUNTIME_FIELDS,
     CanvasDocumentSessionService,
     _DetachedSceneSnapshot,
 )
@@ -40,7 +43,10 @@ from chemvas.ui.canvas.canvas_group_state import CanvasGroupState
 from chemvas.ui.canvas.canvas_history_service import CanvasHistoryService
 from chemvas.ui.canvas.canvas_history_state import CanvasHistoryState
 from chemvas.ui.canvas.canvas_rotation_state import CanvasRotationState
-from chemvas.ui.canvas.canvas_runtime_state import attach_canvas_runtime_state
+from chemvas.ui.canvas.canvas_runtime_state import (
+    CanvasRuntimeState,
+    attach_canvas_runtime_state,
+)
 from chemvas.ui.canvas.canvas_scene_items_state import CanvasSceneItemsState
 from chemvas.ui.canvas.canvas_scene_reset_service import CanvasSceneResetService
 from chemvas.ui.canvas.molecule_scene_renderer import render_molecule
@@ -935,6 +941,90 @@ class CanvasDocumentSessionServiceTest(unittest.TestCase):
             original_scene_rect,
         )
         canvas.close()
+
+    def test_replacement_rollback_covers_every_document_runtime_field(self) -> None:
+        names = {field.name for field in dataclass_fields(CanvasRuntimeState)}
+        # A renamed field must not silently drop out of the exclusions.
+        self.assertLessEqual(_DOCUMENT_SESSION_RUNTIME_FIELDS, names)
+        self.assertEqual(
+            set(_DOCUMENT_MUTATED_RUNTIME_FIELDS),
+            names - _DOCUMENT_SESSION_RUNTIME_FIELDS,
+        )
+        self.assertIn("document_metadata_state", _DOCUMENT_MUTATED_RUNTIME_FIELDS)
+        self.assertIn("native_arrow_styles", _DOCUMENT_MUTATED_RUNTIME_FIELDS)
+
+    def test_failed_replacement_restores_native_cdxml_source_and_arrow_styles(
+        self,
+    ) -> None:
+        from chemvas.features.cdxml_document import parse_cdxml_document
+
+        def native(arrow: str) -> dict:
+            return parse_cdxml_document(
+                (
+                    '<CDXML LineWidth="0.75"><page id="1" BoundingBox="0 0 400 300">'
+                    '<fragment id="30"><n id="31" p="40 50"/><n id="32" p="60 50"/>'
+                    '<b id="33" B="31" E="32"/></fragment>'
+                    f"{arrow}</page></CDXML>"
+                ).encode()
+            ).state
+
+        previous = native(
+            '<arrow id="10" Tail3D="20 90 0" Head3D="100 90 0" '
+            'ArrowheadHead="Full" HeadSize="800"/>'
+        )
+        target = native(
+            '<arrow id="70" Tail3D="30 120 0" Head3D="90 140 0" '
+            'ArrowheadHead="Full" HeadSize="1500"/>'
+        )
+        module = "chemvas.ui.canvas.canvas_document_session_service"
+        failure_points = {
+            "materialize": f"{module}.populate_document_scene",
+            "groups": f"{module}.restore_document_groups",
+            "source": "chemvas.ui.canvas.canvas_cdxml_source.restore_cdxml_source",
+            "normalize": (
+                "chemvas.ui.canvas.canvas_cdxml_source."
+                "normalize_initial_cdxml_projection"
+            ),
+            "commit": f"{module}._CanvasRollbackSnapshot.commit_replacement",
+        }
+        for phase, target_name in failure_points.items():
+            with self.subTest(phase=phase):
+                canvas = build_canvas_view()
+                service = canvas.services.canvas_document_session_service
+                service.apply_state(deepcopy(previous))
+                runtime = canvas.runtime_state
+                metadata = runtime.document_metadata_state
+                bindings = metadata.cdxml_item_bindings
+                styles = runtime.native_arrow_styles
+                before = service.snapshot_state()
+                before_source = deepcopy(metadata.cdxml_source)
+                before_bindings = deepcopy(bindings)
+                before_styles = dict(styles)
+                arrow = next(iter(runtime.scene_items_state.arrow_items.values()))
+                before_width = arrow.pen().widthF()
+                history = runtime.history_state
+                history.history.append(command := object())
+                self.assertIsNotNone(before_source)
+                self.assertEqual(len(before_styles), 1)
+
+                with mock.patch(target_name, side_effect=RuntimeError(phase)):
+                    with self.assertRaisesRegex(RuntimeError, phase) as raised:
+                        service.apply_state(deepcopy(target))
+
+                self.assertFalse(getattr(raised.exception, "__notes__", None))
+                self.assertEqual(service.snapshot_state(), before)
+                self.assertEqual(metadata.cdxml_source, before_source)
+                self.assertIs(metadata.cdxml_item_bindings, bindings)
+                self.assertEqual(bindings, before_bindings)
+                self.assertIs(runtime.native_arrow_styles, styles)
+                self.assertEqual(styles, before_styles)
+                self.assertEqual(len(canvas.model.atoms), 2)
+                self.assertEqual(
+                    list(runtime.scene_items_state.arrow_items.values()), [arrow]
+                )
+                self.assertEqual(arrow.pen().widthF(), before_width)
+                self.assertEqual(history.history, [command])
+                canvas.close()
 
     def test_rolled_back_selected_document_can_be_cleared_without_stale_item_callbacks(
         self,
