@@ -424,6 +424,7 @@ from chemvas.ui.tools.bond_tool_logic import (
     resolve_bond_press_target,
     resolve_bond_snap_target,
 )
+from chemvas.ui.tools.chemdraw_text_shortcuts import ChemdrawTextShortcuts
 from chemvas.ui.tools.text_tool_logic import (
     TextToolTarget,
     apply_text_input,
@@ -3189,6 +3190,35 @@ class BrowserAtomLabelService(AtomLabelService):
         return merge_ids, merge_info
 
 
+class _BrowserShortcutActions:
+    """The browser's side of the shared ChemDraw key decisions.
+
+    Labels are written without desktop history (the browser records the whole
+    document change), and charge marks are placed with measured fonts.
+    """
+
+    def __init__(
+        self, adapter: BrowserStructureAdapter, font: BrowserFontMeasurements | None
+    ) -> None:
+        self.adapter = adapter
+        self.font = font
+
+    def add_or_update_atom_label(
+        self, atom_id: int, text: str, *, show_carbon: bool = False
+    ) -> None:
+        self.adapter.labels.add_or_update_atom_label(
+            atom_id, text, record=False, show_carbon=show_carbon
+        )
+
+    def apply_bond_style(self, bond_id: int, style: str, order: int) -> None:
+        bond = self.adapter.model.bond_for_id(bond_id)
+        assert bond is not None
+        bond.style, bond.order = style, order
+
+    def change_charge_for_atom(self, atom_id: int, delta: int) -> None:
+        self.adapter.change_charge_for_atom(atom_id, delta, self.font)
+
+
 class BrowserStructureAdapter:
     """Materialize existing structure builders into a candidate document and SVG.
 
@@ -4475,50 +4505,26 @@ class BrowserStructureAdapter:
         scale: object = None,
     ) -> str | None:
         if not isinstance(key, str) or key not in (
-            CanvasChemdrawShortcutService.ATOM_HOTKEYS
-            | CanvasChemdrawShortcutService.BOND_HOTKEYS
+            ChemdrawTextShortcuts.ATOM_HOTKEYS
+            | ChemdrawTextShortcuts.BOND_HOTKEYS
             | TOOL_HOTKEYS.keys()
         ):
             raise ValueError("Unsupported hover shortcut.")
         atom_id, bond_id = self.hover_structure(x, y, direct_atom_id, hits, scale)
 
-        if (
-            atom_id is not None and key in CanvasChemdrawShortcutService.ATOM_HOTKEYS
-        ) or (
-            bond_id is not None and key in CanvasChemdrawShortcutService.BOND_HOTKEYS
+        if (atom_id is not None and key in ChemdrawTextShortcuts.ATOM_HOTKEYS) or (
+            bond_id is not None and key in ChemdrawTextShortcuts.BOND_HOTKEYS
         ):
             self.require_sheet_position(x, y)
 
-        def restyle(bond_id: int, style: str, order: int) -> None:
-            bond = self.model.bond_for_id(bond_id)
-            assert bond is not None
-            bond.style, bond.order = style, order
-
-        shortcuts = CanvasChemdrawShortcutService(
+        actions = _BrowserShortcutActions(self, font)
+        shortcuts = ChemdrawTextShortcuts(
             lambda: self.model,
-            hover_state=cast("Any", None),
-            atom_label_service=cast(
-                "Any",
-                SimpleNamespace(
-                    add_or_update_atom_label=partial(
-                        self.labels.add_or_update_atom_label, record=False
-                    ),
-                ),
-            ),
-            structure_build_service=cast("Any", self.growth),
+            atom_labels=actions,
+            structure_build=self.growth,
+            bond_styles=actions,
             notify_error=self.reject_edit,
-            scene_transform_controller=cast(
-                "Any", SimpleNamespace(apply_bond_style=restyle)
-            ),
-            tool_mode_controller=cast("Any", None),
-            mark_scene_service=cast(
-                "Any",
-                SimpleNamespace(
-                    change_charge_for_atom=lambda atom_id, delta: (
-                        self.change_charge_for_atom(atom_id, delta, font)
-                    )
-                ),
-            ),
+            charges=actions,
         )
         handled = (
             atom_id is not None and shortcuts.handle_atom_text(key, atom_id)
