@@ -152,8 +152,8 @@ def test_chemical_properties_survive_preserving_import_and_unrelated_edit(
     state = parse_cdxml_document(raw).state
     assert needle in state["cdxml_source"]["xml"]
     edited = deepcopy(state)
-    # Recolor the arrow: an edit outside the fragment. Atom moves and bond edits
-    # deliberately drop computed AS/CIP labels on the touched nodes.
+    # Recolor the arrow: an edit outside the fragment. Structural and geometric
+    # edits drop computed AS/BS/CIP across the touched fragment.
     edited["arrows"][0]["color"] = "#ff0000"
     assert needle in update_native_document(edited).decode()
 

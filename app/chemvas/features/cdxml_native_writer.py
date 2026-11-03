@@ -13,11 +13,18 @@ from chemvas.domain.atom_aliases import (
 )
 from chemvas.domain.document.cdxml_charge_edits import charge_edit_plan
 from chemvas.domain.document.cdxml_source import parse_native_xml, validate_cdxml_source
+from chemvas.domain.document.cdxml_stereo_descriptors import (
+    ATOM_STEREO_DESCRIPTORS,
+    BOND_STEREO_DESCRIPTORS,
+    atom_edit_keeps_stereo,
+    bond_edit_keeps_stereo,
+)
 from chemvas.domain.document.inspection import document_annotations, document_model
 from chemvas.features.cdxml_document import _ELEMENTS
 from chemvas.features.cdxml_native_palette import allocate_native_color_index
 
 _GENERIC_NICKNAME = re.compile(r"R[0-9]*|X|A|Q")
+_DOUBLE_POSITIONS = {"double_center": "Center", "double_outer": "Right"}
 
 
 def _is_native_pure_element_label(symbol: str) -> bool:
@@ -96,6 +103,7 @@ class _NativeWriter:
         self.atoms = {str(k): v for k, v in self.state["model"]["atoms"].items()}
         self.atom_native = dict(self.source["atoms"])
         self.changed_nodes: set[str] = set()
+        self.stale_stereo: set[ET.Element] = set()
         self.removed_ids: set[str] = set()
 
     def fresh(self) -> str:
@@ -107,6 +115,17 @@ class _NativeWriter:
         if parent is not None and e in list(parent):
             self.removed_ids.update(n.attrib["id"] for n in e.iter() if n.get("id"))
             parent.remove(e)
+
+    def invalidate_stereo(self, e: ET.Element) -> None:
+        """Drop CIP descriptors across the outermost fragment holding ``e``."""
+        fragment = None
+        node: ET.Element | None = e
+        while node is not None:
+            if node.tag == "fragment":
+                fragment = node
+            node = self.parents.get(node)
+        if fragment is not None:
+            self.stale_stereo.add(fragment)
 
     def color_index(self, color: str) -> str:
         return allocate_native_color_index(self.root, color)
@@ -120,17 +139,17 @@ class _NativeWriter:
             before = self.old_atoms[key]
             after = self.atoms.get(key)
             if after is None:
+                self.invalidate_stereo(e)
                 self.removed_ids.update(n.attrib["id"] for n in e.iter() if n.get("id"))
                 self.delete(e)
                 continue
             if after == before:
                 continue
+            if not atom_edit_keeps_stereo(before, after):
+                self.invalidate_stereo(e)
             dx, dy = (after["x"] - before["x"], after["y"] - before["y"])
             if dx or dy:
                 transform_native(e, tx=dx, ty=dy)
-                for node in self.parents[e].iter("n"):
-                    node.attrib.pop("AS", None)
-                    node.attrib.pop("CIP", None)
             if after["element"] != before["element"]:
                 symbol = after["element"]
                 if not _is_native_pure_element_label(
@@ -156,7 +175,6 @@ class _NativeWriter:
                     "Charge",
                     "Radical",
                     "Isotope",
-                    "AS",
                     "BondOrdering",
                     "Geometry",
                 ):
@@ -237,6 +255,7 @@ class _NativeWriter:
     def update_charges(self) -> None:
         for key, charge in self.charge_plan.edits.items():
             native = self.atom_native[key]
+            self.invalidate_stereo(self.byid[native])
             if charge:
                 self.byid[native].set("Charge", str(charge))
             else:
@@ -266,11 +285,22 @@ class _NativeWriter:
         }
         for key, native in self.source["bonds"].items():
             if key not in bonds:
+                self.invalidate_stereo(self.byid[native])
                 self.removed_ids.add(native)
                 self.delete(self.byid[native])
         for key, bond in bonds.items():
             native = self.source["bonds"].get(key)
             if native and bond == old_bonds[key]:
+                continue
+            before = old_bonds.get(key)
+            if native and before and bond_edit_keeps_stereo(before, bond):
+                e = self.byid[native]
+                if bond["color"] != before["color"]:
+                    e.set("color", self.color_index(bond["color"]))
+                if bond["style"] != before["style"]:
+                    e.set(
+                        "DoublePosition", _DOUBLE_POSITIONS.get(bond["style"], "Left")
+                    )
                 continue
             begin, end = (
                 self.atom_native[str(bond["a"])],
@@ -280,14 +310,13 @@ class _NativeWriter:
                 raise ValueError(
                     "Connecting two native fragments is not yet supported; saving was cancelled without replacing the file."
                 )
+            self.invalidate_stereo(self.byid[begin])
             e = (
                 self.byid[native]
                 if native
                 else ET.SubElement(self.parents[self.byid[begin]], "b", id=self.fresh())
             )
             for prop in (
-                "BS",
-                "CIP",
                 "BondCircularOrdering",
                 "Display2",
                 "BeginAttach",
@@ -300,12 +329,7 @@ class _NativeWriter:
             e.set("Display", displays[bond["style"]])
             e.set("color", self.color_index(bond["color"]))
             if bond["order"] == 2:
-                e.set(
-                    "DoublePosition",
-                    {"double_center": "Center", "double_outer": "Right"}.get(
-                        bond["style"], "Left"
-                    ),
-                )
+                e.set("DoublePosition", _DOUBLE_POSITIONS.get(bond["style"], "Left"))
             else:
                 e.attrib.pop("DoublePosition", None)
             self.changed_nodes.update((begin, end))
@@ -490,9 +514,17 @@ class _NativeWriter:
         self.update_items()
         self.remove_deleted_fallbacks()
         self.validate_references()
+        for fragment in self.stale_stereo:
+            for node in fragment.iter("n"):
+                for key in ATOM_STEREO_DESCRIPTORS:
+                    node.attrib.pop(key, None)
+            for bond_e in fragment.iter("b"):
+                for key in BOND_STEREO_DESCRIPTORS:
+                    bond_e.attrib.pop(key, None)
+        # A node whose bonds or label changed has a new coordination.
         for identity in self.changed_nodes:
             e = self.byid[identity]
-            for key in ("AS", "CIP", "BondOrdering", "Geometry"):
+            for key in ("BondOrdering", "Geometry"):
                 e.attrib.pop(key, None)
         from chemvas.features.cdxml_new_objects import append_new_objects
 
