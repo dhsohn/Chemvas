@@ -111,7 +111,7 @@ class FigureExportService:
         then is the stated meaning handed to the exporter, which still decides
         whether that meaning fits the label.
         """
-        from chemvas.features.export.cdxml_label_meanings import (
+        from chemvas.features.export import (
             LABEL_BINDING_FIELD_NAMES,
         )
         from chemvas.ui.export.export_cdxml import CdxmlLabelBinding

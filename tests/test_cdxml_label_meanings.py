@@ -9,14 +9,14 @@ from dataclasses import fields
 import pytest
 
 from chemvas.domain.elements import ATOMIC_NUMBERS, ELEMENT_SYMBOLS, element_symbol
-from chemvas.features.export.cdxml_label_bindings import (
-    CDXML_LABEL_BINDING_MEANINGS,
-    CdxmlLabelBindingEntry,
-)
-from chemvas.features.export.cdxml_label_meanings import (
+from chemvas.features.export import (
     LABEL_BINDING_FIELD_NAMES,
     LABEL_BINDING_MEANING_FIELDS,
     SIDECAR_V1_LABEL_MEANINGS,
+)
+from chemvas.features.export.cdxml_label_bindings import (
+    CDXML_LABEL_BINDING_MEANINGS,
+    CdxmlLabelBindingEntry,
 )
 from chemvas.ui.export.export_cdxml import CdxmlLabelBinding
 

@@ -38,15 +38,13 @@ from chemvas.features.annotations import (
     bracket_symbol_layout,
 )
 from chemvas.features.export import (
+    LABEL_BINDING_FIELD_NAMES,
+    LABEL_BINDING_MEANING_FIELDS,
     CaptionGeometry,
     CdxmlDocumentaryContact,
     CdxmlTextLayoutReference,
     authorize_documentary_contact_for_export,
     reflow_cdxml_captions,
-)
-from chemvas.features.export.cdxml_label_meanings import (
-    LABEL_BINDING_FIELD_NAMES,
-    LABEL_BINDING_MEANING_FIELDS,
 )
 from chemvas.features.rendering import arrow_path_commands
 from chemvas.ui.annotations.shape_geometry import shape_outline, shape_stroke_width
