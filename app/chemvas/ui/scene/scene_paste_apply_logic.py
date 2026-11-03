@@ -11,17 +11,19 @@ Coords3D = tuple[float, float, float]
 
 
 @dataclass(slots=True)
-class PasteApplyResult:
+class PasteApplyResult[Item]:
+    """What a paste added; scene items keep the type their factory created."""
+
     atom_id_map: dict[int, int] = field(default_factory=dict)
     new_atom_ids: set[int] = field(default_factory=set)
-    added_scene_items: list[object] = field(default_factory=list)
-    scene_item_map: dict[tuple[str, int], object] = field(default_factory=dict)
+    added_scene_items: list[Item] = field(default_factory=list)
+    scene_item_map: dict[tuple[str, int], Item] = field(default_factory=dict)
 
     def has_changes(self) -> bool:
         return bool(self.atom_id_map or self.added_scene_items)
 
 
-def apply_paste_payload(
+def apply_paste_payload[Item](
     *,
     atoms: Sequence[object],
     bonds: Sequence[object],
@@ -37,14 +39,14 @@ def apply_paste_payload(
     add_bond: Callable[[int, int, int], int],
     restore_bond_from_state: Callable[[int, dict], None],
     translated_scene_item_state: Callable[..., dict | None],
-    create_scene_item_from_state: Callable[[dict], object],
+    create_scene_item_from_state: Callable[[dict], Item | None],
     perspective: object | None = None,
     apply_perspective: Callable[
         [dict[int, Coords3D], Coords3D | None, Coords2D | None], None
     ]
     | None = None,
-) -> PasteApplyResult:
-    result = PasteApplyResult()
+) -> PasteApplyResult[Item]:
+    result: PasteApplyResult[Item] = PasteApplyResult()
 
     for atom_state in atoms:
         if not isinstance(atom_state, dict):

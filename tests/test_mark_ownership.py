@@ -261,3 +261,42 @@ def test_destroying_modal_parent_cancels_without_reading_deleted_widgets():
             canvas.services.canvas_scene_reset_service.clear_scene()
             canvas.close()
         app.processEvents()
+
+
+def test_ownership_feedback_reads_explicit_inputs_without_a_canvas():
+    from chemvas.domain.document import MoleculeModel
+    from chemvas.ui.scene.mark_ownership import mark_is_distant, mark_owner_text
+
+    class Point:
+        def __init__(self, x, y):
+            self._x, self._y = x, y
+
+        def x(self):
+            return self._x
+
+        def y(self):
+            return self._y
+
+    model = MoleculeModel()
+    atom_id = model.add_atom("N", 0.0, 0.0)
+    data = {"atom_id": atom_id, "kind": "plus"}
+    offsets = []
+
+    def label_distance(owner, dx, dy, kind):
+        offsets.append((owner, round(dx, 3), round(dy, 3), kind))
+        return 10.0
+
+    def distant(x, y):
+        return mark_is_distant(
+            model, data, Point(x, y), bond_length=20.0, label_distance=label_distance
+        )
+
+    assert not distant(15.0, 0.0)
+    assert distant(30.0, 0.0)
+    assert offsets == [(atom_id, 1.0, 0.0, "plus")] * 2
+    assert mark_owner_text(model, data, distant=True) == (
+        f"Owner: N #{atom_id} — far from owner"
+    )
+    assert mark_owner_text(model, {"atom_id": None}, distant=False) == (
+        "Free mark (no chemical owner)"
+    )

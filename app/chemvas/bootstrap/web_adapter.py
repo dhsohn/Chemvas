@@ -375,8 +375,8 @@ from chemvas.ui.molecule.template_geometry import polygon_contains_point
 from chemvas.ui.scene.mark_ownership import (
     DISTANT_MARK_COLOR,
     MARK_OWNER_GUIDANCE,
-    mark_is_distant_for,
-    mark_owner_text_for,
+    mark_is_distant,
+    mark_owner_text,
 )
 from chemvas.ui.scene.scene_align_logic import (
     align_deltas,
@@ -399,7 +399,10 @@ from chemvas.ui.scene.scene_delete_plan import (
     build_delete_selection_plan,
     hover_delete_target,
 )
-from chemvas.ui.scene.scene_paste_apply_logic import apply_paste_payload
+from chemvas.ui.scene.scene_paste_apply_logic import (
+    PasteApplyResult,
+    apply_paste_payload,
+)
 from chemvas.ui.scene.stacking_actions import stacked_depths
 from chemvas.ui.selection.selection_style_access import (
     GROUP_BOX_DASH_PATTERN,
@@ -1713,9 +1716,14 @@ def validated_color(value: object) -> str:
 
 
 def validated_drawing_scale(value: object) -> float:
-    if type(value) not in (int, float, Decimal):
+    # Exact JSON numbers only: bool and other int subclasses are refused.
+    if not isinstance(value, (int, float, Decimal)) or type(value) not in (
+        int,
+        float,
+        Decimal,
+    ):
         raise ValueError("Invalid drawing scale.")
-    scale = float(cast("Any", value))
+    scale = float(value)
     # Fit Page can show a large sheet below the manual zoom minimum.
     if not 0 < scale <= ZOOM_MAX or not math.isfinite(ENDPOINT_SNAP_SCREEN_PX / scale):
         raise ValueError("Invalid drawing scale.")
@@ -5924,24 +5932,30 @@ class BrowserStructureAdapter:
     def mark_owner_feedback(
         self, drawing: dict[str, Any], font: BrowserFontMeasurements
     ) -> dict[str, Any]:
-        self.render_context.geometry = SimpleNamespace(
-            mark_target_distance_for_atom=partial(
-                self.mark_target_distance_for_atom, drawing=drawing, font=font
-            )
+        label_distance = partial(
+            self.mark_target_distance_for_atom, drawing=drawing, font=font
         )
+        bond_length = self.renderer.style.bond_length_px
         owners = {}
         for index, item in enumerate(self.mark_items):
             atom_id = item.record["atom_id"]
             atom = self.model.atom_for_id(atom_id)
+            distant = mark_is_distant(
+                self.model,
+                item.record,
+                item.center,
+                bond_length=bond_length,
+                label_distance=label_distance,
+            )
             feedback: dict[str, Any] = {
-                "text": mark_owner_text_for(cast("Any", self), cast("Any", item))
+                "text": mark_owner_text(self.model, item.record, distant=distant)
             }
             if atom is not None:
                 feedback.update(
                     rect=drawing["mark_owner_rects"][str(atom_id)],
                     line=[atom.x, atom.y, item.center.x(), item.center.y()],
                     color=DISTANT_MARK_COLOR
-                    if mark_is_distant_for(cast("Any", self), cast("Any", item))
+                    if distant
                     else drawing["selection_style"]["color"],
                     tooltip=f"Owner: {atom.element} #{atom_id}. {MARK_OWNER_GUIDANCE}",
                 )
@@ -6532,29 +6546,31 @@ class BrowserStructureAdapter:
                 )
             )
 
-        result = apply_paste_payload(
-            atoms=plan.atoms,
-            bonds=plan.bonds,
-            rings=plan.rings,
-            marks=plan.marks,
-            scene_items=plan.scene_items,
-            perspective=plan.perspective,
-            dx=plan.dx,
-            dy=plan.dy,
-            add_atom=self.model.add_atom,
-            apply_atom_color=lambda atom_id, color: setattr(
-                self.model.atoms[atom_id], "color", color
-            ),
-            set_atom_annotation=self.model.set_atom_annotation,
-            # The document stores a shown label as the atom's explicit flag.
-            add_or_update_atom_label=lambda atom_id, *_args, **_kwargs: setattr(
-                self.model.atoms[atom_id], "explicit_label", True
-            ),
-            add_bond=self.model.add_bond,
-            restore_bond_from_state=restore_bond,
-            translated_scene_item_state=translated_scene_item_state,
-            create_scene_item_from_state=add_record,
-            apply_perspective=apply_perspective,
+        result: PasteApplyResult[BrowserSceneItem | BrowserMarkItem] = (
+            apply_paste_payload(
+                atoms=plan.atoms,
+                bonds=plan.bonds,
+                rings=plan.rings,
+                marks=plan.marks,
+                scene_items=plan.scene_items,
+                perspective=plan.perspective,
+                dx=plan.dx,
+                dy=plan.dy,
+                add_atom=self.model.add_atom,
+                apply_atom_color=lambda atom_id, color: setattr(
+                    self.model.atoms[atom_id], "color", color
+                ),
+                set_atom_annotation=self.model.set_atom_annotation,
+                # The document stores a shown label as the atom's explicit flag.
+                add_or_update_atom_label=lambda atom_id, *_args, **_kwargs: setattr(
+                    self.model.atoms[atom_id], "explicit_label", True
+                ),
+                add_bond=self.model.add_bond,
+                restore_bond_from_state=restore_bond,
+                translated_scene_item_state=translated_scene_item_state,
+                create_scene_item_from_state=add_record,
+                apply_perspective=apply_perspective,
+            )
         )
         if not result.has_changes():
             raise ValueError("The Chemvas clipboard selection is empty.")
@@ -6575,7 +6591,7 @@ class BrowserStructureAdapter:
                 self,
                 {result.atom_id_map[atom_id] for atom_id in group["atoms"]},
                 [
-                    cast("Any", result.scene_item_map[ref[0], ref[1]]).data(3)
+                    result.scene_item_map[ref[0], ref[1]].data(3)
                     for ref in group["items"]
                 ],
             )
