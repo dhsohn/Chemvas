@@ -3,8 +3,9 @@
 This is document content, not a pointer to a mutable file on disk. Bindings use
 source object IDs; collection bindings are parallel to the saved item arrays.
 
-Coupled collection and native-link mutations for notes and image-to-arrow
-promotion are owned here so callers cannot update one side alone.
+Coupled collection and native-link mutations for notes, image-to-arrow
+promotion and identity-preserving collection edits are owned here so callers
+cannot update one side alone.
 """
 
 from __future__ import annotations
@@ -269,6 +270,56 @@ def append_unbound_note(
     notes.append(note)
     items["notes"] = staged_links
     return index
+
+
+RecordLinks = dict[str, dict[int, tuple[object, str]]]
+
+
+def capture_record_links(state: Mapping[str, Any]) -> RecordLinks:
+    """Native links of bound collection records, keyed by record identity.
+
+    Each entry keeps its record alive so a record freed by an edit cannot
+    hand its identity to a new record. Pair with :func:`rebind_record_links`.
+    """
+    source = state.get("cdxml_source")
+    if source is None:
+        return {}
+    if not isinstance(source, dict) or not isinstance(source.get("items"), dict):
+        raise ValueError("Invalid CDXML source fields.")
+    items = source["items"]
+    links: RecordLinks = {}
+    for kind in items:
+        records = state.get(kind, [])
+        if not isinstance(records, list):
+            raise ValueError(f"Invalid CDXML {kind} bindings.")
+        natives = native_ids_for_collection(items, kind, len(records))
+        links[kind] = {
+            id(record): (record, native)
+            for record, native in zip(records, natives, strict=True)
+            if native is not None
+        }
+    return links
+
+
+def rebind_record_links(state: MutableMapping[str, Any], links: RecordLinks) -> None:
+    """Re-derive parallel native links after an edit that keeps records by identity.
+
+    For editors that change records in place and add, drop or reorder whole
+    records: a surviving record keeps its link, an added one is unbound, and a
+    dropped one loses its link so the native writer deletes its object.
+    """
+    source = state.get("cdxml_source")
+    if source is None:
+        return
+    items = source["items"]
+    for kind, by_record in links.items():
+        rebound: list[str | None] = []
+        for record in state.get(kind, []):
+            entry = by_record.get(id(record))
+            rebound.append(
+                entry[1] if entry is not None and entry[0] is record else None
+            )
+        items[kind] = rebound
 
 
 def promote_linked_images_to_arrows(
