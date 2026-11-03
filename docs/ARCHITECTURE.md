@@ -1,10 +1,7 @@
 # Architecture
 
-The browser presentation adapter is described in [WEB_ADAPTER.md](WEB_ADAPTER.md)
-and [ADR 0029](adr/0029-browser-adapter.md). Its Python session
-reuses existing document and feature APIs and CanvasHistoryService. The browser
-mirrors accepted state; toolbar definitions and artwork come from the existing
-desktop owners. SVG materialization and event wiring are cohesive adapters. The Qt architecture below remains the default desktop editor.
+Chemvas is the Qt desktop editor described below and its headless CLI. The
+former browser adapter was retired ([ADR 0068](adr/0068-retire-browser-adapter.md)).
 
 [한국어](ARCHITECTURE.ko.md)
 
@@ -373,12 +370,6 @@ Simple bond-length and bond-update history commands reuse
 `history_command_transaction`. Document replacement snapshots require the native
 Qt scene contract rather than alternate test-only scene representations.
 
-Browser chemical clipboard operations reuse the canonical selection payload builder
-and paste planner, preserving atom ID remapping, groups and annotation transforms
-without a parallel chemistry schema. Automatic browser drafts are managed
-independently of Qt recovery by `bootstrap/web_drafts.py`, using single-server
-process locking and envelope storage ([ADR 0032](adr/0032-browser-clipboard-and-drafts.md)).
-
 - [ADR 0025: Shared atom position mutation](adr/0025-shared-atom-position-mutation.md)
 - [ADR 0026: Endpoint selection draft](adr/0026-endpoint-selection-draft.md)
 - [ADR 0027: Record-based annotation transforms](adr/0027-record-based-annotation-transforms.md)
@@ -431,3 +422,4 @@ process locking and envelope storage ([ADR 0032](adr/0032-browser-clipboard-and-
 - [ADR 0065: Three-platform desktop release acceptance](adr/0065-three-platform-release-acceptance.md)
 - [ADR 0066: Linux per-user frozen installation](adr/0066-linux-user-installation.md)
 - [ADR 0067: Coupled native CDXML collections](adr/0067-coupled-native-cdxml-collections.md)
+- [ADR 0068: Retire the browser adapter](adr/0068-retire-browser-adapter.md)

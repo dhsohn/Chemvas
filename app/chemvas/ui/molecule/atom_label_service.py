@@ -59,7 +59,7 @@ class AtomLabelService:
     """Label edits through explicit ports, plus desktop history and prompting.
 
     Only recorded edits, their history and the label prompt need the canvas;
-    an editor that records whole-document changes builds one without it.
+    unrecorded edits run through the ports alone.
     """
 
     def __init__(

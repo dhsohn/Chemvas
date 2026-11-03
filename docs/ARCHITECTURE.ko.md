@@ -1,11 +1,7 @@
 # 아키텍처
 
-브라우저 어댑터는 [사용 안내](WEB_ADAPTER.ko.md)와
-[ADR 0029](adr/0029-browser-adapter.md)를 따른다. Python 세션은
-기존 문서·기능 API와 CanvasHistoryService를 재사용한다. 브라우저는 승인된
-상태를 표시하고 UI 정의·그림은 기존 소유자에서 읽는다. SVG 표시와 이벤트 연결은
-각각 응집된 연결 코드로 유지한다.
-아래 Qt 구조는 기존 기본 데스크톱 편집기에 해당한다.
+Chemvas는 아래의 Qt 데스크톱 편집기와 헤드리스 CLI로 구성된다. 이전의 브라우저
+어댑터는 중단되었다([ADR 0068](adr/0068-retire-browser-adapter.md)).
 
 [English](ARCHITECTURE.md)
 
@@ -348,12 +344,6 @@ ADR을 언제 쓰는지, 작성 규칙과 템플릿은 [ADR 안내](adr/README.m
 단순 결합 길이·속성 Undo 명령은 `history_command_transaction`을 재사용합니다.
 문서 교체 스냅샷은 테스트 전용 대체 장면 대신 실제 Qt 장면 계약을 사용합니다.
 
-브라우저 화학 클립보드는 기존 선택 페이로드 빌더와 붙여넣기 계획기를 재사용하여
-별도의 화학 스키마 없이 원자 ID 재매핑, 그룹 및 주석 변환을 보존합니다. 브라우저
-자동 복구 드래프트는 Qt 복구와 분리되어 `bootstrap/web_drafts.py`가 단일 서버
-프로세스 잠금과 봉투 저장을 소유합니다
-([ADR 0032](adr/0032-browser-clipboard-and-drafts.md)).
-
 - [ADR 0025: Shared atom position mutation](adr/0025-shared-atom-position-mutation.md)
 - [ADR 0026: Endpoint selection draft](adr/0026-endpoint-selection-draft.md)
 - [ADR 0027: Record-based annotation transforms](adr/0027-record-based-annotation-transforms.md)
@@ -406,3 +396,4 @@ ADR을 언제 쓰는지, 작성 규칙과 템플릿은 [ADR 안내](adr/README.m
 - [ADR 0065: Three-platform desktop release acceptance](adr/0065-three-platform-release-acceptance.md)
 - [ADR 0066: Linux per-user frozen installation](adr/0066-linux-user-installation.md)
 - [ADR 0067: Coupled native CDXML collections](adr/0067-coupled-native-cdxml-collections.md)
+- [ADR 0068: Retire the browser adapter](adr/0068-retire-browser-adapter.md)

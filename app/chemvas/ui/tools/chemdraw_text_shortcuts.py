@@ -1,9 +1,8 @@
 """ChemDraw hover-key decisions on normalized key text (Qt-free).
 
-The desktop canvas and the browser editor both run these decisions after their
-own input adapter turns a key press into text. Each collaborator is a narrow
-protocol naming only the operations a key can trigger, so either editor passes
-its real services without casts or placeholder collaborators.
+The canvas runs these decisions after its input adapter turns a key press into
+text. Each collaborator is a narrow protocol naming only the operations a key
+can trigger, so the decisions are testable without Qt events.
 """
 
 from __future__ import annotations

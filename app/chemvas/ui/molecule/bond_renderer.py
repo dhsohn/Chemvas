@@ -40,9 +40,7 @@ class BondRenderer:
         self.ring_double_geometry = BondRingDoubleGeometryService(
             context, renderer=self
         )
-        self.geometry_planner: BondGeometryPlanService[QPolygonF, QPainterPath] = (
-            BondGeometryPlanService(context, renderer=self)
-        )
+        self.geometry_planner = BondGeometryPlanService(context, renderer=self)
         self.graphics_builder = BondGraphicsBuildService(
             context,
             renderer=self,

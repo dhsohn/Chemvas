@@ -1,4 +1,4 @@
-"""Group membership rules shared by the desktop canvas and the browser adapter.
+"""Group membership rules for the canvas, kept Qt-free.
 
 A group holds whole molecules (atom ids) and standalone annotations (record
 ids). Callers own the id spaces; these rules only compare and combine them.

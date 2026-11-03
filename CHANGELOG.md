@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Removed
+
+- The experimental browser editor (`chemvas --ui web`), which was never
+  distributed, has been retired; Leaf opens `.cdxml` documents in the desktop
+  app instead. `chemvas --ui web` now exits with a message saying so, and
+  `--ui qt` is still accepted. See ADR 0068.
+
 ### Added
 
 - Define equal desktop release acceptance for Windows, macOS and Linux, with

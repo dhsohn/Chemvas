@@ -265,7 +265,7 @@ def bond_pick_candidates(
 def build_bond_grid(
     model: Any, cell_size: float, *, bounds: tuple[int, int, int, int] | None = None
 ) -> dict[tuple[int, int], set[int]]:
-    """Build native bond cells; a browser pick needs only its query window."""
+    """Build native bond cells; a single pick needs only its query window."""
     grid: dict[tuple[int, int], set[int]] = {}
     for bond_id, bond in enumerate(model.bonds):
         if bond is None:

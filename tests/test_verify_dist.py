@@ -1,8 +1,6 @@
 """Distribution contents follow the package declaration, not a partial file list."""
 
-import ast
 import io
-import runpy
 import tarfile
 from pathlib import Path
 from zipfile import ZipFile
@@ -13,20 +11,6 @@ from scripts import verify_dist
 ROOT = Path(__file__).resolve().parents[1]
 DIST_INFO = "chemvas-0.0.0.dist-info"
 SDIST_ROOT = "chemvas-0.0.0"
-# The experimental browser editor in this checkout; no distribution carries it.
-BROWSER_EDITOR_MODULES = frozenset(
-    ("chemvas/bootstrap/web_adapter.py", "chemvas/bootstrap/web_drafts.py")
-)
-BROWSER_EDITOR_ASSETS = frozenset(
-    (
-        "chemvas/web/app.mjs",
-        "chemvas/web/clipboard.mjs",
-        "chemvas/web/index.html",
-        "chemvas/web/scene.mjs",
-        "chemvas/web/style.css",
-        "chemvas/web/transport.mjs",
-    )
-)
 
 
 @pytest.fixture
@@ -43,7 +27,7 @@ def current_package_files():
                 and path.suffix in {".svg", ".png"}
             )
         )
-    } - BROWSER_EDITOR_MODULES
+    }
 
 
 def _wheel(tmp_path, package_files, *, extra=(), entry_point=None):
@@ -176,25 +160,6 @@ def test_wheel_keeps_directory_root_guard(tmp_path, current_package_files):
 
 @pytest.mark.parametrize("kind", ["wheel", "sdist"])
 @pytest.mark.parametrize(
-    "leaked",
-    [
-        *sorted(BROWSER_EDITOR_MODULES),
-        *sorted(BROWSER_EDITOR_ASSETS),
-        "chemvas/bootstrap/web_session.py",
-        "chemvas/web/__init__.py",
-        "chemvas/assets/icon/preview.html",
-        "chemvas/ui/viewer.js",
-    ],
-)
-def test_browser_editor_leak_is_rejected(tmp_path, current_package_files, kind, leaked):
-    writer = _wheel if kind == "wheel" else _sdist
-    verify = verify_dist.verify_wheel if kind == "wheel" else verify_dist.verify_sdist
-    with pytest.raises(ValueError, match="experimental browser editor.*" + leaked):
-        verify(writer(tmp_path, current_package_files | {leaked}))
-
-
-@pytest.mark.parametrize("kind", ["wheel", "sdist"])
-@pytest.mark.parametrize(
     "missing",
     [
         "chemvas/bootstrap/application.py",
@@ -216,11 +181,11 @@ def test_required_desktop_files_are_shipped(current_package_files):
     assert verify_dist.REQUIRED_DESKTOP_FILES <= current_package_files
 
 
-@pytest.mark.parametrize("name", ["setup.py", "pyproject.toml"])
+@pytest.mark.parametrize("name", ["pyproject.toml"])
 def test_sdist_must_carry_the_reviewed_build_inputs(
     tmp_path, current_package_files, name
 ):
-    """A wheel rebuilt from the sdist must see the same boundary."""
+    """A wheel rebuilt from the sdist must see the same package declaration."""
     build_inputs = _build_inputs()
     del build_inputs[name]
     with pytest.raises(ValueError, match="missing required files.*" + name):
@@ -229,8 +194,7 @@ def test_sdist_must_carry_the_reviewed_build_inputs(
         )
     # Byte edits that do not depend on the checkout's line ends.
     reopened = {
-        "setup.py": (b'"chemvas.bootstrap.web_drafts",', b""),
-        "pyproject.toml": (b'"assets/icon/*.png"]', b'"assets/icon/*.png", "web/*"]'),
+        "pyproject.toml": (b'"assets/icon/*.png"]', b'"assets/icon/*.png", "extra/*"]'),
     }[name]
     build_inputs = _build_inputs()
     build_inputs[name] = build_inputs[name].replace(*reopened)
@@ -239,87 +203,6 @@ def test_sdist_must_carry_the_reviewed_build_inputs(
         verify_dist.verify_sdist(
             _sdist(tmp_path, current_package_files, build_inputs=build_inputs)
         )
-
-
-def _build_hook_modules():
-    tree = ast.parse((ROOT / "setup.py").read_text(encoding="utf-8"))
-    for node in tree.body:
-        if (
-            isinstance(node, ast.Assign)
-            and isinstance(node.targets[0], ast.Name)
-            and node.targets[0].id == "SOURCE_CHECKOUT_ONLY_MODULES"
-        ):
-            return {
-                module.replace(".", "/") + ".py"
-                for module in ast.literal_eval(node.value.args[0])
-            }
-    raise AssertionError("setup.py no longer names its source-checkout-only modules")
-
-
-def test_browser_editor_stays_runnable_from_the_source_checkout():
-    source = ROOT / "app"
-    for name in BROWSER_EDITOR_MODULES | BROWSER_EDITOR_ASSETS:
-        assert (source / name).is_file(), name
-    assert (
-        verify_dist.source_checkout_only_files(BROWSER_EDITOR_ASSETS)
-        == BROWSER_EDITOR_ASSETS
-    )
-    # Discovery still finds the modules, so the build hook must drop exactly them.
-    declared = verify_dist.declared_package_files()
-    assert verify_dist.source_checkout_only_files(declared) == BROWSER_EDITOR_MODULES
-    assert _build_hook_modules() == BROWSER_EDITOR_MODULES
-
-
-def test_build_hook_drops_browser_editor_modules(monkeypatch):
-    import setuptools
-    from setuptools.dist import Distribution
-
-    captured = {}
-    monkeypatch.setattr(setuptools, "setup", lambda **options: captured.update(options))
-    runpy.run_path(str(ROOT / "setup.py"), run_name="chemvas_build_hook")
-    distribution = Distribution(
-        {
-            "name": "chemvas",
-            "package_dir": {"": "app"},
-            "packages": ["chemvas.bootstrap"],
-        }
-    )
-    distribution.script_name = str(ROOT / "setup.py")
-    command = captured["cmdclass"]["build_py"](distribution)
-    modules = command.find_package_modules(
-        "chemvas.bootstrap", str(ROOT / "app" / "chemvas" / "bootstrap")
-    )
-    shipped = {f"chemvas/bootstrap/{module}.py" for _package, module, _path in modules}
-    assert "chemvas/bootstrap/application.py" in shipped
-    assert "chemvas/bootstrap/document_render.py" in shipped
-    assert not shipped & BROWSER_EDITOR_MODULES
-
-
-def test_shipped_modules_do_not_import_the_browser_editor():
-    """Only the guarded ``--ui web`` dispatch may name the browser editor."""
-    source = ROOT / "app"
-    declared = verify_dist.declared_package_files()
-    shipped = declared - verify_dist.source_checkout_only_files(declared)
-    offenders = []
-    for name in sorted(shipped):
-        if not name.endswith(".py") or name == "chemvas/bootstrap/application.py":
-            continue
-        tree = ast.parse((source / name).read_text(encoding="utf-8"))
-        for node in ast.walk(tree):
-            if isinstance(node, ast.Import):
-                modules = [alias.name for alias in node.names]
-            elif isinstance(node, ast.ImportFrom) and node.module:
-                modules = [
-                    node.module,
-                    *(f"{node.module}.{alias.name}" for alias in node.names),
-                ]
-            else:
-                continue
-            if verify_dist.source_checkout_only_files(
-                {module.replace(".", "/") + ".py" for module in modules}
-            ):
-                offenders.append(f"{name}:{node.lineno}")
-    assert offenders == []
 
 
 @pytest.fixture
@@ -347,7 +230,6 @@ def package_source(tmp_path, monkeypatch):
         path = source / "app" / name
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text("synthetic\n", encoding="utf-8")
-    (source / "setup.py").write_bytes((ROOT / "setup.py").read_bytes())
     monkeypatch.setattr(verify_dist, "ROOT", source)
     monkeypatch.setattr(
         verify_dist,
@@ -444,29 +326,6 @@ def test_different_packaging_shapes_require_explicit_verifier_review(
     )
     with pytest.raises(ValueError, match="package declaration changed"):
         verify_dist.declared_package_files()
-
-
-@pytest.mark.parametrize("kind", ["wheel", "sdist"])
-def test_declared_browser_editor_is_still_rejected(package_source, tmp_path, kind):
-    """A declaration that ships the browser editor does not make the leak valid."""
-    browser_editor = {"chemvas/bootstrap/web_adapter.py", "chemvas/web/index.html"}
-    for name in ("chemvas/bootstrap/__init__.py", *browser_editor):
-        (package_source / "app" / name).parent.mkdir(parents=True, exist_ok=True)
-        (package_source / "app" / name).write_text("synthetic\n", encoding="utf-8")
-    declaration = package_source / "pyproject.toml"
-    declaration.write_text(
-        declaration.read_text(encoding="utf-8").replace(
-            '"assets/*.png"', '"assets/*.png", "web/*.html"'
-        ),
-        encoding="utf-8",
-    )
-    declared = verify_dist.declared_package_files()
-    assert browser_editor <= declared
-    writer = _wheel if kind == "wheel" else _sdist
-    verify = verify_dist.verify_wheel if kind == "wheel" else verify_dist.verify_sdist
-    with pytest.raises(ValueError, match="experimental browser editor"):
-        verify(writer(tmp_path, declared))
-    verify(writer(tmp_path, declared - browser_editor))
 
 
 @pytest.mark.parametrize("kind", ["wheel", "sdist"])

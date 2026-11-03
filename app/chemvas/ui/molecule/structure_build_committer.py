@@ -32,8 +32,8 @@ class StructureBuildHistorySnapshot:
 class StructureEditPorts[RingItem]:
     """What the structure edits read and write, named instead of a canvas.
 
-    The desktop builds these from its canvas services; the browser editor
-    passes its candidate model and its own ring and label collaborators.
+    ``for_canvas`` builds them from the desktop canvas; tests pass their own
+    so structure edits run without a scene.
     """
 
     model: Callable[[], MoleculeModel]
@@ -85,8 +85,8 @@ class StructureEditPorts[RingItem]:
 class StructureBuildCommitter:
     """Structure edits through explicit ports, plus desktop history recording.
 
-    Only the recorded-change and scene-render methods need the canvas; an
-    editor that records whole-document changes itself builds one without it.
+    Only the recorded-change and scene-render methods need the canvas; the
+    edits run through the ports alone.
     """
 
     def __init__(
