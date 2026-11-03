@@ -958,7 +958,7 @@ class CanvasViewAdditionalTest(unittest.TestCase):
             update_selection_outline=view.refresh_selection_outline
         )
 
-        controller = CanvasMoveController(
+        controller = CanvasMoveController.for_canvas(
             view, hit_testing_service=view.services.hit_testing_service
         )
         controller.update_bond_geometries_for_atoms = mock.Mock()
@@ -1019,7 +1019,7 @@ class CanvasViewAdditionalTest(unittest.TestCase):
         )
         set_atom_items_for(quiet_view, {})
         set_atom_dots_for(quiet_view, {})
-        CanvasMoveController(
+        CanvasMoveController.for_canvas(
             quiet_view, hit_testing_service=quiet_view.services.hit_testing_service
         ).set_atom_positions(positions={}, coords_3d=None)
         quiet_view.services.hit_testing_service.mark_spatial_index_dirty.assert_not_called()
@@ -1048,7 +1048,7 @@ class CanvasViewAdditionalTest(unittest.TestCase):
         )
         set_atom_items_for(noop_view, {})
         set_atom_dots_for(noop_view, {})
-        CanvasMoveController(
+        CanvasMoveController.for_canvas(
             noop_view, hit_testing_service=noop_view.services.hit_testing_service
         ).set_atom_positions(
             positions={99: (3.0, 4.0)},

@@ -234,7 +234,7 @@ class _FakeCanvas:
                 update_selection_outline=self.refresh_selection_outline
             ),
         )
-        move_controller = CanvasMoveController(
+        move_controller = CanvasMoveController.for_canvas(
             self, hit_testing_service=hit_testing_service
         )
         move_controller.redraw_bonds_for_atoms = self.record_redraw_bonds_for_atoms

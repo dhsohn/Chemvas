@@ -53,6 +53,7 @@ from chemvas.domain.document import (
     VALID_EQUILIBRIUM_KINDS,
     VALID_MARK_KINDS,
     AnnotationCollection,
+    Arrow,
     Bond,
     arrow_from_state,
     arrow_to_state,
@@ -302,7 +303,7 @@ from chemvas.ui.canvas.canvas_group_state import (
 from chemvas.ui.canvas.canvas_history_service import CanvasHistoryService
 from chemvas.ui.canvas.canvas_history_state import CanvasHistoryState
 from chemvas.ui.canvas.canvas_mark_registry import CanvasMarkRegistry
-from chemvas.ui.canvas.canvas_move_controller import CanvasMoveController
+from chemvas.ui.canvas.canvas_move_controller import CanvasMoveController, MovePorts
 from chemvas.ui.canvas.canvas_ring_fill_scene_service import rebuild_ring_fill_polygons
 from chemvas.ui.canvas.canvas_tool_settings_state import (
     GRID_COLOR,
@@ -3188,6 +3189,16 @@ class BrowserMarkItem:
         self.record.update(x=center.x(), y=center.y())
 
 
+class _BrowserArrowRecords:
+    """Arrow records for the shared move controller: the item holds its state."""
+
+    def record(self, item: Any) -> Arrow:
+        return arrow_from_state(item.record)
+
+    def set_record(self, item: Any, record: Arrow) -> None:
+        item.record.update(arrow_to_state(record))
+
+
 class _BrowserLabelDrawing:
     """Label presentation for a candidate: document_info renders it later."""
 
@@ -3350,12 +3361,7 @@ class BrowserStructureAdapter:
         self.pasted: dict[str, Any] | None = None
         # The browser materializes labels once, after candidate validation.
         self.render_context = SimpleNamespace(
-            arrows=SimpleNamespace(
-                record=lambda item: arrow_from_state(item.record),
-                set_record=lambda item, record: item.record.update(
-                    arrow_to_state(record)
-                ),
-            ),
+            arrows=_BrowserArrowRecords(),
             atom_labels=_BrowserLabelDrawing(),
         )
         graph = SimpleNamespace(rebuild_bond_adjacency=lambda: None)
@@ -3653,6 +3659,51 @@ class BrowserStructureAdapter:
         for group_id in plan.absorbed:
             state.groups.pop(group_id)
         register_group_for(self, plan.atom_ids, plan.item_ids)
+
+    def move_ports(self) -> MovePorts:
+        """The shared move controller's view of this candidate.
+
+        Atom, mark and ring geometry change in the candidate; scene items,
+        handles and outlines do not exist here, because document_info renders
+        the accepted candidate afterwards. The browser moves shapes and TS
+        brackets from their records itself.
+        """
+
+        def records_moved_here(_item: Any, *_args: Any) -> Any:
+            raise ValueError("The browser moves shapes and brackets from records.")
+
+        return MovePorts(
+            model=lambda: self.model,
+            atom_bond_ids=lambda: self.runtime_state.graph_state.atom_bond_ids,
+            bond_items=lambda _bond_id: (),
+            update_bond_geometry=lambda _bond_id, _rebuild: None,
+            redraw_bond=lambda _bond_id: False,
+            redraw_connected_bonds=lambda _atom_id, _skip: None,
+            ring_items=lambda: (),
+            update_ring_fills_for_atoms=lambda atom_ids: (
+                self.services.canvas_ring_fill_scene_service.update_ring_fills_for_atoms(
+                    atom_ids, ring_items=None
+                )
+            ),
+            update_selection_outline=lambda: None,
+            handles_for=lambda _item: (),
+            atom_label=lambda _atom_id: None,
+            atom_dot=lambda _atom_id: None,
+            position_label=lambda _label, _x, _y: None,
+            marks=lambda: self.runtime_state.mark_registry,
+            mark_center=lambda item: item.center,
+            set_mark_center=lambda item, center: item.set_center(center),
+            coords_3d=lambda: self.runtime_state.atom_coords_3d_state.atom_coords_3d,
+            bond_length=lambda: self.renderer.style.bond_length_px,
+            projection_center_3d=lambda: (
+                self.runtime_state.rotation_state.projection_center_3d
+            ),
+            arrows=lambda: self.render_context.arrows,
+            shape_record=records_moved_here,
+            set_shape_record=records_moved_here,
+            ts_bracket_record=records_moved_here,
+            set_ts_bracket_record=records_moved_here,
+        )
 
     def mark_spatial_index_dirty(self) -> None:
         """No hit-test index to refresh: picks scan the candidate model."""
@@ -5710,7 +5761,7 @@ class BrowserStructureAdapter:
                 )
             )
         controller = CanvasMoveController(
-            cast("Any", self),
+            self.move_ports(),
             point_factory=BrowserPoint,
             hit_testing_service=self,
         )
@@ -6218,7 +6269,7 @@ class BrowserStructureAdapter:
     ) -> None:
         atoms = self.selected_atom_ids(buckets)
         controller = CanvasMoveController(
-            cast("Any", self),
+            self.move_ports(),
             point_factory=BrowserPoint,
             hit_testing_service=self,
             ring_polygon_rebuilder=partial(

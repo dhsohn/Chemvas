@@ -97,7 +97,7 @@ class CanvasViewMoveHelpersTest(unittest.TestCase):
             services.hit_testing_service = SimpleNamespace(
                 mark_spatial_index_dirty=mock.Mock()
             )
-        controller = controller or CanvasMoveController(
+        controller = controller or CanvasMoveController.for_canvas(
             view,
             hit_testing_service=services.hit_testing_service,
         )
