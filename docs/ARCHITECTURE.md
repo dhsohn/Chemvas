@@ -311,9 +311,14 @@ in each projection's image order while preserving retained image order
 `features.cdxml_editable_rectangles` maps black Plain and black Filled native
 rectangles to bound shape records and rewrites `BoundingBox`, `RectangleType`
 and `color` on save; coloured rectangles stay raster because shapes have no
-stroke colour, and other rectangle styles remain raster projections. A
-preparation failure leaves the input unchanged, and `xml`, `offset`, atom/bond
-bindings, unsupported native XML and the persisted schema stay unchanged.
+stroke colour, and other rectangle styles remain raster projections.
+`features.cdxml_native_groups` maps qualifying page-level ChemDraw `<group>`
+elements into editor `state["groups"]` on import and unwraps a native `<group>`
+on save when no editor group still contains all of its bound native members;
+new Chemvas groups and added members stay in the embedded snapshot
+only ([ADR 0068](adr/0068-native-cdxml-groups.md)). A preparation failure leaves
+the input unchanged, and `xml`, `offset`, atom/bond bindings, unsupported native
+XML and the persisted schema stay unchanged.
 `ui.canvas.canvas_cdxml_source` retains the boundary between runtime
 `AnnotationCollection` record IDs and persisted positional bindings.
 
@@ -435,3 +440,4 @@ process locking and envelope storage ([ADR 0032](adr/0032-browser-clipboard-and-
 - [ADR 0065: Three-platform desktop release acceptance](adr/0065-three-platform-release-acceptance.md)
 - [ADR 0066: Linux per-user frozen installation](adr/0066-linux-user-installation.md)
 - [ADR 0067: Coupled native CDXML collections](adr/0067-coupled-native-cdxml-collections.md)
+- [ADR 0068: Native CDXML groups](adr/0068-native-cdxml-groups.md)

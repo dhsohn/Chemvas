@@ -495,6 +495,18 @@ class _NativeWriter:
         self.update_bonds()
         self.update_items()
         self.remove_deleted_fallbacks()
+        self.parents = {
+            child: parent for parent in self.root.iter() for child in parent
+        }
+        from chemvas.features.cdxml_native_groups import sync_native_groups_on_save
+
+        sync_native_groups_on_save(
+            self.page,
+            parents=self.parents,
+            by_id=self.byid,
+            state=self.state,
+            source=self.source,
+        )
         self.validate_references()
         for identity in self.changed_nodes:
             e = self.byid[identity]
