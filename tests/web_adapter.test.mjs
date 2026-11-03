@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {SessionClient, sessionDrawing} from '../app/chemvas/web/transport.mjs';
-import {ChemistryClipboard, copySelection, isSelectionText, pasteText, writeSelection} from '../app/chemvas/web/clipboard.mjs';
+import {SessionClient, offerRecovery, sessionDrawing} from '../app/chemvas/web/transport.mjs';
+import {ChemistryClipboard, clipboardActions, copySelection, isSelectionText, pasteText, writeSelection} from '../app/chemvas/web/clipboard.mjs';
 import {documentDownloads} from '../app/chemvas/web/document_downloads.mjs';
 import {sceneMarkup, measureAtomLabels, AtomLabelCache, clampView, zoomView, wheelView, pointInSheet, measureGlyphInk, marqueeSelection, measureDocumentLineHeight, selectionFrameMarkup, gridMarkup} from '../app/chemvas/web/scene.mjs';
 
@@ -3344,13 +3344,6 @@ test('Cut removes only after a usable copy, and only from the drawing it copied'
 // session whose copy replies come from `reply`, and an edit stand-in that
 // accepts each change at the next revision.
 async function clipboardActionHarness({clipboard = {}, reply = () => ({payload: SELECTION})} = {}) {
-  const {runInNewContext} = await import('node:vm');
-  const source = await webSource('app.mjs');
-  const slice = marker => {
-    const start = source.indexOf(marker), end = source.indexOf('\n}\n', start) + 2;
-    assert.ok(start >= 0 && end > start, marker);
-    return source.slice(start, end);
-  };
   const env = fakeClipboard(clipboard), requests = [], edits = [], notices = [];
   const context = {
     editor: {document: {}, busy: false, readOnly: false, info: {session: 's', revision: 4}},
@@ -3358,18 +3351,32 @@ async function clipboardActionHarness({clipboard = {}, reply = () => ({payload: 
     selectedItems: () => [{target: 'atom', id: 0}, {target: 'bond', id: 0}],
     api: async (_path, body) => { requests.push(JSON.parse(JSON.stringify(body))); return reply(body, context); },
     edit: async change => {
-      // The page's objects come from the VM realm; compare them as this realm's.
       edits.push(JSON.parse(JSON.stringify(change)));
       context.editor.info = {...context.editor.info, revision: context.editor.info.revision + 1, pasted: change.kind === 'paste' ? [{target: 'atom', id: 9}] : null};
       return true;
     },
     notice: (...args) => notices.push(args), render() {}, cancelGesture() {},
-    chemistryClipboard: new ChemistryClipboard(env), copySelection, Blob, ui: {max_clipboard_bytes: 4096},
+    chemistryClipboard: new ChemistryClipboard(env), ui: {max_clipboard_bytes: 4096},
   };
-  runInNewContext([slice('async function copyChemistry(cut) {'), slice('async function pasteChemistry(systemText) {'), slice('async function pasteFromMenu() {')].join('\n'), context);
+  Object.assign(context, clipboardActions({
+    editor: context.editor, isLoading: () => context.loading, activeGesture: () => context.gesture,
+    selection: () => context.selection, setSelection: next => { context.selection = next; },
+    selectedItems: () => context.selectedItems(), api: (...args) => context.api(...args),
+    edit: change => context.edit(change), notice: (...args) => context.notice(...args),
+    render: () => context.render(), cancelGesture: () => context.cancelGesture(),
+    store: context.chemistryClipboard, maxBytes: () => context.ui.max_clipboard_bytes,
+  }));
   return {context, env, requests, edits, notices};
 }
 const SELECTED = [{target: 'atom', id: 0}, {target: 'bond', id: 0}];
+
+test('the page takes its clipboard actions and startup recovery from the shared modules', async () => {
+  const source = await webSource('app.mjs');
+  assert.ok(source.includes('const {copyChemistry, pasteChemistry, pasteFromMenu} = clipboardActions({'));
+  assert.ok(source.includes("$('copy').onclick = () => void copyChemistry(false);"));
+  assert.ok(source.includes("$('paste').onclick = () => void pasteFromMenu();"));
+  assert.ok(source.includes('void offerRecovery({storage: sessionStorage, closedSessionKey,'));
+});
 
 test('Copy asks for the selection at its revision; Cut then deletes that selection as one edit', async () => {
   const h = await clipboardActionHarness();
@@ -3458,19 +3465,13 @@ test('menu Paste waiting on clipboard permission pastes nothing into a drawing r
 });
 
 test('the startup notice counts only drafts no open window holds and reports unreadable recovery', async () => {
-  const {runInNewContext} = await import('node:vm');
-  const source = await webSource('app.mjs');
-  const start = source.indexOf('async function offerRecovery() {');
-  const code = source.slice(start, source.indexOf('\n}\n', start) + 2);
   const run = async reply => {
     const notices = [];
-    const context = {
-      sessionStorage: {getItem: () => null, removeItem() {}}, closedSessionKey: 'closed',
-      editor: {info: {session: 's'}}, $: () => ({hidden: true}),
+    await offerRecovery({
+      storage: {getItem: () => null, removeItem() {}}, closedSessionKey: 'closed',
+      session: () => 's', noticeShown: () => false,
       api: async () => reply(), notice: (...args) => notices.push(args),
-    };
-    runInNewContext(code, context);
-    await context.offerRecovery();
+    });
     return notices;
   };
   const entry = (open, problem = null) => ({id: 'd', name: 'Work.cdxml', open, problem});

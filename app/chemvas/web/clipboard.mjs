@@ -72,3 +72,56 @@ export async function copySelection({store, payload, cut = false, isCurrent, rem
   if (!isCurrent()) return {copied, removed: false, stale: true};
   return {copied, removed: Boolean(await remove()), stale: false};
 }
+
+// The page's Edit > Copy, Cut and Paste of the canvas selection. The page passes
+// its live state as functions, so each check reads it at that moment.
+export function clipboardActions({editor, isLoading, activeGesture, selection, setSelection, selectedItems, api, edit, notice, render, cancelGesture, store, maxBytes}) {
+  // The server's copy reply is requested inside the user gesture, so the system
+  // clipboard write starts before it arrives; Cut then deletes through the
+  // usual one-step edit.
+  async function copyChemistry(cut) {
+    if (!editor.document || editor.busy || isLoading() || activeGesture() || !selection().size || (cut && editor.readOnly)) return;
+    const items = selectedItems(), {session, revision} = editor.info;
+    const payload = api('session', {session, revision, action: 'copy', selection: items}).then(reply => reply.payload);
+    const isCurrent = () => !editor.busy && !isLoading() && editor.info?.session === session && editor.info?.revision === revision;
+    let outcome;
+    try {
+      outcome = await copySelection({store, payload, cut, isCurrent, remove: () => edit({kind: 'delete_selection', selection: items})});
+    } catch (error) { notice(error.message, true); return; }
+    if (outcome.removed) { selection().clear(); render(); }
+    if (outcome.stale) notice('The drawing changed before Cut finished. The selection was copied but not removed.', true);
+    else if ((!cut || outcome.removed) && !outcome.copied.system) notice('Copied for pasting in this browser window only: the browser did not allow access to the system clipboard.');
+  }
+  // A Chemvas selection from the system clipboard, else this window's own copy
+  // (see pasteText). The server validates, offsets and remaps it in one
+  // Undo/Redo step, and the pasted items become the selection.
+  async function pasteChemistry(systemText) {
+    if (!editor.document || editor.busy || isLoading()) return;
+    if (editor.readOnly) { notice('This drawing is read-only in the browser adapter.', true); return; }
+    const text = store.textFor(systemText);
+    if (text === null) {
+      notice(systemText === null ? 'The browser did not allow reading the clipboard. Press ⌘/Ctrl+V on the canvas to paste.' : 'The clipboard does not contain a Chemvas selection.', true);
+      return;
+    }
+    if (new Blob([text]).size > maxBytes()) { notice('The Chemvas clipboard selection is too large to paste.', true); return; }
+    cancelGesture();
+    if (await edit({kind: 'paste', payload: text})) {
+      setSelection(new Set((editor.info.pasted ?? []).map(item => `${item.target}:${item.id}`)));
+      render();
+    }
+  }
+  // Edit > Paste reads the system clipboard first, which can wait on the
+  // browser's permission prompt; it pastes only into the drawing it was chosen
+  // for, never into one loaded, recovered or edited meanwhile.
+  async function pasteFromMenu() {
+    if (!editor.document || editor.busy || isLoading()) return;
+    const {session, revision} = editor.info;
+    const systemText = await store.read();
+    if (editor.info?.session !== session || editor.info?.revision !== revision) {
+      notice('The drawing changed while the clipboard was being read. Nothing was pasted.', true);
+      return;
+    }
+    await pasteChemistry(systemText);
+  }
+  return {copyChemistry, pasteChemistry, pasteFromMenu};
+}
