@@ -12,7 +12,7 @@ from chemvas.domain.atom_aliases import (
     ATOM_ALIAS_DEFINITIONS,
 )
 from chemvas.domain.document.cdxml_charge_edits import charge_edit_plan
-from chemvas.domain.document.cdxml_source import parse_native_xml, validate_cdxml_source
+from chemvas.domain.document.cdxml_source import validate_cdxml_source
 from chemvas.domain.document.cdxml_stereo_descriptors import (
     ATOM_STEREO_DESCRIPTORS,
     BOND_STEREO_DESCRIPTORS,
@@ -77,8 +77,7 @@ class _NativeWriter:
         self.state = state
         self.note_writer = note_writer
         self.source = self.state["cdxml_source"]
-        validate_cdxml_source(self.source, self.state)
-        self.root = parse_native_xml(self.source["xml"])
+        self.root = validate_cdxml_source(self.source, self.state)
         self.charge_plan = charge_edit_plan(self.state, self.root, for_write=True)
         # Model-only charge/radical edits have no native form; the shared
         # resolver rejects any that marks and native Charge do not match.

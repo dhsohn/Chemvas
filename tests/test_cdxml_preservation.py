@@ -306,6 +306,44 @@ def test_malformed_baseline_bindings_rejected_before_save():
         update_native_document(state)
 
 
+@pytest.mark.parametrize(
+    "corrupt,kind",
+    [
+        # A key the baseline model never had: the writer looked it up blindly.
+        (lambda s: s["atoms"].update({"99": s["atoms"].pop("0")}), "atoms"),
+        # An atom bound to a fragment moved every atom inside it.
+        (lambda s: s["atoms"].update({"0": "3"}), "atoms"),
+        # A nested label atom is part of its contracted node, not an atom.
+        (lambda s: s["atoms"].update({"0": "7"}), "atoms"),
+        # A bond bound to a node wrote bond attributes onto the atom.
+        (lambda s: s["bonds"].update({"0:1": "4"}), "bonds"),
+        (lambda s: s["bonds"].update({"0:1": "10"}), "bonds"),
+        (lambda s: s["bonds"].update({"0:2": s["bonds"].pop("0:1")}), "bonds"),
+        (lambda s: s["bonds"].update({"0:1:2": s["bonds"].pop("0:1")}), "bonds"),
+        # A bond whose native ends are not its atoms' bound nodes.
+        (lambda s: s["atoms"].pop("1"), "bonds"),
+    ],
+)
+def test_structure_bindings_must_match_baseline_and_native_roles(corrupt, kind):
+    state = imported()
+    corrupt(state["cdxml_source"])
+    with pytest.raises(ValueError, match=f"Invalid CDXML {kind} bindings"):
+        update_native_document(state)
+    # A saved snapshot carrying the same bindings is refused on open.
+    with pytest.raises(ValueError, match=f"Invalid CDXML {kind} bindings"):
+        embed_document(NATIVE, state)
+
+
+def test_structure_bindings_stay_valid_after_live_deletions():
+    state = imported()
+    state["model"]["atoms"].pop(1)
+    state["model"]["bonds"].clear()
+    root = native(state)
+    assert root.find('.//*[@id="5"]') is None
+    assert root.find('.//*[@id="12"]') is None
+    assert root.find('.//*[@id="4"]') is not None
+
+
 def test_deleting_native_charge_graphic_does_not_leave_hidden_charge():
     raw = NATIVE.replace(
         b'<curve id="14"',

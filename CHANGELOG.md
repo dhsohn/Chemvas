@@ -21,6 +21,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Reject a retained CDXML source whose atom or bond bindings name records
+  missing from its baseline, bind an atom to anything but a top-level native
+  atom node, or bind a bond to anything but a native bond joining its atoms'
+  nodes. Saving such a snapshot previously failed with an internal error or
+  moved and rewrote the wrong native objects; it is now refused when the
+  document is opened or saved.
 - Undoing the deletion of an imported CDXML arrow or caption now redraws it with
   its native line width, arrowhead geometry and caption placement instead of the
   editor defaults, including when it was deleted as part of a group.
