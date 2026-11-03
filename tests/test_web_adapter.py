@@ -399,13 +399,13 @@ def test_browser_collection_edits_keep_native_cdxml_links_with_their_records():
     from chemvas.features.cdxml_document import parse_cdxml_document
 
     raw = (
-        '<CDXML><page id="1" BoundingBox="0 0 400 300">'
-        '<fragment id="30"><n id="31" p="40 50"/><n id="32" p="60 50"/>'
-        '<b id="33" B="31" E="32"/></fragment>'
-        '<arrow id="10" Tail3D="20 90 0" Head3D="100 90 0" ArrowheadHead="Full"/>'
-        '<arrow id="11" Tail3D="20 130 0" Head3D="100 130 0" ArrowheadHead="Full"/>'
-        "</page></CDXML>"
-    ).encode()
+        b'<CDXML><page id="1" BoundingBox="0 0 400 300">'
+        b'<fragment id="30"><n id="31" p="40 50"/><n id="32" p="60 50"/>'
+        b'<b id="33" B="31" E="32"/></fragment>'
+        b'<arrow id="10" Tail3D="20 90 0" Head3D="100 90 0" ArrowheadHead="Full"/>'
+        b'<arrow id="11" Tail3D="20 130 0" Head3D="100 130 0" ArrowheadHead="Full"/>'
+        b"</page></CDXML>"
+    )
     source = build_document_payload(
         parse_cdxml_document(raw).state, CANVAS_FILE_VERSION
     )
