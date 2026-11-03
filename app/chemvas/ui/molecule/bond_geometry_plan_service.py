@@ -17,33 +17,38 @@ from chemvas.features.rendering import (
 )
 
 if TYPE_CHECKING:
-    from PyQt6.QtGui import QPainterPath, QPolygonF
-
     from chemvas.ui.scene.scene_render_context import SceneRenderContext
 
 
+# Polygons and paths are whatever the renderer's drawer factories build: Qt
+# QPolygonF/QPainterPath on the desktop, coordinate data in the browser.
 @dataclass(frozen=True)
-class BondLinePrimitive:
+class BondLinePrimitive[Polygon]:
     segment: LineSegment
-    outline: QPolygonF | None = None
+    outline: Polygon | None = None
 
 
 @dataclass(frozen=True)
-class BondPathPrimitive:
-    path: QPainterPath
+class BondPathPrimitive[Path]:
+    path: Path
 
 
 @dataclass(frozen=True)
-class BondPolygonPrimitive:
-    polygon: QPolygonF
+class BondPolygonPrimitive[Polygon]:
+    polygon: Polygon
     outlined: bool = False
 
 
-BondPrimitive = BondLinePrimitive | BondPathPrimitive | BondPolygonPrimitive
+type BondPrimitive[Polygon, Path] = (
+    BondLinePrimitive[Polygon] | BondPathPrimitive[Path] | BondPolygonPrimitive[Polygon]
+)
 
 
-class BondGeometryPlanService:
+class BondGeometryPlanService[Polygon, Path]:
     """Compute the ordered graphics primitives for one model bond.
+
+    ``Polygon`` and ``Path`` are the types the renderer's drawer factories
+    build; the code constructing the planner names them for its renderer.
 
     Build materializes this plan as scene items. In-place updates apply a new
     plan to those same item objects, so style/ring dispatch and geometry cannot
@@ -360,7 +365,7 @@ class BondGeometryPlanService:
         b,
         *,
         topology_count: int | None = None,
-    ) -> tuple[BondPrimitive, ...]:
+    ) -> tuple[BondPrimitive[Polygon, Path], ...]:
         if bond.style in {"wavy", "hash_plain"}:
             return self._native_uncertain_primitives(
                 bond, a, b, topology_count=topology_count

@@ -2737,3 +2737,19 @@ def test_note_selection_list_mutations_stay_on_named_owners() -> None:
     paths = [path for path in _app_python_files() if path not in allowed_paths]
 
     assert _matching_lines(pattern, paths) == []
+
+
+def test_browser_adapter_passes_typed_collaborators_without_any_casts() -> None:
+    """The browser hands shared services ports and protocols, not ``cast(Any)``.
+
+    A cast there hides a mismatch between what a desktop service reads and what
+    the browser supplies; narrow the service's dependencies instead.
+    """
+    module = APP_ROOT / "chemvas" / "bootstrap" / "web_adapter.py"
+    source = module.read_text(encoding="utf-8")
+    casts = [
+        f"{module.name}:{source.count(chr(10), 0, match.start()) + 1}"
+        for match in re.finditer(r"""cast\(\s*["']Any["']""", source)
+    ]
+
+    assert casts == []

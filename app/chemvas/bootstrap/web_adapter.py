@@ -512,7 +512,7 @@ from chemvas.ui.window.main_window_toolbar_logic import (
 from chemvas.ui.window.tab_title_logic import APP_TITLE_SUFFIX, UNSAVED_MARKER
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Iterable, Iterator, Mapping
+    from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
 
     from chemvas.domain.document import MoleculeModel
 
@@ -2079,7 +2079,10 @@ def drawing_geometry(
         point_factory=point,
         polygon_factory=lambda points: [(p.x(), p.y()) for p in points],
     )
-    planner = BondGeometryPlanService(context, renderer=geometry)
+    # The drawer factories above build coordinate lists and dot data, not Qt.
+    planner: BondGeometryPlanService[
+        Sequence[tuple[float, float]], tuple[list[tuple[float, float]], float]
+    ] = BondGeometryPlanService(context, renderer=geometry)
     result: dict[str, list[dict[str, Any]]] = {}
     selection_parts = {}
     for index, bond in enumerate(model.bonds):
@@ -2094,7 +2097,7 @@ def drawing_geometry(
                 result[str(index)].append(
                     {
                         "line": item.segment,
-                        "polygon": list(cast("Any", item.outline)),
+                        "polygon": list(item.outline),
                         "outlined": False,
                     }
                     if item.outline is not None
@@ -2103,12 +2106,12 @@ def drawing_geometry(
             elif isinstance(item, BondPolygonPrimitive):
                 result[str(index)].append(
                     {
-                        "polygon": list(cast("Any", item.polygon)),
+                        "polygon": list(item.polygon),
                         "outlined": item.outlined,
                     }
                 )
             elif isinstance(item, BondPathPrimitive):
-                centers, radius = cast("Any", item.path)
+                centers, radius = item.path
                 result[str(index)].append({"dots": centers, "radius": radius})
         parts = []
         for primitive in result[str(index)]:
