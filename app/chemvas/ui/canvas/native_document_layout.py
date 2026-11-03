@@ -5,10 +5,14 @@ from __future__ import annotations
 import math
 from contextlib import contextmanager
 from dataclasses import replace
+from typing import TYPE_CHECKING
 
 from PyQt6.QtGui import QTransform
 
 from chemvas.domain.document.cdxml_source import parse_native_xml
+
+if TYPE_CHECKING:
+    from chemvas.ui.scene.scene_render_context import SceneRenderContext
 
 
 def native_bond_metrics(state: dict) -> dict[tuple[int, int], dict[str, float]]:
@@ -120,3 +124,20 @@ def place_native_caption(
     )
     # Captions are annotations above the retained graphic projections.
     item.setZValue(2)
+
+
+def apply_native_presentation(context: SceneRenderContext, item) -> None:
+    """Give an annotation projection its retained CDXML presentation.
+
+    Document load and history re-creation both call this once the item
+    carries its final record ID. The native styles and caption placements are
+    keyed by that ID, so a projection materialized under a temporary ID was
+    drawn without them.
+    """
+    record_id = item.data(3)
+    state = context.state
+    if record_id in state.native_arrow_styles:
+        context.arrows.render_record(item, context.arrows.record(item))
+    placement = state.native_caption_placements.get(record_id)
+    if placement is not None:
+        place_native_caption(item, placement)
