@@ -75,7 +75,19 @@ def update_native_document(state: dict[str, Any], *, note_writer: Any = None) ->
 class _NativeWriter:
     def __init__(self, state: dict[str, Any], note_writer: Any) -> None:
         self.state = state
-        self.note_writer = note_writer
+        self.note_writer = None
+        if note_writer is not None:
+            # Note HTML omits whatever equals the document's text defaults, so
+            # the caption writer must read it with the same defaults the editor
+            # used, or omitted fonts become the toolkit's generic family.
+            text_defaults = state.get("settings") or {}
+
+            def write_note(
+                root: ET.Element, node: ET.Element, note: dict[str, Any]
+            ) -> None:
+                note_writer(root, node, note, text_defaults)
+
+            self.note_writer = write_note
         self.source = self.state["cdxml_source"]
         self.root = validate_cdxml_source(self.source, self.state)
         self.charge_plan = charge_edit_plan(self.state, self.root, for_write=True)
