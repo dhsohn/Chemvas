@@ -21,6 +21,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Keep ChemDraw stereo descriptors (``AS``, ``BS``, ``CIP``) when saving an
+  imported CDXML after recoloring atoms or bonds or moving a double bond's second
+  line; a recolored bond now writes only its new color. Edits that can change
+  stereochemistry (bond order, wedge or hash, topology, element, charge, atom
+  positions) now drop those descriptors across the whole fragment, including
+  double-bond ``BS`` after atom moves, instead of only on the edited atoms.
 - Refuse alias and ambiguous atom labels (Ac, Ts, Ar) when editing imported
   ChemDraw CDXML in place, matching fresh export; they are no longer written as
   actinium, tennessine or argon. Expand short ``#rgb`` colors such as ``#f00``
