@@ -1,5 +1,6 @@
 import {SessionClient, sessionDrawing} from './transport.mjs';
 import {ChemistryClipboard, copySelection, isSelectionText} from './clipboard.mjs';
+import {documentDownloads} from './document_downloads.mjs';
 import {sceneMarkup, AtomLabelCache, clampView, itemKey, zoomView, wheelView, pointInSheet, marqueeSelection, measureDocumentLineHeight, measureNoteFont, layoutNoteText, styleNoteText, serializeNoteEditor, noteBlocks, noteBlocksHtml, noteTextOffset, noteTextPosition, formatNoteBlocks, noteFormatState, selectionFrameMarkup, gridMarkup, groupUnit, expandToGroups, groupBoxesMarkup, valenceWarningMarkup, bondHoverMarkup} from './scene.mjs';
 
 const $ = id => document.getElementById(id);
@@ -1641,77 +1642,14 @@ $('file').onchange = async () => {
   if (file.size > ui.max_document_bytes) { notice(`The browser adapter opens files up to ${ui.max_document_bytes / 1048576} MiB.`, true); return; }
   await loadDocument(file.text().then(text => api('open', {cdxml: text})), file.name);
 };
-// File > Save copy: the session's document, as a download. An open note is
-// committed first, as leaving it would, and a note that was not saved stops the
-// copy; one copy runs at a time, and a reply for a document since replaced,
-// renamed, edited or busy is not its copy.
-let savingCopy = false;
-$('save').onclick = async () => {
-  if (savingCopy || !editor.document || editor.busy || loading) return;
-  savingCopy = true;
-  try {
-    if (await finishNoteEdit() === false) return;
-    if (!editor.document || editor.busy || loading) return;
-    const {session, revision} = editor.info, name = editor.name;
-    const current = () => !editor.busy && !loading && editor.info?.session === session && editor.info?.revision === revision && editor.name === name;
-    // The session holds embedded images; the browser's copy carries references.
-    try {
-      const {cdxml} = await api('session', {session, revision, action: 'save_cdxml'});
-      if (current()) {
-        download(cdxml, name.replace(/\.cdxml$/i, '') + '-web-copy.cdxml', 'chemical/x-cdxml');
-        notice('Save copy requested. Check your downloads before closing; the original file has not changed.');
-      }
-    } catch (error) { if (current()) notice(error.message, true); }
-  } finally { savingCopy = false; }
-};
-// File > Export Figure: the whole canvas as the desktop's plain SVG figure, as a
-// download. Like Export MOL, an open note is committed first and a note that was
-// not saved stops the export; one export runs at a time, a reply for a document
-// since replaced, renamed, edited or busy is not its figure, and a download
-// clears only the export's own refusal while that is still the notice shown.
-let exportingFigure = false, figureRefusal = null;
-$('export-figure').onclick = async () => {
-  if (exportingFigure || !editor.document || editor.busy || loading) return;
-  exportingFigure = true;
-  try {
-    if (await finishNoteEdit() === false) return;
-    if (!editor.document || editor.busy || loading) return;
-    const {session, revision} = editor.info, name = editor.name;
-    const current = () => !editor.busy && !loading && editor.info?.session === session && editor.info?.revision === revision && editor.name === name;
-    try {
-      const {svg} = await api('session', {session, revision, action: 'export_figure', format: 'svg', scope: 'sheet'});
-      if (current()) {
-        download(svg, name.replace(/\.cdxml$/i, '') + '.svg', 'image/svg+xml');
-        if (figureRefusal === noticeSerial) notice();
-        figureRefusal = null;
-      }
-    } catch (error) { if (current()) { notice(error.message, true); figureRefusal = noticeSerial; } }
-  } finally { exportingFigure = false; }
-};
-// File > Export MOL: the desktop's selected-only Molfile, as a download. An open
-// note is committed first, as leaving it would, and a note that was not saved
-// stops the export; one export runs at a time, and a reply for a document since
-// replaced, renamed, edited or busy is not its MOL. A download clears only the
-// export's own refusal, and only while that is still the notice shown.
-let exportingMol = false, molRefusal = null;
-$('export-mol').onclick = async () => {
-  if (exportingMol || !editor.document || editor.busy || loading) return;
-  exportingMol = true;
-  try {
-    if (await finishNoteEdit() === false) return;
-    if (!editor.document || editor.busy || loading) return;
-    const {session, revision} = editor.info, name = editor.name;
-    const current = () => !editor.busy && !loading && editor.info?.session === session && editor.info?.revision === revision && editor.name === name;
-    try {
-      const {molfile} = await api('session', {session, revision, action: 'export_mol', selection: selectedItems()});
-      if (current()) {
-        download(molfile, name.replace(/\.cdxml$/i, '') + '.mol', 'chemical/x-mdl-molfile');
-        if (molRefusal === noticeSerial) notice();
-        molRefusal = null;
-      }
-    } catch (error) { if (current()) { notice(error.message, true); molRefusal = noticeSerial; } }
-  } finally { exportingMol = false; }
-};
+// File > Save copy, Export Figure and Export MOL (see document_downloads.mjs).
+const downloads = documentDownloads({
+  editor, isLoading: () => loading, finishNoteEdit, api, download, notice,
+  noticeSerial: () => noticeSerial, selectedItems,
+});
+$('save').onclick = downloads.saveCopy;
+$('export-figure').onclick = downloads.exportFigure;
+$('export-mol').onclick = downloads.exportMol;
 for (const action of ['undo', 'redo']) $(action).onclick = async () => {
   cancelGesture(); const pending = editor[action](); render();
   try { await pending; selection = new Set(); } catch (error) { notice(error.message, true); } finally { render(); refreshHover(); }

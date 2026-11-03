@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {SessionClient, sessionDrawing} from '../app/chemvas/web/transport.mjs';
 import {ChemistryClipboard, copySelection, isSelectionText, pasteText, writeSelection} from '../app/chemvas/web/clipboard.mjs';
+import {documentDownloads} from '../app/chemvas/web/document_downloads.mjs';
 import {sceneMarkup, measureAtomLabels, AtomLabelCache, clampView, zoomView, wheelView, pointInSheet, measureGlyphInk, marqueeSelection, measureDocumentLineHeight, selectionFrameMarkup, gridMarkup} from '../app/chemvas/web/scene.mjs';
 
 test('document line height retains the font gap before the native ceiling', () => {
@@ -769,6 +770,22 @@ test('imported marks expose native hit shapes and escape custom text', () => {
 // The page sources as the harnesses below slice them. A Windows checkout may
 // carry CRLF line ends while the slices end at LF boundaries; JavaScript parses
 // either terminator alike, so the executed production code is the same.
+// The page's File downloads over a test context. Each call reads the context's
+// live state, as the page passes its own.
+function contextDownloads(context) {
+  return documentDownloads({
+    editor: context.editor, isLoading: () => context.loading,
+    finishNoteEdit: () => context.finishNoteEdit(), api: (...args) => context.api(...args),
+    download: (...args) => context.download(...args), notice: (...args) => context.notice(...args),
+    noticeSerial: () => context.noticeSerial, selectedItems: () => context.selectedItems(),
+  });
+}
+// The page wires each File download's menu item to the shared action.
+async function assertDownloadWired(id, action) {
+  const source = await webSource('app.mjs');
+  assert.ok(source.includes(`$('${id}').onclick = downloads.${action};`), `${id} is not wired to ${action}`);
+}
+
 async function webSource(name) {
   const {readFile} = await import('node:fs/promises');
   return (await readFile(new URL(`../app/chemvas/web/${name}`, import.meta.url), 'utf8')).replaceAll('\r\n', '\n');
@@ -1674,24 +1691,14 @@ test('browser Undo with nothing to undo still ends an unmatched beforeinput and 
 // them, over an immediate session reply. The page's download helper is
 // replaced, so nothing reaches the file system.
 test('File > Export Figure downloads the accepted whole-canvas SVG without changing the document', async () => {
-  const {runInNewContext} = await import('node:vm');
   const page = await webSource('index.html');
-  const source = await webSource('app.mjs');
   const item = /<button\b([^>]*)>Export Figure…<\/button>/.exec(page);
   assert.ok(item && /\bid="export-figure"/.test(item[1]) && !/\bdisabled\b/.test(item[1]), 'File > Export Figure is not an enabled menu item with id export-figure');
-  const at = source.indexOf("$('export-figure').onclick");
-  assert.ok(at >= 0, 'File > Export Figure has no click handler');
-  // Comments and one-export guards declared just before the handler belong to it.
-  let start = at;
-  for (let end = at - 1; end > 0;) {
-    const begin = source.lastIndexOf('\n', end - 1) + 1;
-    if (!/^(let |\/\/)/.test(source.slice(begin, end))) break;
-    start = begin; end = begin - 1;
-  }
+  await assertDownloadWired('export-figure', 'exportFigure');
   const svg = '<svg xmlns="http://www.w3.org/2000/svg" width="10.5833mm" height="11.9944mm" viewBox="0 0 30 34"/>';
-  const elements = {'export-figure': {}}, requests = [], downloads = [], notices = [];
+  const requests = [], downloads = [], notices = [];
   const context = {
-    $: id => elements[id], loading: false,
+    loading: false,
     editor: {document: {}, busy: false, readOnly: false, info: {session: 's', revision: 4}, name: 'Work.cdxml', canUndo: true, canRedo: false},
     selectedItems: () => [{target: 'bond', id: 0}],
     finishNoteEdit: async () => true,
@@ -1701,8 +1708,7 @@ test('File > Export Figure downloads the accepted whole-canvas SVG without chang
     edit: () => { throw new Error('Export Figure must not edit the document'); },
   };
   const editor = JSON.stringify(context.editor);
-  runInNewContext(source.slice(start, source.indexOf('\n};', at) + 3), context);
-  await elements['export-figure'].onclick();
+  await contextDownloads(context).exportFigure();
   await new Promise(resolve => setImmediate(resolve));
   // The whole canvas as the session's native SVG, named like the desktop's default.
   assert.deepEqual(requests, [['session', {session: 's', revision: 4, action: 'export_figure', format: 'svg', scope: 'sheet'}]]);
@@ -1713,14 +1719,10 @@ test('File > Export Figure downloads the accepted whole-canvas SVG without chang
 
 // File > Export MOL's own handler over a held note commit and session reply.
 async function exportMolHandler() {
-  const {runInNewContext} = await import('node:vm');
-  const source = await webSource('app.mjs');
-  const start = source.indexOf('let exportingMol = false');
-  const end = source.indexOf('\n};', source.indexOf("$('export-mol').onclick", start)) + 3;
-  assert.ok(start >= 0 && end > start);
-  const elements = {'export-mol': {}}, requests = [], downloads = [], notices = [], replies = [], commits = [];
+  await assertDownloadWired('export-mol', 'exportMol');
+  const requests = [], downloads = [], notices = [], replies = [], commits = [];
   const context = {
-    $: id => elements[id], loading: false,
+    loading: false,
     editor: {document: {}, busy: false, info: {session: 's', revision: 4}, name: 'Work.cdxml'},
     selectedItems: () => [{target: 'bond', id: 0}],
     finishNoteEdit: () => new Promise(resolve => commits.push(resolve)),
@@ -1728,10 +1730,10 @@ async function exportMolHandler() {
     download: (...args) => downloads.push(args), noticeSerial: 0,
     notice: (...args) => { notices.push(args); context.noticeSerial++; },
   };
-  runInNewContext(source.slice(start, end), context);
+  const {exportMol} = contextDownloads(context);
   return {context, requests, downloads, notices, replies, commits,
     flush: () => new Promise(resolve => setImmediate(resolve)),
-    click: () => elements['export-mol'].onclick()};
+    click: () => exportMol()};
 }
 
 test('Export MOL commits an open note first, then downloads the selected structure', async () => {
@@ -1825,20 +1827,16 @@ test('a successful Export MOL clears only its own refusal while it is still the 
 // answered by the test and each export answered at once.
 async function noteExportHarness(save) {
   const h = await noteEditorHarness();
-  const {runInNewContext} = await import('node:vm');
-  const source = await webSource('app.mjs');
-  const start = source.indexOf('let exportingMol = false');
-  const end = source.indexOf('\n};', source.indexOf("$('export-mol').onclick", start)) + 3;
-  const elements = {'export-mol': {}}, notices = [], exports = [];
+  const notices = [], exports = [];
   Object.assign(h.context, {
-    $: id => elements[id], noticeSerial: 0, selectedItems: () => [], download() {},
+    noticeSerial: 0, selectedItems: () => [], download() {},
     notice: (...args) => { notices.push(args); h.context.noticeSerial++; },
     edit: async request => { h.edits.push(request); return save(h, request); },
     api: (path, body) => body.action === 'export_mol' ? (exports.push(body.revision), Promise.resolve({molfile: 'MOL\n'})) : new Promise((resolve, reject) => h.replies.push({body, resolve, reject})),
   });
   h.context.editor.name = 'Work.cdxml';
-  runInNewContext(source.slice(start, end), h.context);
-  return Object.assign(h, {notices, exports, exportMol: async () => { await elements['export-mol'].onclick(); await h.settle(); }});
+  const {exportMol} = contextDownloads(h.context);
+  return Object.assign(h, {notices, exports, exportMol: async () => { await exportMol(); await h.settle(); }});
 }
 
 test('a failed note save keeps its text and stops Export MOL without blocking a later export', async () => {
@@ -2576,16 +2574,11 @@ const SAVE_COPY_NOTICE = 'Save copy requested. Check your downloads before closi
 function acceptNoteSave(h, request) { h.stored = request.html; h.context.editor.info.revision += 1; return true; }
 async function noteSaveCopyHarness({save = acceptNoteSave, hold = false} = {}) {
   const h = await noteEditorHarness();
-  const {runInNewContext} = await import('node:vm');
-  const source = await webSource('app.mjs');
-  const at = source.indexOf("$('save').onclick"), guard = source.lastIndexOf('let savingCopy', at);
-  const start = guard >= 0 && !source.slice(guard, at).includes('};') ? guard : at;
-  const end = source.indexOf('\n};', at) + 3;
-  assert.ok(at >= 0 && end > at);
-  const elements = {save: {}}, notices = [], exports = [], downloads = [], pending = [];
+  await assertDownloadWired('save', 'saveCopy');
+  const notices = [], exports = [], downloads = [], pending = [];
   h.stored = h.context.editor.info.drawing.notes[0].html;
   Object.assign(h.context, {
-    $: id => elements[id], download: (...args) => downloads.push(args),
+    download: (...args) => downloads.push(args),
     notice: (...args) => notices.push(args),
     edit: async request => { h.edits.push(request); return save(h, request); },
     api: (_path, body) => {
@@ -2596,10 +2589,10 @@ async function noteSaveCopyHarness({save = acceptNoteSave, hold = false} = {}) {
     },
   });
   h.context.editor.name = 'Work.cdxml';
-  runInNewContext(source.slice(start, end), h.context);
+  const {saveCopy} = contextDownloads(h.context);
   return Object.assign(h, {notices, exports, downloads, pending,
-    click: () => elements.save.onclick(),
-    saveCopy: async () => { await elements.save.onclick(); await h.settle(); },
+    click: () => saveCopy(),
+    saveCopy: async () => { await saveCopy(); await h.settle(); },
     revisions: () => exports.map(body => body.revision),
     // Each downloaded copy's note text, without its markup.
     texts: () => downloads.map(([text]) => text.replace(/<[^>]*>/g, ''))});
@@ -2873,19 +2866,10 @@ const FIGURE_SVG = [
   ''].join('\n');
 const figureRequest = revision => ['session', {session: 's', revision, action: 'export_figure', format: 'svg', scope: 'sheet'}];
 async function exportFigureHandler({mol = false} = {}) {
-  const {runInNewContext} = await import('node:vm');
-  const source = await webSource('app.mjs');
-  const at = source.indexOf("$('export-figure').onclick");
-  assert.ok(at >= 0, 'File > Export Figure has no click handler');
-  let start = at;
-  for (let end = at - 1; end > 0;) {
-    const begin = source.lastIndexOf('\n', end - 1) + 1;
-    if (!/^(let |\/\/)/.test(source.slice(begin, end))) break;
-    start = begin; end = begin - 1;
-  }
-  const elements = {'export-figure': {}, 'export-mol': {}}, requests = [], downloads = [], notices = [], replies = [], commits = [], edits = [];
+  await assertDownloadWired('export-figure', 'exportFigure');
+  const requests = [], downloads = [], notices = [], replies = [], commits = [], edits = [];
   const context = {
-    $: id => elements[id], loading: false,
+    loading: false,
     editor: {document: {}, busy: false, info: {session: 's', revision: 4}, name: 'Work.cdxml'},
     selectedItems: () => [{target: 'bond', id: 0}],
     finishNoteEdit: () => new Promise(resolve => commits.push(resolve)),
@@ -2894,17 +2878,12 @@ async function exportFigureHandler({mol = false} = {}) {
     notice: (...args) => { notices.push(args); context.noticeSerial++; },
     edit: (...args) => { edits.push(args); return Promise.resolve(true); },
   };
-  runInNewContext(source.slice(start, source.indexOf('\n};', at) + 3), context);
-  if (mol) {
-    const from = source.indexOf('let exportingMol = false');
-    const to = source.indexOf('\n};', source.indexOf("$('export-mol').onclick", from)) + 3;
-    assert.ok(from >= 0 && to > from);
-    runInNewContext(source.slice(from, to), context);
-  }
+  // Export MOL, when asked for, shares the page's notice and its own refusal.
+  const {exportFigure, exportMol} = contextDownloads(context);
   return {context, requests, downloads, notices, replies, commits, edits,
     flush: () => new Promise(resolve => setImmediate(resolve)),
-    click: () => elements['export-figure'].onclick(),
-    clickMol: () => elements['export-mol'].onclick()};
+    click: () => exportFigure(),
+    clickMol: () => (mol ? exportMol() : undefined)};
 }
 // One Export Figure over a saved note, refused, answered, or refused only after
 // its document was renamed.
