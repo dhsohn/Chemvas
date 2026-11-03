@@ -13,6 +13,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   public CDXML documents for repeatable editing and export checks. Native bundle
   installation acceptance remains pending.
 
+### Changed
+
+- Import native ChemDraw black Plain and black Filled ``RectangleType`` graphics
+  as editable Chemvas shapes (solid stroke) and write move, resize, recolor and
+  delete back to the original ``<graphic>``. Coloured rectangles stay raster
+  because shapes have no stroke colour; RoundEdge, Shadow, dashed/bold and other
+  unsupported styles stay raster too. Documents previously saved with an
+  embedded Chemvas snapshot keep those rectangles as images until the snapshot
+  is invalidated; reopening native XML alone uses the shape binding for black
+  Plain/Filled.
+
 ### Security
 
 - ``review-cdxml`` and the render layout reference now reject internal DOCTYPE

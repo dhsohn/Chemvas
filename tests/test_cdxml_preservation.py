@@ -323,8 +323,10 @@ def test_native_background_fill_stays_below_bonds():
         )
     )
     state = parse_cdxml_document(raw).state
-    index = state["cdxml_source"]["items"]["images"].index("32")
-    assert state["images"][index]["z"] < 0
+    # Black Filled rectangles import as bound shapes; Z still lives on the native
+    # graphic. Background stacking for non-editable graphics uses image z.
+    assert state["cdxml_source"]["items"]["shapes"].index("32") == 0
+    assert state["shapes"][0]["fill"] == "#000000"
     assert native(state).find('.//graphic[@id="32"]').get("Z") == "10"
 
 

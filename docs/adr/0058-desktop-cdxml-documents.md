@@ -20,11 +20,14 @@ annotation bindings follow stable runtime record identities and are serialized
 alongside item arrays. The native writer updates changed objects by identity
 and retains untouched subtrees, including nested chemistry and reaction steps.
 
-The desktop displays atoms and captions using Chemvas styles. Native curves,
-arrows, brackets, orbital outlines and colored molecular areas have bounded
-raster editing projections; moving/resizing those projections transforms the
-original vector coordinates when saving CDXML. The saved CDXML does not replace
-these objects with bitmaps. It is not a pixel-identical ChemDraw renderer.
+The desktop displays atoms and captions using Chemvas styles. Black Plain and
+black Filled native rectangles import as editable shape records; coloured
+rectangles stay raster because shapes have no stroke colour. Native curves,
+arrows, brackets, orbital outlines, other rectangle styles and colored molecular
+areas have bounded raster editing projections; moving/resizing those projections
+transforms the original vector coordinates when saving CDXML. The saved CDXML
+does not replace these objects with bitmaps. It is not a pixel-identical
+ChemDraw renderer.
 Native chemical properties, including fractional bond orders and contracted
 fragment definitions, remain in XML independently of the drawing projection.
 

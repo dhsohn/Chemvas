@@ -65,7 +65,7 @@ def test_caption_scene_baseline_center_size_and_foreground_preserve_state():
         assert QFontInfo(font).pixelSize() == 5
         assert (
             item.zValue()
-            > next(iter(context.state.scene_items_state.image_items.values())).zValue()
+            > next(iter(context.state.scene_items_state.shape_items.values())).zValue()
         )
         item.setPos(item.pos() + QPointF(7, 9))
         assert item.mapToScene(anchor) == QPointF(-63, -51)
