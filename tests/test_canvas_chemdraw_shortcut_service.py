@@ -511,3 +511,35 @@ class CanvasChemDrawShortcutServiceTest(unittest.TestCase):
         self.assertIn(("benzene", 0), calls)
         self.assertIn(("ring", 0, 6), calls)
         self.assertIn(("chair", 0, True), calls)
+
+
+def test_service_holds_no_reference_cycle_to_itself():
+    import gc
+    import weakref
+
+    from chemvas.ui.canvas.canvas_chemdraw_shortcut_service import (
+        CanvasChemdrawShortcutService,
+    )
+
+    errors: list[str] = []
+    service = CanvasChemdrawShortcutService(
+        lambda: None,
+        hover_state=None,
+        atom_label_service=None,
+        structure_build_service=None,
+        notify_error=errors.append,
+        scene_transform_controller=None,
+        tool_mode_controller=None,
+    )
+    # A replaced error sink still reaches the shared key decisions.
+    service._notify_error = errors.append
+    assert service.text_shortcuts.notify_error == errors.append
+    reference = weakref.ref(service)
+    gc.disable()
+    try:
+        del service
+        # Freed by reference counting alone; a cycle would wait for the
+        # collector, which can then release Qt services at an arbitrary point.
+        assert reference() is None
+    finally:
+        gc.enable()

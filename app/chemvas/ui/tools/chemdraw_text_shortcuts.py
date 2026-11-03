@@ -109,7 +109,7 @@ class ChemdrawTextShortcuts:
         self.atom_labels = atom_labels
         self.structure_build = structure_build
         self.bond_styles = bond_styles
-        self._notify_error = notify_error
+        self.notify_error = notify_error
         self.charges = charges
 
     def handle_atom_text(self, text: str, atom_id: int) -> bool:
@@ -168,7 +168,7 @@ class ChemdrawTextShortcuts:
         try:
             style = bond_shortcut_style(bond, text)
         except ValueError as error:
-            self._notify_error(str(error))
+            self.notify_error(str(error))
             return True
         if style is not None:
             self.bond_styles.apply_bond_style(bond_id, *style)

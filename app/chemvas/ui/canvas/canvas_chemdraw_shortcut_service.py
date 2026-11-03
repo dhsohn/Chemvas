@@ -52,7 +52,6 @@ class CanvasChemdrawShortcutService:
         self.hover_state = hover_state
         self.atom_labels = atom_label_service
         self.structure_build = structure_build_service
-        self._notify_error = notify_error
         self.tool_mode = tool_mode_controller
         self.scene_transform = scene_transform_controller
         self.mark_scene_service = mark_scene_service
@@ -61,10 +60,20 @@ class CanvasChemdrawShortcutService:
             atom_labels=atom_label_service,
             structure_build=structure_build_service,
             bond_styles=scene_transform_controller,
-            # Resolved per call so a replaced error sink is still honored.
-            notify_error=lambda message: self._notify_error(message),
+            notify_error=notify_error,
             charges=mark_scene_service,
         )
+
+    # The error sink lives on the shared decisions, so the service holds no
+    # callback back to itself: a self-referencing cycle would leave this
+    # service, and the Qt services it holds, to the cyclic garbage collector.
+    @property
+    def _notify_error(self) -> Callable[[str], object]:
+        return self.text_shortcuts.notify_error
+
+    @_notify_error.setter
+    def _notify_error(self, notify_error: Callable[[str], object]) -> None:
+        self.text_shortcuts.notify_error = notify_error
 
     def handle_shortcut(self, event: QKeyEvent) -> bool:
         if self.handle_object_shortcut(event):
