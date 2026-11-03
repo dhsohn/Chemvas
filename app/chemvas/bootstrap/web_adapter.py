@@ -341,7 +341,7 @@ from chemvas.ui.insert.template_geometry_resolver_service import (
     TemplateGeometryResolverService,
 )
 from chemvas.ui.molecule.atom_label_merge_service import AtomLabelMergeService
-from chemvas.ui.molecule.atom_label_service import AtomLabelService
+from chemvas.ui.molecule.atom_label_service import AtomLabelPorts, AtomLabelService
 from chemvas.ui.molecule.bond_geometry_plan_service import (
     BondGeometryPlanService,
     BondLinePrimitive,
@@ -511,7 +511,7 @@ from chemvas.ui.window.main_window_toolbar_logic import (
 from chemvas.ui.window.tab_title_logic import APP_TITLE_SUFFIX, UNSAVED_MARKER
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Iterator, Mapping
+    from collections.abc import Callable, Iterable, Iterator, Mapping
 
     from chemvas.domain.document import MoleculeModel
 
@@ -3188,6 +3188,36 @@ class BrowserMarkItem:
         self.record.update(x=center.x(), y=center.y())
 
 
+class _BrowserLabelDrawing:
+    """Label presentation for a candidate: document_info renders it later."""
+
+    def atom_item_for_id(self, atom_id: int) -> None:
+        return None
+
+    def implicit_carbon_dot_brush(self) -> None:
+        return None
+
+    def ensure_carbon_dot(self, atom_id: int) -> None:
+        pass
+
+    def remove_carbon_dot(self, atom_id: int) -> None:
+        pass
+
+    def position_label(self, item: Any, x: float, y: float) -> None:
+        pass
+
+    def relayout_atom_label(self, atom_id: int) -> bool:
+        return False
+
+    def relayout_atom_labels(
+        self, atom_ids: Iterable[int], *, skip_bond_ids: Iterable[int] = ()
+    ) -> None:
+        pass
+
+    def draw_atom(self, atom_id: int, *, visible: bool | None = None) -> None:
+        pass
+
+
 class BrowserAtomLabelService(AtomLabelService):
     """Label service that reports merges, which the desktop records in history."""
 
@@ -3326,16 +3356,18 @@ class BrowserStructureAdapter:
                     arrow_to_state(record)
                 ),
             ),
-            atom_labels=SimpleNamespace(
-                atom_item_for_id=lambda _id: None,
-                ensure_carbon_dot=lambda _id: None,
-                draw_atom=lambda _id, **kwargs: None,
-                relayout_atom_label=lambda _id: False,
-            ),
+            atom_labels=_BrowserLabelDrawing(),
         )
         graph = SimpleNamespace(rebuild_bond_adjacency=lambda: None)
         self.labels = BrowserAtomLabelService(
-            cast("Any", self),
+            AtomLabelPorts(
+                model=lambda: self.model,
+                drawing=self.render_context.atom_labels,
+                # No scene items exist to reselect; labels render afterwards.
+                select_items=lambda _items: None,
+                hovered_atom_id=lambda: self.runtime_state.hover_preview_state.atom_id,
+                add_atom=self.model.add_atom,
+            ),
             graph_service=graph,
             merge_service=AtomLabelMergeService(
                 self, graph_service=graph, capture_history=False

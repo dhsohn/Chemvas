@@ -1,7 +1,8 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
 from functools import cached_property
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Protocol
 
 from chemvas.core.history import history_transaction_scope
 from chemvas.ui.molecule.atom_label_merge_service import AtomLabelMergeService
@@ -9,14 +10,63 @@ from chemvas.ui.molecule.atom_label_merge_service import AtomLabelMergeService
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable
 
+    from chemvas.domain.document import MoleculeModel
     from chemvas.ui.canvas.canvas_view import CanvasView
 
 
+class AtomLabelDrawing(Protocol):
+    """The label presentation a label edit refreshes."""
+
+    def atom_item_for_id(self, atom_id: int) -> Any: ...
+    def implicit_carbon_dot_brush(self) -> Any: ...
+    def ensure_carbon_dot(self, atom_id: int) -> None: ...
+    def remove_carbon_dot(self, atom_id: int) -> None: ...
+    def position_label(self, item: Any, x: float, y: float) -> None: ...
+    def relayout_atom_label(self, atom_id: int) -> bool: ...
+    def relayout_atom_labels(
+        self, atom_ids: Iterable[int], *, skip_bond_ids: Iterable[int] = ()
+    ) -> None: ...
+    def draw_atom(self, atom_id: int, *, visible: bool | None = None) -> None: ...
+
+
+@dataclass(frozen=True, kw_only=True)
+class AtomLabelPorts:
+    """What an unrecorded label edit reads and writes, named instead of a canvas."""
+
+    model: Callable[[], MoleculeModel]
+    drawing: AtomLabelDrawing
+    # Reselect the replacement item when a relabel swaps a selected item.
+    select_items: Callable[[list[Any]], object]
+    hovered_atom_id: Callable[[], int | None]
+    add_atom: Callable[[str, float, float], int]
+
+    @classmethod
+    def for_canvas(cls, canvas: CanvasView) -> AtomLabelPorts:
+        return cls(
+            model=lambda: canvas.model,
+            drawing=canvas.render_context.atom_labels,
+            select_items=lambda items: canvas.services.selection.set_items_selected(
+                items, True, block_signals=False
+            ),
+            hovered_atom_id=lambda: canvas.runtime_state.hover_preview_state.atom_id,
+            add_atom=lambda element, x, y: (
+                canvas.services.canvas_atom_mutation_service.add_atom(element, x, y)
+            ),
+        )
+
+
 class AtomLabelService:
+    """Label edits through explicit ports, plus desktop history and prompting.
+
+    Only recorded edits, their history and the label prompt need the canvas;
+    an editor that records whole-document changes builds one without it.
+    """
+
     def __init__(
         self,
-        canvas: CanvasView,
+        ports: AtomLabelPorts,
         *,
+        canvas: CanvasView | None = None,
         move_controller=None,
         graph_service,
         history_service=None,
@@ -24,16 +74,20 @@ class AtomLabelService:
         merge_service=None,
         connection_allowed=None,
     ) -> None:
-        self.canvas = canvas
+        self.ports = ports
+        self._canvas = canvas
         self.history = history_service
         self.move_controller = move_controller
         self.graph_service = graph_service
         self._hover_refresh = hover_refresh or (lambda: None)
-        self.drawing = canvas.render_context.atom_labels
-        self.merge_service = merge_service or AtomLabelMergeService(
-            canvas, graph_service=graph_service
-        )
+        self.drawing = ports.drawing
+        if merge_service is None:
+            merge_service = AtomLabelMergeService(
+                self.canvas, graph_service=graph_service
+            )
+        self.merge_service = merge_service
         if connection_allowed is None:
+            canvas = self.canvas
             from chemvas.ui.scene.scene_group_operations import (
                 group_connection_allowed_for,
             )
@@ -42,6 +96,19 @@ class AtomLabelService:
                 return group_connection_allowed_for(canvas, ids)
 
         self.connection_allowed = connection_allowed
+
+    @classmethod
+    def for_canvas(cls, canvas: CanvasView, **kwargs: Any) -> AtomLabelService:
+        return cls(AtomLabelPorts.for_canvas(canvas), canvas=canvas, **kwargs)
+
+    @property
+    def canvas(self) -> CanvasView:
+        """The recording canvas; unrecorded label edits never read it."""
+        if self._canvas is None:
+            raise RuntimeError(
+                "This label service records no desktop history and shows no prompt."
+            )
+        return self._canvas
 
     @cached_property
     def _history_recorder(self):
@@ -88,9 +155,7 @@ class AtomLabelService:
             and replacement_item is not None
             and replacement_item is not previous_item
         ):
-            self.canvas.services.selection.set_items_selected(
-                [replacement_item], True, block_signals=False
-            )
+            self.ports.select_items([replacement_item])
         if refresh_hover:
             self._hover_refresh()
 
@@ -102,7 +167,7 @@ class AtomLabelService:
         merge_ids: list[int],
         merge_info: dict,
     ) -> None:
-        atom = self.canvas.model.atom_for_id(atom_id)
+        atom = self.ports.model().atom_for_id(atom_id)
         after_element = atom.element if atom is not None else before_element
         after_explicit_label = (
             atom.explicit_label if atom is not None else before_explicit_label
@@ -166,9 +231,7 @@ class AtomLabelService:
     ) -> int:
         """Add a labelled atom; an unrecorded caller owns the candidate transaction."""
         if not record:
-            atom_id = self.canvas.services.canvas_atom_mutation_service.add_atom(
-                text, x, y
-            )
+            atom_id = self.ports.add_atom(text, x, y)
             self.add_or_update_atom_label(atom_id, text, record=False, show_carbon=True)
             return atom_id
         from chemvas.ui.transactions.document import document_transaction
@@ -177,7 +240,7 @@ class AtomLabelService:
             document_transaction(self.canvas, history_service=self.history),
             history_transaction_scope(self.history.operations),
         ):
-            before_next_atom_id = int(self.canvas.model.next_atom_id)
+            before_next_atom_id = int(self.ports.model().next_atom_id)
             atom_id = self.add_labelled_atom(text, x, y, record=False)
             self._history_recorder.record_added_atom(
                 atom_id, before_next_atom_id=before_next_atom_id
@@ -196,7 +259,7 @@ class AtomLabelService:
     ) -> None:
         text = text.strip()
         show_carbon = bool(show_carbon)
-        atom = self.canvas.model.atoms[atom_id]
+        atom = self.ports.model().atoms[atom_id]
         if allow_merge and text and (text.upper() != "C" or show_carbon):
             merge_ids = self.merge_service._overlapping_atom_ids(atom_id)
             if merge_ids and not self.connection_allowed({atom_id, *merge_ids}):
@@ -207,7 +270,7 @@ class AtomLabelService:
         was_selected = bool(
             previous_atom_item is not None and previous_atom_item.isSelected()
         )
-        refresh_hover = self.canvas.runtime_state.hover_preview_state.atom_id == atom_id
+        refresh_hover = self.ports.hovered_atom_id() == atom_id
         if text:
             atom.element = text
         show_label = bool(text)
@@ -276,7 +339,7 @@ class AtomLabelService:
             )
 
     def atom_label_prompt_initial(self, atom_id: int) -> str | None:
-        atom = self.canvas.model.atom_for_id(atom_id)
+        atom = self.ports.model().atom_for_id(atom_id)
         if atom is None:
             return None
         return (
@@ -309,4 +372,4 @@ class AtomLabelService:
             self.apply_atom_label_prompt(atom_id, text)
 
 
-__all__ = ["AtomLabelService"]
+__all__ = ["AtomLabelDrawing", "AtomLabelPorts", "AtomLabelService"]

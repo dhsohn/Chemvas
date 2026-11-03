@@ -197,7 +197,7 @@ def _atom_label_service(canvas: _FakeCanvas) -> AtomLabelService:
         canvas, graph_service=canvas.services.graph_service, hit_testing_service=None
     )
     canvas.services.selection.set_items_selected = selection.set_items_selected
-    return AtomLabelService(
+    return AtomLabelService.for_canvas(
         canvas,
         move_controller=canvas.services.move_controller,
         graph_service=canvas.services.graph_service,
