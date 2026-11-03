@@ -20,7 +20,7 @@ from chemvas.domain.document.cdxml_stereo_descriptors import (
     bond_edit_keeps_stereo,
 )
 from chemvas.domain.document.inspection import document_annotations, document_model
-from chemvas.features.cdxml_document import _ELEMENTS
+from chemvas.domain.elements import ATOMIC_NUMBERS
 from chemvas.features.cdxml_native_palette import allocate_native_color_index
 
 _GENERIC_NICKNAME = re.compile(r"R[0-9]*|X|A|Q")
@@ -30,7 +30,7 @@ _DOUBLE_POSITIONS = {"double_center": "Center", "double_outer": "Right"}
 def _is_native_pure_element_label(symbol: str) -> bool:
     """True when ``symbol`` may be written as a native ``Element`` atomic number."""
     return (
-        symbol in _ELEMENTS
+        symbol in ATOMIC_NUMBERS
         and symbol not in ATOM_ALIAS_DEFINITIONS
         and symbol not in AMBIGUOUS_ELEMENT_LABELS
     )
@@ -179,7 +179,7 @@ class _NativeWriter:
                 ):
                     e.attrib.pop(prop, None)
                 if _is_native_pure_element_label(symbol):
-                    e.set("Element", str(_ELEMENTS.index(symbol)))
+                    e.set("Element", str(ATOMIC_NUMBERS[symbol]))
                 else:
                     e.attrib.pop("Element", None)
                     e.set("NodeType", "GenericNickname")
@@ -228,7 +228,7 @@ class _NativeWriter:
                 id=self.fresh(),
                 p=f"{after['x'] + self.offset[0]:.12g} {after['y'] + self.offset[1]:.12g}",
                 Element=(
-                    str(_ELEMENTS.index(symbol))
+                    str(ATOMIC_NUMBERS[symbol])
                     if _is_native_pure_element_label(symbol)
                     else "6"
                 ),

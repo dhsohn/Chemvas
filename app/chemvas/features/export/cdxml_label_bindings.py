@@ -29,9 +29,15 @@ from __future__ import annotations
 import hashlib
 import re
 from dataclasses import dataclass
+from types import MappingProxyType
 from typing import TYPE_CHECKING
 
 from chemvas.domain.json_io import strict_json_loads
+from chemvas.features.export.cdxml_label_meanings import (
+    LABEL_BINDING_FIELD_NAMES,
+    LABEL_BINDING_MEANING_FIELDS,
+    SIDECAR_V1_LABEL_MEANINGS,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -53,19 +59,18 @@ def _validate_metadata_xml_text(value: str, where: str) -> None:
         raise ValueError(f"{where}: text contains characters illegal in XML 1.0")
 
 
-# Each meaning names the one extra field it needs. The exporter's
-# CdxmlLabelBinding accepts exactly these meanings and fields and re-checks
-# them; this table only lets the sidecar refuse an unknown key early.
-CDXML_LABEL_BINDING_MEANINGS: Mapping[str, tuple[str, ...]] = {
-    "element": ("element",),
-    "generic_aryl": (),
-    "aryl_fragment": ("fragment",),
-}
+# The meanings each sidecar version accepts, from the shared meaning contract.
+# The exporter's CdxmlLabelBinding re-checks the same contract; these tables
+# only let the sidecar refuse an unknown key early.
+CDXML_LABEL_BINDING_MEANINGS: Mapping[str, tuple[str, ...]] = MappingProxyType(
+    {
+        meaning: fields
+        for meaning, fields in LABEL_BINDING_MEANING_FIELDS.items()
+        if meaning in SIDECAR_V1_LABEL_MEANINGS
+    }
+)
 
-_V2_BINDING_MEANINGS: Mapping[str, tuple[str, ...]] = {
-    **CDXML_LABEL_BINDING_MEANINGS,
-    "aryl_label": ("author_note",),
-}
+_V2_BINDING_MEANINGS: Mapping[str, tuple[str, ...]] = LABEL_BINDING_MEANING_FIELDS
 
 _FORMAT = CDXML_LABEL_BINDINGS_FORMAT
 _VERSION = CDXML_LABEL_BINDINGS_VERSION
@@ -134,11 +139,8 @@ class CdxmlLabelBindingEntry:
             "expected_label": self.expected_label,
             "meaning": self.meaning,
         }
-        if self.meaning == "aryl_label":
-            entry["author_note"] = self.author_note
-        else:
-            for field_name in CDXML_LABEL_BINDING_MEANINGS[self.meaning]:
-                entry[field_name] = getattr(self, field_name)
+        for field_name in LABEL_BINDING_MEANING_FIELDS[self.meaning]:
+            entry[field_name] = getattr(self, field_name)
         return entry
 
 
@@ -385,9 +387,7 @@ def _parse_entry(
         atom_id=atom_id,
         expected_label=expected_label,
         meaning=meaning,
-        element=values.get("element"),
-        fragment=values.get("fragment"),
-        author_note=values.get("author_note"),
+        **{name: values.get(name) for name in LABEL_BINDING_FIELD_NAMES},
     )
 
 

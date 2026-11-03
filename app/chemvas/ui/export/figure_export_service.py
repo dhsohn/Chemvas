@@ -111,6 +111,9 @@ class FigureExportService:
         then is the stated meaning handed to the exporter, which still decides
         whether that meaning fits the label.
         """
+        from chemvas.features.export.cdxml_label_meanings import (
+            LABEL_BINDING_FIELD_NAMES,
+        )
         from chemvas.ui.export.export_cdxml import CdxmlLabelBinding
         from chemvas.ui.export.export_scope import export_item_closure
 
@@ -138,9 +141,7 @@ class FigureExportService:
                 )
             typed[entry.atom_id] = CdxmlLabelBinding(
                 entry.meaning,
-                element=entry.element,
-                fragment=entry.fragment,
-                author_note=entry.author_note,
+                **{name: getattr(entry, name) for name in LABEL_BINDING_FIELD_NAMES},
             )
         return typed
 

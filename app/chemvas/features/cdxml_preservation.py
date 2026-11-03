@@ -15,7 +15,7 @@ from typing import Any, NoReturn
 
 from chemvas.domain.document import CANVAS_FILE_VERSION, build_document_payload
 from chemvas.domain.document.cdxml_source import parse_native_xml
-from chemvas.features.cdxml_document import _ELEMENTS
+from chemvas.domain.elements import element_symbol
 from chemvas.features.document_composition import compose_document_state
 
 
@@ -173,7 +173,8 @@ class PreservingImporter:
         text = e.find("t")
         label = "".join(text.itertext()).strip() if text is not None else ""
         z = int(e.get("Element", "6"))
-        if not 0 < z < len(_ELEMENTS):
+        element = element_symbol(z)
+        if element is None:
             self.unsupported(e, "atomic number")
         kind = e.get("NodeType", "Element")
         if kind not in {
@@ -184,7 +185,7 @@ class PreservingImporter:
             "Unspecified",
         }:
             self.unsupported(e, "unsupported visible node type")
-        symbol = label or _ELEMENTS[z]
+        symbol = label or element
         if kind != "Element" and not label:
             self.unsupported(e, "missing contracted node label")
         x, y = self.point(e.get("p", ""), e)

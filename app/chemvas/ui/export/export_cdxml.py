@@ -30,6 +30,7 @@ from chemvas.domain.document import (
     Shape,
     connected_atom_components,
 )
+from chemvas.domain.elements import ATOMIC_NUMBERS
 from chemvas.features.annotations import (
     BRACKET_SYMBOLS,
     bracket_path_commands,
@@ -42,6 +43,10 @@ from chemvas.features.export import (
     CdxmlTextLayoutReference,
     authorize_documentary_contact_for_export,
     reflow_cdxml_captions,
+)
+from chemvas.features.export.cdxml_label_meanings import (
+    LABEL_BINDING_FIELD_NAMES,
+    LABEL_BINDING_MEANING_FIELDS,
 )
 from chemvas.features.rendering import arrow_path_commands
 from chemvas.ui.annotations.shape_geometry import shape_outline, shape_stroke_width
@@ -76,22 +81,6 @@ if TYPE_CHECKING:
     from chemvas.ui.scene.scene_render_context import SceneRenderContext
 
 GroupsProvider = Mapping[int, "SceneGroup"]
-
-
-# ── Element-to-atomic-number mapping (pure elements only) ──────────────
-
-_ELEMENT_TO_Z: dict[str, int] = {}
-_z = 0
-for _sym in (
-    "H He Li Be B C N O F Ne Na Mg Al Si P S Cl Ar K Ca Sc Ti V Cr Mn Fe Co Ni "
-    "Cu Zn Ga Ge As Se Br Kr Rb Sr Y Zr Nb Mo Tc Ru Rh Pd Ag Cd In Sn Sb Te I Xe "
-    "Cs Ba La Ce Pr Nd Pm Sm Eu Gd Tb Dy Ho Er Tm Yb Lu Hf Ta W Re Os Ir Pt Au Hg "
-    "Tl Pb Bi Po At Rn Fr Ra Ac Th Pa U Np Pu Am Cm Bk Cf Es Fm Md No Lr Rf Db Sg "
-    "Bh Hs Mt Ds Rg Cn Nh Fl Mc Lv Ts Og"
-).split():
-    _z += 1
-    _ELEMENT_TO_Z[_sym] = _z
-del _z, _sym
 
 
 # ── Atom label semantics ───────────────────────────────────────────────
@@ -774,7 +763,7 @@ def _resolve_label_plan(
             "element-identity binding was supplied for it; blocked until that "
             "meaning is supplied",
         )
-    z = _ELEMENT_TO_Z.get(label)
+    z = ATOMIC_NUMBERS.get(label)
     if z is None:
         raise _refuse_atom(atom_id, f"label '{label}' is not a pure element symbol")
     return _LabelPlan(atomic_number=z)
@@ -798,7 +787,7 @@ def _bound_label_plan(
         )
     if binding.meaning == "element":
         symbol = binding.element
-        z = _ELEMENT_TO_Z.get(symbol) if isinstance(symbol, str) else None
+        z = ATOMIC_NUMBERS.get(symbol) if isinstance(symbol, str) else None
         if z is None:
             raise _refuse_atom(
                 atom_id, f"bound element '{symbol}' is not a pure element symbol"
@@ -858,15 +847,6 @@ def _bound_label_plan(
     raise _refuse_atom(atom_id, f"unknown label binding meaning {binding.meaning!r}")
 
 
-# Each binding meaning names the one field it needs; the other must be absent.
-_BINDING_FIELDS: Mapping[str, tuple[str, ...]] = {
-    "element": ("element",),
-    "generic_aryl": (),
-    "aryl_fragment": ("fragment",),
-    "aryl_label": ("author_note",),
-}
-
-
 def _check_binding_fields(atom_id: int, binding: CdxmlLabelBinding) -> None:
     """Refuse a binding whose fields contradict or do not fit its meaning.
 
@@ -875,10 +855,10 @@ def _check_binding_fields(atom_id: int, binding: CdxmlLabelBinding) -> None:
     a ``str`` is refused rather than dropped or converted.
     """
     meaning = binding.meaning
-    if type(meaning) is not str or meaning not in _BINDING_FIELDS:
+    if type(meaning) is not str or meaning not in LABEL_BINDING_MEANING_FIELDS:
         raise _refuse_atom(atom_id, f"unknown label binding meaning {meaning!r}")
-    required = _BINDING_FIELDS[meaning]
-    for field_name in ("element", "fragment", "author_note"):
+    required = LABEL_BINDING_MEANING_FIELDS[meaning]
+    for field_name in LABEL_BINDING_FIELD_NAMES:
         value = getattr(binding, field_name)
         if field_name not in required:
             if value is not None:
@@ -2763,7 +2743,7 @@ def _serialize_fragments(
                         label_plan.generic_nickname is not None
                         or (
                             atom.element in {"P", "O", "H"}
-                            and _ELEMENT_TO_Z[atom.element] == z
+                            and ATOMIC_NUMBERS[atom.element] == z
                         )
                         or (
                             atom.element in {"Me", "tBu"}
@@ -3171,7 +3151,7 @@ def _add_charged_atom_definitions(fragment: ET.Element, ids: _IdAllocator) -> No
         if not charge or label is None:
             continue
         atomic_number = node.get("Element", "6")
-        symbol = next(k for k, v in _ELEMENT_TO_Z.items() if str(v) == atomic_number)
+        symbol = next(k for k, v in ATOMIC_NUMBERS.items() if str(v) == atomic_number)
         del node.attrib["Charge"]
         node.attrib.pop("Element", None)
         node.set("NodeType", "Fragment")
