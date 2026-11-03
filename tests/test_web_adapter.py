@@ -392,6 +392,86 @@ def test_existing_desktop_history_owns_browser_undo_and_rejected_edits():
     assert session.info["document"] == ring["document"]
 
 
+def test_browser_collection_edits_keep_native_cdxml_links_with_their_records():
+    import xml.etree.ElementTree as ET
+
+    from chemvas.domain.document import CANVAS_FILE_VERSION, build_document_payload
+    from chemvas.features.cdxml_document import parse_cdxml_document
+
+    raw = (
+        b'<CDXML><page id="1" BoundingBox="0 0 400 300">'
+        b'<fragment id="30"><n id="31" p="40 50"/><n id="32" p="60 50"/>'
+        b'<b id="33" B="31" E="32"/></fragment>'
+        b'<arrow id="10" Tail3D="20 90 0" Head3D="100 90 0" ArrowheadHead="Full"/>'
+        b'<arrow id="11" Tail3D="20 130 0" Head3D="100 130 0" ArrowheadHead="Full"/>'
+        b"</page></CDXML>"
+    )
+    source = build_document_payload(
+        parse_cdxml_document(raw).state, CANVAS_FILE_VERSION
+    )
+    session = BrowserSession()
+    loaded = session.dispatch({"revision": 0, "action": "load", "document": source})[
+        "document"
+    ]
+
+    def links(document):
+        return document["state"]["cdxml_source"]["items"]
+
+    def edit(change):
+        return session.dispatch(
+            {"revision": session.revision, "action": "edit", "edit": change}
+        )["document"]
+
+    assert links(loaded) == {"notes": [], "images": [], "arrows": ["10", "11"]}
+    # A new note is unbound; it used to be refused as invalid note bindings.
+    noted = edit({"kind": "note_text", "id": None, "html": "<p>hi</p>", "x": 0, "y": 0})
+    assert links(noted)["notes"] == [None]
+    assert (
+        session.dispatch({"revision": session.revision, "action": "undo"})["document"]
+        == loaded
+    )
+    assert (
+        session.dispatch({"revision": session.revision, "action": "redo"})["document"]
+        == noted
+    )
+    # Deleting the first native arrow keeps the second one's link.
+    deleted = edit(
+        {"kind": "delete_selection", "selection": [{"target": "arrow", "id": 0}]}
+    )
+    assert links(deleted) == {"notes": [None], "images": [], "arrows": ["11"]}
+
+    saved = session.dispatch({"revision": session.revision, "action": "save_cdxml"})[
+        "cdxml"
+    ]
+    root = ET.fromstring(saved)
+    assert [arrow.get("id") for arrow in root.iter("arrow")] == ["11"]
+    assert [node.get("id") for node in root.iter("n")] == ["31", "32"]
+    assert ["".join(text.itertext()) for text in root.iter("t")] == ["hi"]
+    reopened = BrowserSession().dispatch(
+        {"revision": 0, "action": "load", "document": read_payload(saved)}
+    )["document"]
+    assert reopened["state"]["notes"] == deleted["state"]["notes"]
+    assert links(reopened) == links(deleted)
+
+
+def test_record_links_do_not_bind_a_new_record_that_reuses_a_freed_identity():
+    from chemvas.domain.document.cdxml_source import (
+        capture_record_links,
+        rebind_record_links,
+    )
+
+    note = {"text": "native"}
+    state = {"notes": [note], "cdxml_source": {"items": {"notes": ["40"]}}}
+    links = capture_record_links(state)
+    state["notes"] = []
+    del note
+    # The captured link keeps the dropped record alive, so its identity
+    # cannot pass to the record added after it.
+    state["notes"].append({"text": "new"})
+    rebind_record_links(state, links)
+    assert state["cdxml_source"]["items"]["notes"] == [None]
+
+
 def test_browser_ui_uses_the_desktop_definitions():
     from chemvas.shell.icon_design import design_icon_svg
     from chemvas.shell.palette import PALETTE

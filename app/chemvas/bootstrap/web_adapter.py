@@ -72,6 +72,10 @@ from chemvas.domain.document import (
     serialize_model_state_with_warnings,
     unmarked_isolated_carbon_ids,
 )
+from chemvas.domain.document.cdxml_source import (
+    capture_record_links,
+    rebind_record_links,
+)
 from chemvas.domain.document.groups import SceneGroup
 from chemvas.domain.document.images import (
     MAX_DOCUMENT_BYTES,
@@ -6678,6 +6682,9 @@ def edit_document(
         if daggers and font is not None
         else None,
     )
+    # Edits add, drop and update collection records as objects; native links
+    # follow the records rather than their indices.
+    record_links = capture_record_links(candidate)
     shortcut_tool = None
     edit_notice = None
     snap_marks = None
@@ -6852,6 +6859,7 @@ def edit_document(
         adapter.set_drawing_settings(edit)
     else:
         raise ValueError("Unsupported edit or unexpected fields.")
+    rebind_record_links(candidate, record_links)
     if adapter.candidate_accepted:
         adapter.publish_perspective()
         adapter.publish_groups()

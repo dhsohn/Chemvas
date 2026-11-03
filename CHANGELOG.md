@@ -21,6 +21,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- The browser editor can add a note to an editable imported CDXML document and
+  delete one of its native arrows. Native links now follow their records
+  through the edit, so these changes are no longer refused as invalid bindings
+  and the saved file keeps the remaining native objects.
 - Reject a retained CDXML source whose atom or bond bindings name records
   missing from its baseline, bind an atom to anything but a top-level native
   atom node, or bind a bond to anything but a native bond joining its atoms'
