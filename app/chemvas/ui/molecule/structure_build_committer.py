@@ -12,8 +12,9 @@ from chemvas.ui.molecule.bond_renderer_access import update_bond_geometry_for
 from chemvas.ui.molecule.structure_mutation_access import add_bond_for
 
 if TYPE_CHECKING:
-    from collections.abc import Sequence
+    from collections.abc import Callable, MutableMapping, Sequence
 
+    from chemvas.domain.document import MoleculeModel
     from chemvas.domain.points import PointLike
     from chemvas.ui.canvas.canvas_view import CanvasView
     from chemvas.ui.transactions.document import DocumentSavepoint
@@ -27,9 +28,85 @@ class StructureBuildHistorySnapshot:
     exact_transaction: DocumentSavepoint
 
 
+@dataclass(frozen=True, kw_only=True)
+class StructureEditPorts[RingItem]:
+    """What the structure edits read and write, named instead of a canvas.
+
+    The desktop builds these from its canvas services; the browser editor
+    passes its candidate model and its own ring and label collaborators.
+    """
+
+    model: Callable[[], MoleculeModel]
+    bond_length: Callable[[], float]
+    atom_bond_ids: Callable[[], MutableMapping[int, set[int]]]
+    add_atom: Callable[[str, float, float], int]
+    add_bond: Callable[[int, int, int], int]
+    add_bond_graphics: Callable[[int], object]
+    # Refresh an existing bond's geometry, allowing its topology to rebuild.
+    update_bond_geometry: Callable[[int], object]
+    add_or_update_atom_label: Callable[..., object]
+    # The ring fill item is the editor's own: a Qt item or a document record.
+    create_ring_fill_item: Callable[[list, list[int]], RingItem]
+    attach_scene_item: Callable[[RingItem], object]
+
+    @classmethod
+    def for_canvas(cls, canvas: CanvasView) -> StructureEditPorts[Any]:
+        # Services are read at call time: the committer is built while the
+        # canvas wires its services together.
+        services = lambda: canvas.services  # noqa: E731 - late-bound accessor
+        return cls(
+            model=lambda: canvas.model,
+            bond_length=lambda: canvas.renderer.style.bond_length_px,
+            atom_bond_ids=lambda: canvas.runtime_state.graph_state.atom_bond_ids,
+            add_atom=lambda element, x, y: (
+                services().canvas_atom_mutation_service.add_atom(element, x, y)
+            ),
+            add_bond=lambda a_id, b_id, order: add_bond_for(canvas, a_id, b_id, order),
+            add_bond_graphics=lambda bond_id: canvas.bond_renderer.add_bond_graphics(
+                bond_id
+            ),
+            update_bond_geometry=lambda bond_id: update_bond_geometry_for(
+                canvas, bond_id, allow_topology_rebuild=True
+            ),
+            add_or_update_atom_label=lambda *args, **kwargs: (
+                services().atom_label_service.add_or_update_atom_label(*args, **kwargs)
+            ),
+            create_ring_fill_item=lambda points, atom_ids: (
+                services().canvas_ring_fill_scene_service.create_ring_fill_item(
+                    points, atom_ids
+                )
+            ),
+            attach_scene_item=lambda item: (
+                services().scene_item_controller.attach_scene_item(item)
+            ),
+        )
+
+
 class StructureBuildCommitter:
-    def __init__(self, canvas: CanvasView) -> None:
-        self.canvas = canvas
+    """Structure edits through explicit ports, plus desktop history recording.
+
+    Only the recorded-change and scene-render methods need the canvas; an
+    editor that records whole-document changes itself builds one without it.
+    """
+
+    def __init__(
+        self, ports: StructureEditPorts[Any], *, canvas: CanvasView | None = None
+    ) -> None:
+        self.ports = ports
+        self._canvas = canvas
+
+    @classmethod
+    def for_canvas(cls, canvas: CanvasView) -> StructureBuildCommitter:
+        return cls(StructureEditPorts.for_canvas(canvas), canvas=canvas)
+
+    @property
+    def canvas(self) -> CanvasView:
+        """The recording canvas; edits never read it."""
+        if self._canvas is None:
+            raise RuntimeError(
+                "This structure committer records no desktop history or scene."
+            )
+        return self._canvas
 
     def begin_recorded_change(self) -> StructureBuildHistorySnapshot:
         from chemvas.ui.transactions.document import DocumentSavepoint
@@ -132,25 +209,25 @@ class StructureBuildCommitter:
         return merged
 
     def add_bond_graphics(self, bond_id: int) -> None:
-        self.canvas.bond_renderer.add_bond_graphics(bond_id)
+        self.ports.add_bond_graphics(bond_id)
 
     def add_atom(self, element: str, x: float, y: float) -> int:
-        return self.canvas.services.canvas_atom_mutation_service.add_atom(element, x, y)
+        return self.ports.add_atom(element, x, y)
 
     def add_bond(
         self, a_id: int, b_id: int, order: int = 1, *, style: str = "single"
     ) -> int:
-        bond_id = add_bond_for(self.canvas, a_id, b_id, order)
-        bond = self.canvas.model.bond_for_id(bond_id)
+        bond_id = self.ports.add_bond(a_id, b_id, order)
+        bond = self.ports.model().bond_for_id(bond_id)
         if bond is not None:
             bond.style = style
         return bond_id
 
     def bond_id_between(self, a_id: int, b_id: int) -> int | None:
-        return first_matching_bond_id(self.canvas.model.bonds, a_id, b_id)
+        return first_matching_bond_id(self.ports.model().bonds, a_id, b_id)
 
     def add_bond_graphics_range(self, start_bond_id: int) -> None:
-        model = self.canvas.model
+        model = self.ports.model()
         atom_ids: set[int] = set()
         for bond_id in model.bond_ids_from(start_bond_id):
             self.add_bond_graphics(bond_id)
@@ -161,15 +238,13 @@ class StructureBuildCommitter:
         # Ring membership/fill and all new neighbours must already be present.
         internal, dependent = geometry_bond_sets_for_atom_ids(
             atom_ids,
-            self.canvas.runtime_state.graph_state.atom_bond_ids,
+            self.ports.atom_bond_ids(),
             model.bonds,
             bond_for_id=model.bond_for_id,
         )
         for bond_id in internal | dependent:
             if bond_id < start_bond_id:
-                update_bond_geometry_for(
-                    self.canvas, bond_id, allow_topology_rebuild=True
-                )
+                self.ports.update_bond_geometry(bond_id)
 
     def add_atom_label(
         self,
@@ -182,17 +257,15 @@ class StructureBuildCommitter:
         kwargs = {"record": record, "allow_merge": False}
         if show_carbon:
             kwargs["show_carbon"] = True
-        self.canvas.services.atom_label_service.add_or_update_atom_label(
-            atom_id, element, **kwargs
-        )
+        self.ports.add_or_update_atom_label(atom_id, element, **kwargs)
 
     def label_non_carbon_atoms(self, atom_ids: list[int], elements: list[str]) -> None:
         for atom_id, element in zip(atom_ids, elements, strict=False):
             if element != "C":
-                atom = self.canvas.model.atom_for_id(atom_id)
+                atom = self.ports.model().atom_for_id(atom_id)
                 if atom is None:
                     continue
-                self.canvas.services.atom_label_service.add_or_update_atom_label(
+                self.ports.add_or_update_atom_label(
                     atom_id,
                     atom.element,
                     record=False,
@@ -209,7 +282,7 @@ class StructureBuildCommitter:
         return atom_id
 
     def match_ring_atom(self, point: PointLike, merge: list) -> int | None:
-        tol = self.canvas.renderer.style.bond_length_px * 0.2
+        tol = self.ports.bond_length() * 0.2
         for entry in merge:
             atom_id, x, y = entry
             if abs(point.x() - x) < tol and abs(point.y() - y) < tol:
@@ -220,7 +293,7 @@ class StructureBuildCommitter:
         self, points: Sequence[PointLike], merge: list
     ) -> list[int]:
         candidates = list(merge)
-        next_id = self.canvas.model.next_atom_id
+        next_id = self.ports.model().next_atom_id
         atom_ids = []
         for point in points:
             atom_id = self.match_ring_atom(point, candidates)
@@ -245,7 +318,7 @@ class StructureBuildCommitter:
             element = elements[idx] if elements else "C"
             atom_ids.append(self.add_atom_with_merge(point, element, merge))
         resolved_bond_orders = self.resolved_ring_bond_orders(atom_ids, bond_orders)
-        bonds_start = len(self.canvas.model.bonds)
+        bonds_start = len(self.ports.model().bonds)
         for index in range(len(atom_ids)):
             order = resolved_bond_orders[index]
             a_id = atom_ids[index]
@@ -261,12 +334,8 @@ class StructureBuildCommitter:
     def add_ring_fill(self, points, atom_ids: list[int]):
         if len(points) < 3:
             return None
-        ring_item = (
-            self.canvas.services.canvas_ring_fill_scene_service.create_ring_fill_item(
-                list(points), list(atom_ids)
-            )
-        )
-        self.canvas.services.scene_item_controller.attach_scene_item(ring_item)
+        ring_item = self.ports.create_ring_fill_item(list(points), list(atom_ids))
+        self.ports.attach_scene_item(ring_item)
         return ring_item
 
     def resolved_ring_bond_orders(
@@ -320,7 +389,7 @@ class StructureBuildCommitter:
         self, atom_ids: list[int], bond_orders: list[int]
     ) -> int:
         sums = {atom_id: 0 for atom_id in atom_ids}
-        for bond in self.canvas.model.bonds:
+        for bond in self.ports.model().bonds:
             if bond is None:
                 continue
             if bond.a in sums:
@@ -343,7 +412,7 @@ class StructureBuildCommitter:
         for index, order in enumerate(bond_orders):
             a_id = atom_ids[index]
             b_id = atom_ids[(index + 1) % len(atom_ids)]
-            existing_bond = self.canvas.model.bond_for_id(
+            existing_bond = self.ports.model().bond_for_id(
                 self.bond_id_between(a_id, b_id)
             )
             if existing_bond is not None:
@@ -365,4 +434,8 @@ class StructureBuildCommitter:
         render_molecule(context)
 
 
-__all__ = ["StructureBuildCommitter", "StructureBuildHistorySnapshot"]
+__all__ = [
+    "StructureBuildCommitter",
+    "StructureBuildHistorySnapshot",
+    "StructureEditPorts",
+]
