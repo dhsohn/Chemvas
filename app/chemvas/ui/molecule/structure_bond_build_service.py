@@ -14,8 +14,7 @@ from chemvas.features.rendering import (
 from chemvas.ui.canvas.canvas_window_access import notify_error_for
 
 if TYPE_CHECKING:
-    from PyQt6.QtCore import QPointF
-
+    from chemvas.domain.points import PointLike
     from chemvas.ui.molecule.structure_build_committer import StructureBuildCommitter
 
 
@@ -39,8 +38,8 @@ class StructureBondBuildService:
 
     def add_bond_between_points(
         self,
-        start: QPointF,
-        end: QPointF,
+        start: PointLike,
+        end: PointLike,
         style: str,
         order: int,
         *,

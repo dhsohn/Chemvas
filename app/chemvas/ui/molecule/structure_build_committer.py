@@ -12,8 +12,9 @@ from chemvas.ui.molecule.bond_renderer_access import update_bond_geometry_for
 from chemvas.ui.molecule.structure_mutation_access import add_bond_for
 
 if TYPE_CHECKING:
-    from PyQt6.QtCore import QPointF
+    from collections.abc import Sequence
 
+    from chemvas.domain.points import PointLike
     from chemvas.ui.canvas.canvas_view import CanvasView
     from chemvas.ui.transactions.document import DocumentSavepoint
 
@@ -199,7 +200,7 @@ class StructureBuildCommitter:
                     show_carbon=False,
                 )
 
-    def add_atom_with_merge(self, point: QPointF, element: str, merge: list) -> int:
+    def add_atom_with_merge(self, point: PointLike, element: str, merge: list) -> int:
         existing = self.match_ring_atom(point, merge)
         if existing is not None:
             return existing
@@ -207,7 +208,7 @@ class StructureBuildCommitter:
         merge.append((atom_id, point.x(), point.y()))
         return atom_id
 
-    def match_ring_atom(self, point: QPointF, merge: list) -> int | None:
+    def match_ring_atom(self, point: PointLike, merge: list) -> int | None:
         tol = self.canvas.renderer.style.bond_length_px * 0.2
         for entry in merge:
             atom_id, x, y = entry
@@ -215,7 +216,9 @@ class StructureBuildCommitter:
                 return atom_id
         return None
 
-    def planned_ring_atom_ids(self, points: list[QPointF], merge: list) -> list[int]:
+    def planned_ring_atom_ids(
+        self, points: Sequence[PointLike], merge: list
+    ) -> list[int]:
         candidates = list(merge)
         next_id = self.canvas.model.next_atom_id
         atom_ids = []

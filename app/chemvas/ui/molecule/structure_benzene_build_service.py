@@ -15,6 +15,7 @@ if TYPE_CHECKING:
 
     from PyQt6.QtCore import QPointF
 
+    from chemvas.domain.points import PointLike
     from chemvas.ui.molecule.structure_build_committer import StructureBuildCommitter
 
 
@@ -23,6 +24,12 @@ class BenzenePlacement:
     points: list[QPointF]
     merge: list[tuple[int, float, float]]
     bond_orders: list[int]
+
+
+def _qpoint(point: PointLike) -> QPointF:
+    from PyQt6.QtCore import QPointF
+
+    return QPointF(point.x(), point.y())
 
 
 class StructureBenzeneBuildService:
@@ -45,7 +52,7 @@ class StructureBenzeneBuildService:
 
     def benzene_ring_points(
         self,
-        center: QPointF,
+        center: PointLike,
         attach_atom_id: int | None = None,
         attach_bond_id: int | None = None,
         *,
@@ -66,8 +73,10 @@ class StructureBenzeneBuildService:
             center_inside_existing_ring=lambda: (
                 self.center_inside_existing_ring(center)
                 if self.center_inside_existing_ring is not None
+                # Qt's polygon test needs a real QPointF, whatever point type
+                # the caller placed the ring with.
                 else point_inside_any_ring(
-                    center, ring_items=self.canvas.runtime_state.ring_items()
+                    _qpoint(center), ring_items=self.canvas.runtime_state.ring_items()
                 )
             ),
             regular_ring_points_for_bond=(
@@ -82,7 +91,7 @@ class StructureBenzeneBuildService:
 
     def add_benzene_ring(
         self,
-        center: QPointF,
+        center: PointLike,
         attach_atom_id: int | None = None,
         attach_bond_id: int | None = None,
         *,
@@ -115,7 +124,7 @@ class StructureBenzeneBuildService:
 
     def plan_placement(
         self,
-        center: QPointF,
+        center: PointLike,
         attach_atom_id: int | None,
         attach_bond_id: int | None,
         *,
@@ -190,7 +199,7 @@ class StructureBenzeneBuildService:
 
     def build_benzene_ring(
         self,
-        center: QPointF,
+        center: PointLike,
         attach_atom_id: int | None = None,
         attach_bond_id: int | None = None,
         *,

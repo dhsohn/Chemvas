@@ -4348,17 +4348,14 @@ class BrowserStructureAdapter:
             bond_length=self.renderer.style.bond_length_px,
         )
         if short_click:
-            end_point = cast(
-                "BrowserPoint",
-                default_bond_endpoint_for(
-                    self, cast("Any", start_point), start_id, point_factory=BrowserPoint
-                ),
+            end_point = default_bond_endpoint_for(
+                self, start_point, start_id, point_factory=BrowserPoint
             )
         else:
             end_point = BrowserPoint(*endpoint)
         self.bond_builder.add_bond_between_points(
-            cast("Any", start_point),
-            cast("Any", end_point),
+            start_point,
+            end_point,
             style,
             BOND_ORDERS[style],
             record=False,
@@ -4717,8 +4714,7 @@ class BrowserStructureAdapter:
         resolution = TemplateGeometryResolverService(
             self, point_factory=BrowserPoint
         ).resolve_insert(request, plan)
-        # The committer is typed for Qt points; BrowserPoint offers the same x()/y().
-        committer = cast("Any", self.committer)
+        committer = self.committer
         if (
             resolution is None
             or resolution.points is None
@@ -4779,7 +4775,7 @@ class BrowserStructureAdapter:
             ):
                 return None
             placement = self.builder.plan_placement(
-                cast("Any", BrowserPoint(x, y)),
+                BrowserPoint(x, y),
                 plan.atom_id,
                 plan.bond_id,
                 benzene_ring_points=self.ring_points,
@@ -4872,7 +4868,7 @@ class BrowserStructureAdapter:
                     "z": ATOM_HOVER_Z,
                 }
             end = default_bond_endpoint_for(
-                self, cast("Any", start), atom_id, point_factory=BrowserPoint
+                self, start, atom_id, point_factory=BrowserPoint
             )
             preview_id = self.model.add_bond(
                 start_id, self.model.add_atom("C", end.x(), end.y()), order
@@ -4916,7 +4912,7 @@ class BrowserStructureAdapter:
             growth_anchors(self.model.bonds, atom_id=atom_id, bond_id=bond_id)
         )
         self.builder.build_benzene_ring(
-            cast("Any", BrowserPoint(x, y)),
+            BrowserPoint(x, y),
             atom_id,
             bond_id,
             benzene_ring_points=self.ring_points,
