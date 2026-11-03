@@ -776,7 +776,7 @@ def test_failed_shared_ring_build_keeps_document_history_and_identifiers(monkeyp
     original = StructureBuildCommitter.add_bond
 
     def fail_after_first_bond(self, *args, **kwargs):
-        if len(self.canvas.model.bonds):
+        if len(self.ports.model().bonds):
             raise ValueError("injected construction failure")
         return original(self, *args, **kwargs)
 
@@ -1117,7 +1117,7 @@ def test_failed_bond_build_keeps_candidate_private_and_redo_available(monkeypatc
     before = deepcopy(session.info)
 
     def fail_after_atoms(self, *args, **kwargs):
-        assert len(self.canvas.model.atoms) == 2
+        assert len(self.ports.model().atoms) == 2
         raise ValueError("injected bond failure")
 
     monkeypatch.setattr(StructureBuildCommitter, "add_bond", fail_after_atoms)

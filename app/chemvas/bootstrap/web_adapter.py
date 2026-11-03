@@ -357,7 +357,10 @@ from chemvas.ui.molecule.structure_benzene_build_service import (
     StructureBenzeneBuildService,
 )
 from chemvas.ui.molecule.structure_bond_build_service import StructureBondBuildService
-from chemvas.ui.molecule.structure_build_committer import StructureBuildCommitter
+from chemvas.ui.molecule.structure_build_committer import (
+    StructureBuildCommitter,
+    StructureEditPorts,
+)
 from chemvas.ui.molecule.structure_geometry_access import (
     cyclohexane_chair_points_for,
     default_bond_endpoint_for,
@@ -3342,7 +3345,26 @@ class BrowserStructureAdapter:
                 (atom_id, removed)
             ),
         )
-        self.committer = StructureBuildCommitter(cast("Any", self))
+        # Builds commit into the candidate model; document_info renders the
+        # accepted candidate, so graphics and geometry refreshes do nothing here.
+        self.committer = StructureBuildCommitter(
+            StructureEditPorts(
+                model=lambda: self.model,
+                bond_length=lambda: self.renderer.style.bond_length_px,
+                atom_bond_ids=lambda: self.runtime_state.graph_state.atom_bond_ids,
+                add_atom=self.model.add_atom,
+                add_bond=self.model.add_bond,
+                add_bond_graphics=lambda _bond_id: None,
+                update_bond_geometry=lambda _bond_id: None,
+                add_or_update_atom_label=self.labels.add_or_update_atom_label,
+                create_ring_fill_item=lambda points, atom_ids: (
+                    self.services.canvas_ring_fill_scene_service.create_ring_fill_item(
+                        points, atom_ids
+                    )
+                ),
+                attach_scene_item=self.attach_ring,
+            )
+        )
         self.bond_builder = StructureBondBuildService(
             self,
             self.committer,
@@ -3389,11 +3411,8 @@ class BrowserStructureAdapter:
 
         self.growth = StructureGrowthBuildService(
             StructureGrowthBuildActions(
-                atom_point=lambda atom_id: cast(
-                    "Any",
-                    BrowserPoint(
-                        self.model.atoms[atom_id].x, self.model.atoms[atom_id].y
-                    ),
+                atom_point=lambda atom_id: BrowserPoint(
+                    self.model.atoms[atom_id].x, self.model.atoms[atom_id].y
                 ),
                 sprout_bond_endpoint=partial(
                     sprout_bond_endpoint_for, self, point_factory=BrowserPoint
@@ -3602,6 +3621,9 @@ class BrowserStructureAdapter:
         for group_id in plan.absorbed:
             state.groups.pop(group_id)
         register_group_for(self, plan.atom_ids, plan.item_ids)
+
+    def mark_spatial_index_dirty(self) -> None:
+        """No hit-test index to refresh: picks scan the candidate model."""
 
     def find_atom_near(self, x: float, y: float, max_dist: float) -> int | None:
         return nearest_atom_id(
@@ -5658,9 +5680,7 @@ class BrowserStructureAdapter:
         controller = CanvasMoveController(
             cast("Any", self),
             point_factory=BrowserPoint,
-            hit_testing_service=cast(
-                "Any", SimpleNamespace(mark_spatial_index_dirty=lambda: None)
-            ),
+            hit_testing_service=self,
         )
         controller.set_atom_positions(positions, update_selection=False)
         for mark_item, state in mark_updates:
@@ -6168,9 +6188,7 @@ class BrowserStructureAdapter:
         controller = CanvasMoveController(
             cast("Any", self),
             point_factory=BrowserPoint,
-            hit_testing_service=cast(
-                "Any", SimpleNamespace(mark_spatial_index_dirty=lambda: None)
-            ),
+            hit_testing_service=self,
             ring_polygon_rebuilder=partial(
                 rebuild_ring_fill_polygons,
                 point_factory=BrowserPoint,

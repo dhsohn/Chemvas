@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import replace
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Protocol
 
 from chemvas.domain.document import VALID_ARROW_KINDS
 from chemvas.domain.document.shapes import moved_shape
@@ -28,8 +28,13 @@ _MOVE_BY_ITEM_KINDS = frozenset(
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
-    from chemvas.ui.canvas.canvas_hit_testing_service import CanvasHitTestingService
     from chemvas.ui.canvas.canvas_view import CanvasView
+
+
+class SpatialIndexInvalidator(Protocol):
+    """The one hit-testing operation a move needs: a stale-index flag."""
+
+    def mark_spatial_index_dirty(self) -> object: ...
 
 
 class CanvasMoveController:
@@ -37,7 +42,7 @@ class CanvasMoveController:
         self,
         canvas: CanvasView,
         *,
-        hit_testing_service: CanvasHitTestingService,
+        hit_testing_service: SpatialIndexInvalidator,
         ring_polygon_rebuilder=rebuild_ring_fill_polygons,
         point_factory=None,
     ) -> None:
