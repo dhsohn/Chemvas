@@ -3,15 +3,33 @@
 from __future__ import annotations
 
 import xml.etree.ElementTree as ET
+from typing import TYPE_CHECKING, Any
 
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QFont, QTextCharFormat, QTextDocument
 
 from chemvas.features.cdxml_native_palette import allocate_native_color_index
 
+if TYPE_CHECKING:
+    from collections.abc import Mapping
 
-def write_native_caption(root: ET.Element, node: ET.Element, state: dict) -> None:
+
+def write_native_caption(
+    root: ET.Element,
+    node: ET.Element,
+    state: dict,
+    text_defaults: Mapping[str, Any] | None = None,
+) -> None:
+    """Rewrite ``node``'s runs from the note record ``state``.
+
+    ``text_defaults`` are the document's text settings. The record's HTML is
+    exported relative to them (Qt drops a run's family, weight or italic when
+    it equals the editor's default font), so they are the base the runs are
+    resolved against; without them an omitted family would be saved as the
+    toolkit's generic default instead of the font the caption shows.
+    """
     document = QTextDocument()
+    document.setDefaultFont(_default_font(document.defaultFont(), text_defaults))
     document.setHtml(state.get("html", ""))
     if not state.get("html"):
         document.setPlainText(state["text"])
@@ -89,3 +107,19 @@ def write_native_caption(root: ET.Element, node: ET.Element, state: dict) -> Non
     # Bounds and wrap metrics are derived by the native consumer after an edit.
     for key in ("BoundingBox", "LineStarts", "WordWrapWidth"):
         node.attrib.pop(key, None)
+
+
+def _default_font(base: QFont, text_defaults: Mapping[str, Any] | None) -> QFont:
+    font = QFont(base)
+    if not text_defaults:
+        return font
+    family = text_defaults.get("text_font_family")
+    if isinstance(family, str) and family:
+        font.setFamilies([family])
+    weight = text_defaults.get("text_font_weight")
+    if type(weight) is int and 1 <= weight <= 1000:
+        font.setWeight(QFont.Weight(weight))
+    italic = text_defaults.get("text_italic")
+    if type(italic) is bool:
+        font.setItalic(italic)
+    return font

@@ -238,13 +238,17 @@ def test_apple_system_ui_font_default_keeps_caption_colors_on_native_reopen(
         fonts = {
             font.get("id"): font.get("name") for font in root.findall("fonttable/font")
         }
-        assert ".AppleSystemUIFont" in fonts.values()
         runs = root.find('.//t[@id="6"]').findall("s")
         assert [run.get("color") for run in runs] == ["4", "1", "5", "4"]
+        # The caption is Arial; the application's UI font is only the toolkit
+        # fallback and must not replace it (dot-prefixed source families are
+        # covered by the reopen cases below).
+        assert {fonts[run.get("font")] for run in runs} == {"Arial"}
+        assert ".AppleSystemUIFont" not in fonts.values()
 
         from_native = parse_cdxml_document(native).state
         html = from_native["notes"][0]["html"]
-        assert "&#x27;.AppleSystemUIFont&#x27;" in html
+        assert "AppleSystemUIFont" not in html
         assert _document_char_colors(html) == EXPECTED_RICH_CHARS
 
         with offscreen_canvas(from_native, command="test-native-apple-font-reopen") as (
