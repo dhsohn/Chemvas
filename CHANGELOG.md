@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.28.0] - 2026-11-04
+
 ### Removed
 
 - The experimental browser editor (`chemvas --ui web`), which was never
@@ -16,6 +18,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Show a notice when a document uses fonts that are unavailable and the
+  desktop app displays substitutes.
 - Define equal desktop release acceptance for Windows, macOS and Linux, with
   public CDXML documents for repeatable editing and export checks. Native bundle
   installation acceptance remains pending.
@@ -28,6 +32,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Save native CDXML after undoing deletion of newly attached atoms, retain
+  explicit carbon labels, and keep centered or right-aligned captions anchored
+  when edited and reopened.
+- Preserve the source font when saving edited native CDXML captions.
 - Reject new bonds to retained native CDXML fragment and nickname definitions
   with undo guidance before replacing the file, instead of losing their internal
   attachment mappings. Ordinary atom additions and supported explicit label
@@ -36,10 +44,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   attachment offsets when restyling existing bonds, including order changes and
   reversed direction. Offsets follow their original endpoint; stereo descriptors
   and ordinary atom coordination are still invalidated conservatively.
-- The browser editor can add a note to an editable imported CDXML document and
-  delete one of its native arrows. Native links now follow their records
-  through the edit, so these changes are no longer refused as invalid bindings
-  and the saved file keeps the remaining native objects.
 - Reject a retained CDXML source whose atom or bond bindings name records
   missing from its baseline, bind an atom to anything but a top-level native
   atom node, or bind a bond to anything but a native bond joining its atoms'
@@ -3246,7 +3250,8 @@ housekeeping.
   `.chemvas` document type (double-clicking a file opens it in Chemvas), and a
   Linux `.desktop` entry with an `application/x-chemvas` MIME type.
 
-[Unreleased]: https://github.com/dhsohn/Chemvas/compare/v0.25.0...HEAD
+[Unreleased]: https://github.com/dhsohn/Chemvas/compare/v0.28.0...HEAD
+[0.28.0]: https://github.com/dhsohn/Chemvas/compare/v0.27.1...v0.28.0
 [0.25.0]: https://github.com/dhsohn/Chemvas/compare/v0.24.0...v0.25.0
 [0.24.0]: https://github.com/dhsohn/Chemvas/compare/v0.23.0...v0.24.0
 [0.23.0]: https://github.com/dhsohn/Chemvas/compare/v0.22.0...v0.23.0
