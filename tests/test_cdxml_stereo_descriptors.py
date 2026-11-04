@@ -8,6 +8,7 @@ from __future__ import annotations
 import xml.etree.ElementTree as ET
 from copy import deepcopy
 from typing import TYPE_CHECKING, Any
+from unittest.mock import Mock
 
 import pytest
 
@@ -20,6 +21,9 @@ from chemvas.features.cdxml_native_writer import update_native_document
 
 if TYPE_CHECKING:
     from collections.abc import Callable
+    from pathlib import Path
+
+    from PyQt6.QtWidgets import QApplication
 
 # Fragment 2 has a stereocentre (10, wedge 20) whose substituent chain ends in a
 # double bond (24). Fragment 3 is a separate structure with its own labels.
@@ -408,3 +412,264 @@ def test_style_edit_does_not_restore_attachments_of_replaced_fragment_label() ->
     assert saved["5"].get("Geometry") is None
     assert saved["5"].find("fragment") is None
     assert saved["30"].get("EndAttach") is None
+
+
+def _defined_attachment_state(
+    node_type: str, mapping: str = "explicit"
+) -> dict[str, Any]:
+    root = ET.fromstring(ATTACHMENTS)
+    node = root.find('.//n[@id="5"]')
+    definition = root.find('.//fragment[@id="6"]')
+    assert node is not None and definition is not None
+    node.set("NodeType", node_type)
+    if node_type == "Nickname":
+        label = node.find("t/s")
+        bond = root.find('.//b[@id="30"]')
+        assert label is not None and bond is not None
+        label.text = "L"
+        bond.set("EndAttach", "0")  # Label offset, not the selected chemical port.
+    if mapping in {"no_bond_ordering", "implicit", "one_port"}:
+        node.attrib.pop("BondOrdering")
+    if mapping in {"no_connection_order", "implicit", "one_port"}:
+        definition.attrib.pop("ConnectionOrder")
+    if mapping == "one_port":
+        # SDK ConnectionOrder is omitted with fewer than two attachment points.
+        # The sole port is already occupied by bond 30.
+        for identity in ("22", "24"):
+            definition.remove(next(e for e in definition if e.get("id") == identity))
+        fragment = root.find('.//fragment[@id="2"]')
+        bond = root.find('.//b[@id="31"]')
+        assert fragment is not None and bond is not None
+        fragment.remove(bond)
+    return parse_cdxml_document(ET.tostring(root)).state
+
+
+def _add_bond_at(
+    state: dict[str, Any], native: str = "5", *, reverse: bool = False
+) -> int:
+    model = state["model"]
+    anchor = int(
+        next(k for k, v in state["cdxml_source"]["atoms"].items() if v == native)
+    )
+    new_id = model["next_atom_id"]
+    model["next_atom_id"] += 1
+    atom = _atom(state, native)
+    model["atoms"][new_id] = dict(
+        element="C",
+        x=atom["x"],
+        y=atom["y"] - 20,
+        color="#000000",
+        explicit_label=False,
+    )
+    begin, end = (new_id, anchor) if reverse else (anchor, new_id)
+    model["bonds"].append(
+        dict(a=begin, b=end, order=1, style="single", color="#000000")
+    )
+    return new_id
+
+
+@pytest.mark.parametrize("node_type", ["Fragment", "Nickname"])
+@pytest.mark.parametrize("reverse", [False, True])
+@pytest.mark.parametrize(
+    "mapping",
+    ["explicit", "no_connection_order", "no_bond_ordering", "implicit", "one_port"],
+)
+def test_new_bond_at_defined_structure_refuses_without_mutating_state(
+    node_type: str, reverse: bool, mapping: str
+) -> None:
+    state = _defined_attachment_state(node_type, mapping)
+    _add_bond_at(state, reverse=reverse)
+    before = deepcopy(state)
+    with pytest.raises(ValueError, match="attachment.*undo the new bond"):
+        update_native_document(state)
+    assert state == before
+
+
+@pytest.mark.parametrize(
+    "node_type", [b"", b' NodeType="Element"'], ids=["absent", "element"]
+)
+def test_new_bond_at_retained_definition_refuses_without_fragment_node_type(
+    node_type: bytes,
+) -> None:
+    source = ATTACHMENTS.replace(
+        b' NodeType="Fragment" BondOrdering="31 30"',
+        node_type + b' BondOrdering="31 30"',
+        1,
+    )
+    state = parse_cdxml_document(source).state
+    _assert_attachment_mapping(_save(state))
+    _add_bond_at(state)
+    before = deepcopy(state)
+    with pytest.raises(ValueError, match="attachment.*undo the new bond"):
+        update_native_document(state)
+    assert state == before
+
+
+@pytest.mark.parametrize("node_type", ["Fragment", "Nickname"])
+@pytest.mark.parametrize("new_bond_first", [False, True])
+def test_style_edit_does_not_mask_unsafe_new_attachment(
+    node_type: str, new_bond_first: bool
+) -> None:
+    state = _defined_attachment_state(node_type)
+    _bond(state, "30")["style"] = "bold_in"
+    expected = update_native_document(state)
+    new_id = _add_bond_at(state)
+    added = state["model"]["bonds"].pop()
+    state["model"]["bonds"].insert(
+        0 if new_bond_first else len(state["model"]["bonds"]), added
+    )
+    with pytest.raises(ValueError, match="attachment.*undo the new bond"):
+        update_native_document(state)
+    state["model"]["bonds"].remove(added)
+    del state["model"]["atoms"][new_id]
+    assert update_native_document(state) == expected
+    _assert_attachment_mapping(_save(state))
+
+
+@pytest.mark.parametrize("reverse", [False, True])
+def test_new_connection_between_existing_atoms_cannot_reuse_a_removed_port(
+    reverse: bool,
+) -> None:
+    state = _defined_attachment_state("Fragment")
+    # Replace 5--4 with 5--9 in the same outer fragment. Equal degree does not
+    # specify that the new bond should inherit the deleted bond's internal N.
+    root = ET.fromstring(state["cdxml_source"]["xml"])
+    fragment = root.find('.//fragment[@id="2"]')
+    assert fragment is not None
+    ET.SubElement(fragment, "n", id="9", p="100 70", Element="8")
+    state = parse_cdxml_document(ET.tostring(root)).state
+    bond = _bond(state, "31")
+    atom_ids = {v: int(k) for k, v in state["cdxml_source"]["atoms"].items()}
+    bond["a"], bond["b"] = (
+        (atom_ids["9"], atom_ids["5"]) if reverse else (atom_ids["5"], atom_ids["9"])
+    )
+    with pytest.raises(ValueError, match="attachment.*undo the new bond"):
+        update_native_document(state)
+
+
+@pytest.mark.parametrize("reverse", [False, True])
+def test_ordinary_atom_addition_preserves_neighbouring_attachment_mapping(
+    reverse: bool,
+) -> None:
+    state = _attachment_state()
+    original = _save(state)
+    _add_bond_at(state, "3", reverse=reverse)
+    saved = _save(parse_cdxml_document(update_native_document(state)).state)
+    _assert_attachment_mapping(saved)
+    outer_bonds = saved["2"].findall("b")
+    assert len(outer_bonds) == 3
+    added = next(b for b in outer_bonds if b.get("id") not in {"30", "31"})
+    assert added.get("E" if reverse else "B") == "3"
+    new_id = added.attrib["B" if reverse else "E"]
+    assert saved[new_id].get("Element") == "6"
+    assert saved["3"].get("BondOrdering") is None
+    assert saved["3"].get("Geometry") is None
+    assert saved["5"].get("Geometry") == "Linear"
+    assert ET.tostring(saved["102"]) == ET.tostring(original["102"])
+
+
+@pytest.mark.parametrize("node_type", ["Fragment", "Nickname"])
+@pytest.mark.parametrize("symbol", ["C", "N", "R1"])
+def test_new_bond_after_genuine_retyping_uses_existing_label_replacement_contract(
+    node_type: str, symbol: str
+) -> None:
+    state = _defined_attachment_state(node_type)
+    _atom(state, "5")["element"] = symbol
+    _bond(state, "30")["style"] = "bold_in"
+    _add_bond_at(state)
+    raw = update_native_document(state)
+    assert b"ChemvasDocument:" not in raw
+    saved = _save(parse_cdxml_document(raw).state)
+    assert saved["5"].find("fragment") is None
+    assert saved["5"].get("BondOrdering") is None
+    assert saved["5"].get("NodeType", "Element") == (
+        "GenericNickname" if symbol == "R1" else "Element"
+    )
+    assert saved["5"].get("Element") == {"C": "6", "N": "7", "R1": None}[symbol]
+    assert len(saved["2"].findall("b")) == 3
+    assert saved["30"].get("EndAttach") is None
+
+
+@pytest.mark.parametrize("node_type", ["Fragment", "Nickname"])
+def test_retyping_back_to_original_label_does_not_bypass_attachment_guard(
+    node_type: str,
+) -> None:
+    state = _defined_attachment_state(node_type)
+    atom = _atom(state, "5")
+    original = atom["element"]
+    atom["element"] = "C"
+    _add_bond_at(state)
+    atom["element"] = original
+    with pytest.raises(ValueError, match="attachment.*undo the new bond"):
+        update_native_document(state)
+
+
+@pytest.mark.parametrize("reverse", [False, True])
+def test_failed_attachment_save_preserves_file_and_undo_restores_save(
+    tmp_path: Path, qt_application: QApplication, reverse: bool
+) -> None:
+    from PyQt6.QtCore import QPointF
+
+    from chemvas.bootstrap.main_window import build_main_window
+    from chemvas.ui.window.main_window_ports import active_canvas_for_window
+
+    path = tmp_path / "attachments.cdxml"
+    path.write_bytes(ATTACHMENTS)
+    original_stat = path.stat()
+    box = Mock()
+    window = build_main_window()
+    actions = window.services.document_action_service
+    canvas = active_canvas_for_window(window)
+    session = canvas.services.canvas_document_session_service
+    history = canvas.services.history_service
+    try:
+        assert actions.load_canvas_from_path(window, str(path), message_box=box)
+        before = session.snapshot_state()
+        expected = update_native_document(before)
+        digest = canvas.runtime_state.document_metadata_state.source_sha256
+        anchor = int(
+            next(k for k, v in before["cdxml_source"]["atoms"].items() if v == "5")
+        )
+        atom = canvas.model.atoms[anchor]
+        start, end = QPointF(atom.x, atom.y), QPointF(atom.x, atom.y - 20)
+        if reverse:
+            start, end = end, start
+        assert (
+            canvas.services.structure_build_service.add_bond_between_points(
+                start, end, "single", 1
+            )
+            is not None
+        )
+        edited = session.snapshot_state()
+        assert len(edited["model"]["bonds"]) == len(before["model"]["bonds"]) + 1
+        history_before = history.capture_stack_snapshot()
+        assert not actions.save_canvas_to_path(window, str(path), message_box=box)
+        message = box.warning.call_args.args[-1]
+        assert "attachment" in message and "undo the new bond" in message
+        assert "file was not replaced" in message
+        assert path.read_bytes() == ATTACHMENTS
+        assert path.stat().st_mtime_ns == original_stat.st_mtime_ns
+        assert path.stat().st_ino == original_stat.st_ino
+        assert not list(tmp_path.glob(".chemvas-*.tmp"))
+        assert session.snapshot_state() == edited
+        history.verify_stack_snapshot(history_before)
+        assert canvas.runtime_state.document_metadata_state.source_sha256 == digest
+        assert window.services.canvas_document_service.is_dirty(canvas)
+
+        history.undo()
+        assert update_native_document(session.snapshot_state()) == expected
+        history.redo()
+        with pytest.raises(ValueError, match="attachment.*undo the new bond"):
+            update_native_document(session.snapshot_state())
+        history.undo()
+        assert actions.save_canvas_to_path(window, str(path), message_box=box)
+        assert not window.services.canvas_document_service.is_dirty(canvas)
+        # Ignore the snapshot so retained metadata cannot conceal native loss.
+        native = ET.tostring(ET.fromstring(path.read_bytes()))
+        saved = _save(parse_cdxml_document(native).state)
+        _assert_attachment_mapping(saved)
+        assert len(saved["2"].findall("b")) == 2
+    finally:
+        window.services.canvas_document_service.mark_clean(canvas)
+        window.close()
+        qt_application.processEvents()

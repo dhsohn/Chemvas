@@ -374,6 +374,20 @@ class _NativeWriter:
                 self.atom_native[str(bond["a"])],
                 self.atom_native[str(bond["b"])],
             )
+            if not native:
+                for identity in (begin, end):
+                    if self.byid[identity].find("fragment") is not None:
+                        # Accepted legacy XML may omit or misstate NodeType;
+                        # the retained direct fragment is the definition.
+                        # The editor has no port selection or unused-port state.
+                        # SDK BondOrdering/ConnectionOrder map chemical ports;
+                        # BeginAttach/EndAttach only locate label characters.
+                        # Missing ordering (including one-port definitions) is
+                        # not permission to assign a new bond. update_atoms has
+                        # already removed definitions for genuine label retypes.
+                        raise ValueError(
+                            "Cannot determine the attachment point for a new bond to a defined native contracted structure; undo the new bond before saving. The file was not replaced."
+                        )
             if self.parents[self.byid[begin]] is not self.parents[self.byid[end]]:
                 raise ValueError(
                     "Connecting two native fragments is not yet supported; saving was cancelled without replacing the file."
