@@ -27,7 +27,7 @@ NATIVE = b"""<?xml version="1.0"?><CDXML BondLength="20"><page id="1" Width="400
 <fragment id="2">
 <n id="10" p="100 100" AS="R" CIP="R" Geometry="Tetrahedral" BondOrdering="20 21 22 0"/>
 <n id="11" p="117 110" Element="8"><t><s>O</s></t></n>
-<n id="12" p="100 80" Geometry="Tetrahedral" BondOrdering="21 23 0 0"/>
+<n id="12" p="100 80" NodeType="Element" Geometry="Tetrahedral" BondOrdering="21 23 0 0"/>
 <n id="13" p="83 110" Element="7"><t><s>N</s></t></n>
 <n id="14" p="117 70"/>
 <n id="15" p="117 50"/>
@@ -49,6 +49,10 @@ DESCRIPTORS = {
     "24": {"BS": "E", "CIP": "E"},
 }
 OTHER_FRAGMENT = {"30": {"AS": "S", "CIP": "S"}, "32": {"BS": "N"}}
+COORDINATION = {
+    "10": {"BondOrdering": "20 21 22 0", "Geometry": "Tetrahedral"},
+    "12": {"BondOrdering": "21 23 0 0", "Geometry": "Tetrahedral"},
+}
 
 
 def _state() -> dict[str, Any]:
@@ -84,6 +88,185 @@ def _descriptors(saved: dict[str, ET.Element], expected: dict[str, dict[str, str
 
 def _cleared(expected: dict[str, dict[str, str]]):
     return {identity: dict.fromkeys(attrs) for identity, attrs in expected.items()}
+
+
+def _delete_native(
+    state: dict[str, Any], bonds: tuple[str, ...], atoms: tuple[str, ...] = ()
+) -> None:
+    for native in bonds:
+        state["model"]["bonds"].remove(_bond(state, native))
+    keys = {v: k for k, v in state["cdxml_source"]["atoms"].items()}
+    for native in atoms:
+        records = state["model"]["atoms"]
+        key = keys[native] if keys[native] in records else int(keys[native])
+        del records[key]
+
+
+@pytest.mark.parametrize(
+    "bonds,atoms,reset",
+    [
+        pytest.param(("20",), (), {"10"}, id="wedge"),
+        pytest.param(("21",), (), {"10", "12"}, id="both-ends"),
+        pytest.param(("23",), (), {"12"}, id="other-end"),
+        pytest.param(("20", "21"), (), {"10", "12"}, id="several-bonds"),
+        pytest.param(("20", "21", "22"), (), {"10", "12"}, id="isolated-centre"),
+        pytest.param(("20",), ("11",), {"10"}, id="deleted-neighbour"),
+        pytest.param(("21", "23"), ("12",), {"10"}, id="deleted-ordered-neighbour"),
+        pytest.param(("20", "21", "22"), ("10",), {"12"}, id="deleted-centre"),
+        pytest.param(
+            ("20", "21", "22", "23"), ("10", "12"), set(), id="deleted-both-ends"
+        ),
+        pytest.param(("25",), ("16",), set(), id="untouched-coordination"),
+    ],
+)
+def test_deletion_resets_only_surviving_elemental_endpoint_coordination(
+    bonds: tuple[str, ...], atoms: tuple[str, ...], reset: set[str]
+) -> None:
+    state = _state()
+    original = _save(state)
+    _delete_native(state, bonds, atoms)
+    edited = deepcopy(state)
+    raw = update_native_document(state)
+    saved = {e.attrib["id"]: e for e in ET.fromstring(raw).iter() if e.get("id")}
+    assert state == edited
+    assert not (set(bonds) | set(atoms)).intersection(saved)
+    for identity, attrs in COORDINATION.items():
+        if identity not in atoms:
+            expected = dict.fromkeys(attrs) if identity in reset else attrs
+            assert {key: saved[identity].get(key) for key in attrs} == expected
+    surviving = {key: attrs for key, attrs in DESCRIPTORS.items() if key in saved}
+    assert _descriptors(saved, surviving) == _cleared(surviving)
+    assert ET.tostring(saved["3"]) == ET.tostring(original["3"])
+    # Surviving bond directions, wedges, orders and other native attributes stay.
+    for identity in set(state["cdxml_source"]["bonds"].values()) - set(bonds):
+        attrs = dict(original[identity].attrib)
+        if identity != "32":
+            attrs.pop("BS", None)
+            attrs.pop("CIP", None)
+        assert saved[identity].attrib == attrs
+
+    # Reopen the native XML itself, without an embedded Chemvas snapshot.
+    assert b"ChemvasDocument:" not in raw
+    reopened = parse_cdxml_document(raw).state
+    for collection, removed in (("atoms", atoms), ("bonds", bonds)):
+        assert set(reopened["cdxml_source"][collection].values()) == set(
+            state["cdxml_source"][collection].values()
+        ) - set(removed)
+    for identity in reopened["cdxml_source"]["atoms"].values():
+        assert _atom(reopened, identity) == _atom(state, identity)
+    assert update_native_document(reopened) == raw
+
+
+@pytest.mark.parametrize("save_deleted", [False, True])
+def test_deletion_undo_preserves_native_source_and_no_net_edit_bytes(
+    save_deleted: bool,
+) -> None:
+    state = _state()
+    before = deepcopy(state)
+    original = update_native_document(state)
+    assert ET.canonicalize(original.decode()) == ET.canonicalize(
+        state["cdxml_source"]["xml"]
+    )
+    restored_bonds = [deepcopy(_bond(state, identity)) for identity in ("20", "21")]
+    _delete_native(state, ("20", "21"), ("11",))
+    if save_deleted:
+        update_native_document(state)
+    # Undo can reinsert records at the end; source identity still owns the XML.
+    state["model"]["atoms"].update(before["model"]["atoms"])
+    state["model"]["bonds"].extend(restored_bonds)
+    assert state["cdxml_source"] == before["cdxml_source"]
+    assert update_native_document(state) == original
+
+
+@pytest.mark.parametrize(
+    "node_type,nested",
+    [
+        ("Fragment", True),
+        ("Nickname", True),
+        (None, True),
+        ("Element", True),
+        ("GenericNickname", False),
+        ("Unspecified", False),
+    ],
+)
+@pytest.mark.parametrize("edit_remaining_bond", [False, True])
+def test_deletion_keeps_special_node_attachment_references_fail_closed(
+    node_type: str | None, nested: bool, edit_remaining_bond: bool
+) -> None:
+    root = ET.fromstring(NATIVE)
+    node = root.find('.//n[@id="12"]')
+    assert node is not None
+    node.attrib.pop("NodeType")
+    if node_type is not None:
+        node.set("NodeType", node_type)
+    node.set("BondOrdering", "21 23")
+    if nested:
+        # Two outer bonds genuinely map to two external connection points.
+        node.append(
+            ET.fromstring("""<fragment id="40" ConnectionOrder="42 43">
+            <n id="41" p="100 80" Element="8"/>
+            <n id="42" p="100 100" NodeType="ExternalConnectionPoint"/>
+            <n id="43" p="117 70" NodeType="ExternalConnectionPoint"/>
+            <b id="44" B="42" E="41"/><b id="45" B="41" E="43"/>
+            </fragment>""")
+        )
+    if node_type == "GenericNickname":
+        node.set("GenericNickname", "R")
+    ET.SubElement(ET.SubElement(node, "t"), "s").text = (
+        "R" if node_type == "GenericNickname" else "O"
+    )
+    state = parse_cdxml_document(ET.tostring(root)).state
+    assert "12" in state["cdxml_source"]["atoms"].values()
+    assert _save(state)["12"].get("BondOrdering") == "21 23"
+    # A deletion elsewhere must preserve the complete attachment definition.
+    elsewhere = deepcopy(state)
+    _delete_native(elsewhere, ("20",))
+    assert ET.tostring(_save(elsewhere)["12"]) == ET.tostring(_save(state)["12"])
+    _delete_native(state, ("21",))
+    if edit_remaining_bond:
+        # This also puts the special node in changed_nodes. Its blanket cleanup
+        # must still run AFTER reference validation, so it cannot hide the loss.
+        _bond(state, "23").update(order=2, style="double")
+    before = deepcopy(state)
+    with pytest.raises(ValueError, match=r"native n\.BondOrdering references"):
+        update_native_document(state)
+    assert state == before
+
+
+@pytest.mark.parametrize(
+    "reference", ["BondOrdering", "BondCircularOrdering", "BracketedObjectIDs"]
+)
+def test_deletion_does_not_clear_unrelated_native_references(reference: str) -> None:
+    root = ET.fromstring(NATIVE)
+    if reference == "BondOrdering":
+        node = root.find('.//n[@id="12"]')
+        assert node is not None
+        # Not an endpoint of bond 20: do not repair a foreign reference.
+        node.set(reference, "20 21 23 0")
+    elif reference == "BondCircularOrdering":
+        node = root.find('.//b[@id="21"]')
+        assert node is not None
+        node.set(reference, "20 22 23")
+    else:
+        page = root.find("page")
+        assert page is not None
+        ET.SubElement(page, "bracketedgroup", id="40", BracketedObjectIDs="20 21")
+    state = parse_cdxml_document(ET.tostring(root)).state
+    _delete_native(state, ("20",))
+    with pytest.raises(ValueError, match=rf"\.{reference} references"):
+        update_native_document(state)
+
+
+def test_deletion_preserves_unaffected_native_references() -> None:
+    raw = NATIVE.replace(
+        b"</page>",
+        b'<bracketedgroup id="40" BracketedObjectIDs="10 12 24"/></page>',
+    )
+    state = parse_cdxml_document(raw).state
+    _delete_native(state, ("20",))
+    saved = _save(state)
+    assert saved["40"].get("BracketedObjectIDs") == "10 12 24"
+    assert _descriptors(saved, {"12": COORDINATION["12"]}) == {"12": COORDINATION["12"]}
 
 
 def test_colour_only_bond_edit_keeps_descriptors_and_writes_only_colour() -> None:

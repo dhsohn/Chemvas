@@ -353,9 +353,22 @@ class _NativeWriter:
         }
         for key, native in self.source["bonds"].items():
             if key not in bonds:
-                self.invalidate_stereo(self.byid[native])
+                e = self.byid[native]
+                self.invalidate_stereo(e)
                 self.removed_ids.add(native)
-                self.delete(self.byid[native])
+                self.delete(e)
+                # Only ordinary elemental coordination can be discarded here.
+                # Fragment/NamedAlternativeGroup ordering maps attachment points
+                # and must still pass reference validation before any cleanup.
+                for identity in (e.attrib["B"], e.attrib["E"]):
+                    node = self.byid[identity]
+                    if (
+                        identity not in self.removed_ids
+                        and node.get("NodeType", "Element") == "Element"
+                        and node.find("fragment") is None
+                    ):
+                        node.attrib.pop("BondOrdering", None)
+                        node.attrib.pop("Geometry", None)
         for key, bond in bonds.items():
             native = self.source["bonds"].get(key)
             if native and bond == old_bonds[key]:

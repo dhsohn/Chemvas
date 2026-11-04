@@ -50,6 +50,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   stereochemistry (bond order, wedge or hash, topology, element, charge, atom
   positions) now drop those descriptors across the whole fragment, including
   double-bond ``BS`` after atom moves, instead of only on the edited atoms.
+- Allow native CDXML saves after deleting a bond from a surviving elemental
+  atom by dropping its stale ``BondOrdering`` and ``Geometry``. Keep valid
+  ordering on untouched atoms and continue refusing deletions that break
+  contracted-node attachment mappings or other native references.
 - Refuse alias and ambiguous atom labels (Ac, Ts, Ar) when editing imported
   ChemDraw CDXML in place, matching fresh export; they are no longer written as
   actinium, tennessine or argon. Expand short ``#rgb`` colors such as ``#f00``
