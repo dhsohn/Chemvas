@@ -28,6 +28,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Preserve native CDXML fragment and nickname attachment mappings and bond-label
+  attachment offsets when restyling existing bonds, including order changes and
+  reversed direction. Offsets follow their original endpoint; stereo descriptors
+  and ordinary atom coordination are still invalidated conservatively.
 - The browser editor can add a note to an editable imported CDXML document and
   delete one of its native arrows. Native links now follow their records
   through the edit, so these changes are no longer refused as invalid bindings

@@ -384,6 +384,13 @@ class _NativeWriter:
                 if native
                 else ET.SubElement(self.parents[self.byid[begin]], "b", id=self.fresh())
             )
+            # SDK BeginAttach/EndAttach are label-character offsets, not port
+            # numbers. Bind them to the original XML endpoints: importing an
+            # End-style wedge/hash may already have reversed the model's a/b.
+            attachments = {
+                e.get("B"): e.get("BeginAttach"),
+                e.get("E"): e.get("EndAttach"),
+            }
             for prop in (
                 "BondCircularOrdering",
                 "Display2",
@@ -396,11 +403,39 @@ class _NativeWriter:
             e.set("Order", str(bond["order"]))
             e.set("Display", displays[bond["style"]])
             e.set("color", self.color_index(bond["color"]))
+            for atom_key, identity, prop in (
+                (str(bond["a"]), begin, "BeginAttach"),
+                (str(bond["b"]), end, "EndAttach"),
+            ):
+                attachment = attachments.get(identity)
+                if (
+                    native
+                    and attachment is not None
+                    and self.old_atoms[atom_key]["element"]
+                    == self.atoms[atom_key]["element"]
+                ):
+                    e.set(prop, attachment)
             if bond["order"] == 2:
                 e.set("DoublePosition", _DOUBLE_POSITIONS.get(bond["style"], "Left"))
             else:
                 e.attrib.pop("DoublePosition", None)
-            self.changed_nodes.update((begin, end))
+            for identity in (begin, end):
+                node = self.byid[identity]
+                if native and (
+                    node.get("NodeType") == "Fragment"
+                    or (
+                        node.get("NodeType") == "Nickname"
+                        and node.find("fragment[@ConnectionOrder]") is not None
+                    )
+                ):
+                    # SDK BondOrdering pairs these existing bond IDs with the
+                    # definition's ConnectionOrder; a defined Nickname is a
+                    # special case of Fragment. Style/order/direction edits do
+                    # not change that pairing. Geometry is still stale, and
+                    # other edits in changed_nodes retain their invalidation.
+                    node.attrib.pop("Geometry", None)
+                else:
+                    self.changed_nodes.add(identity)
 
     def update_items(self) -> None:
         for collection, original_bindings in self.source["baseline_items"].items():
@@ -589,7 +624,7 @@ class _NativeWriter:
             for bond_e in fragment.iter("b"):
                 for key in BOND_STEREO_DESCRIPTORS:
                     bond_e.attrib.pop(key, None)
-        # A node whose bonds or label changed has a new coordination.
+        # Other bond, label or charge edits still invalidate node coordination.
         for identity in self.changed_nodes:
             e = self.byid[identity]
             for key in ("BondOrdering", "Geometry"):

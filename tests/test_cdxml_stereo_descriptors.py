@@ -50,6 +50,42 @@ DESCRIPTORS = {
 }
 OTHER_FRAGMENT = {"30": {"AS": "S", "CIP": "S"}, "32": {"BS": "N"}}
 
+# Bond 31 attaches to N (port 21), while bond 30 attaches to C (port 22).
+# The outer order deliberately differs from both bond ID and XML order.
+# Fragment 102 has an unrelated copy whose mapping and descriptors must survive.
+ATTACHMENTS = b"""<CDXML BondLength="20"><page id="1" Width="400" Height="300">
+<fragment id="2">
+<n id="3" p="60 100" Element="17" Geometry="Linear" BondOrdering="30 0" AS="R" CIP="R"><t><s>Cl</s></t></n>
+<n id="4" p="140 100" Element="9"><t><s>F</s></t></n>
+<n id="5" p="100 100" NodeType="Fragment" BondOrdering="31 30" Geometry="Linear">
+<fragment id="6" ConnectionOrder="21 22">
+<n id="7" p="90 100" Element="7" AS="R" CIP="R"/>
+<n id="8" p="110 100" Element="6"/>
+<n id="21" p="80 100" NodeType="ExternalConnectionPoint"/>
+<n id="22" p="120 100" NodeType="ExternalConnectionPoint"/>
+<b id="23" B="21" E="7"/><b id="24" B="22" E="8"/>
+<b id="25" B="7" E="8"/>
+</fragment><t><s>NHCH2</s></t></n>
+<b id="30" B="3" E="5" EndAttach="2" BS="N" CIP="N"/>
+<b id="31" B="5" E="4"/>
+</fragment>
+<fragment id="102">
+<n id="103" p="240 100" Element="17"><t><s>Cl</s></t></n>
+<n id="104" p="320 100" Element="9"><t><s>F</s></t></n>
+<n id="105" p="280 100" NodeType="Fragment" BondOrdering="131 130">
+<fragment id="106" ConnectionOrder="121 122">
+<n id="107" p="270 100" Element="7" AS="S" CIP="S"/>
+<n id="108" p="290 100" Element="6"/>
+<n id="121" p="260 100" NodeType="ExternalConnectionPoint"/>
+<n id="122" p="300 100" NodeType="ExternalConnectionPoint"/>
+<b id="123" B="121" E="107"/><b id="124" B="122" E="108"/>
+<b id="125" B="107" E="108"/>
+</fragment><t><s>NHCH2</s></t></n>
+<b id="130" B="103" E="105" EndAttach="2" BS="N" CIP="N"/>
+<b id="131" B="105" E="104"/>
+</fragment>
+</page></CDXML>"""
+
 
 def _state() -> dict[str, Any]:
     return deepcopy(parse_cdxml_document(NATIVE).state)
@@ -205,3 +241,170 @@ def test_unclassified_record_fields_invalidate() -> None:
     assert not bond_edit_keeps_stereo(bond, {**bond, "order": 1, "style": "single"})
     assert not bond_edit_keeps_stereo(bond, {**bond, "style": "double_either"})
     assert bond_edit_keeps_stereo(bond, {**bond, "style": "double_outer"})
+
+
+def _attachment_state(
+    display: str = "Solid", order: str = "1", begin_attach: str | None = None
+) -> dict[str, Any]:
+    root = ET.fromstring(ATTACHMENTS)
+    bond = root.find('.//b[@id="30"]')
+    assert bond is not None
+    bond.set("Display", display)
+    bond.set("Order", order)
+    if begin_attach is not None:
+        bond.set("BeginAttach", begin_attach)
+    return parse_cdxml_document(ET.tostring(root)).state
+
+
+def _assert_attachment_mapping(saved: dict[str, ET.Element]) -> None:
+    assert saved["5"].get("BondOrdering") == "31 30"
+    assert saved["6"].get("ConnectionOrder") == "21 22"
+    # Check the chemical attachment targets, not just the visible label.
+    assert saved["21"].get("NodeType") == "ExternalConnectionPoint"
+    assert saved["22"].get("NodeType") == "ExternalConnectionPoint"
+    assert (saved["23"].get("B"), saved["23"].get("E")) == ("21", "7")
+    assert (saved["24"].get("B"), saved["24"].get("E")) == ("22", "8")
+    assert saved["7"].get("Element") == "7"
+    assert saved["8"].get("Element") == "6"
+    assert {saved["30"].get("B"), saved["30"].get("E")} == {"3", "5"}
+    assert {saved["31"].get("B"), saved["31"].get("E")} == {"5", "4"}
+
+
+def _endpoint_offsets(bond: ET.Element) -> dict[str, str | None]:
+    return {
+        bond.attrib["B"]: bond.get("BeginAttach"),
+        bond.attrib["E"]: bond.get("EndAttach"),
+    }
+
+
+@pytest.mark.parametrize(
+    ("display", "old_order", "style", "order", "reverse"),
+    [
+        ("Solid", "1", "bold_in", 1, False),
+        ("Solid", "1", "wedge", 1, False),
+        ("Solid", "1", "hash", 1, True),
+        ("Solid", "1", "dotted", 1, False),
+        ("Solid", "1", "wavy", 1, False),
+        ("Solid", "1", "double", 2, False),
+        ("Solid", "1", "triple", 3, False),
+        ("Solid", "1", "single", 2, False),  # Order alone.
+        ("Solid", "2", "wedge", 1, True),  # Style, order and direction.
+        ("WedgeBegin", "1", "wedge", 1, True),  # Direction alone.
+        ("WedgedHashBegin", "1", "wedge", 1, True),
+        ("WedgeEnd", "1", "bold_in", 1, False),  # Import normalizes a/b.
+        ("WedgedHashEnd", "1", "wedge", 1, False),
+    ],
+)
+@pytest.mark.parametrize("begin_attach", [None, "0", "1"])
+def test_existing_bond_edit_keeps_native_attachment_mapping(
+    display: str,
+    old_order: str,
+    style: str,
+    order: int,
+    reverse: bool,
+    begin_attach: str | None,
+) -> None:
+    state = _attachment_state(display, old_order, begin_attach)
+    original = _save(state)
+    bond = _bond(state, "30")
+    bond.update(style=style, order=order)
+    if reverse:
+        bond["a"], bond["b"] = bond["b"], bond["a"]
+    expected_ends = tuple(
+        state["cdxml_source"]["atoms"][str(bond[key])] for key in ("a", "b")
+    )
+    raw = update_native_document(state)
+    assert b"ChemvasDocument:" not in raw
+    reopened = parse_cdxml_document(raw).state  # Native XML, no snapshot fallback.
+    saved_versions = (
+        {e.attrib["id"]: e for e in ET.fromstring(raw).iter() if e.get("id")},
+        _save(reopened),
+    )
+    for saved in saved_versions:
+        _assert_attachment_mapping(saved)
+        assert (saved["30"].get("B"), saved["30"].get("E")) == expected_ends
+        assert _endpoint_offsets(saved["30"]) == {"3": begin_attach, "5": "2"}
+        assert saved["30"].get("Order") == str(order)
+        assert ET.tostring(saved["31"]) == ET.tostring(original["31"])
+        assert ET.tostring(saved["102"]) == ET.tostring(original["102"])
+        for identity in ("3", "7", "30"):
+            for prop in ("AS", "BS", "CIP"):
+                assert saved[identity].get(prop) is None
+        assert saved["3"].get("BondOrdering") is None
+        assert saved["3"].get("Geometry") is None
+        assert saved["5"].get("Geometry") is None
+    assert _bond(reopened, "30")["order"] == order
+    assert _bond(reopened, "30")["style"] == (
+        "double" if style == "single" and order == 2 else style
+    )
+
+
+def test_style_edit_keeps_multiport_nickname_attachment_mapping() -> None:
+    root = ET.fromstring(ATTACHMENTS)
+    node = root.find('.//n[@id="5"]')
+    assert node is not None
+    node.set("NodeType", "Nickname")
+    label = node.find("t/s")
+    assert label is not None
+    label.text = "L"  # One symbol for the existing two-port definition.
+    bond = root.find('.//b[@id="30"]')
+    assert bond is not None
+    bond.set("EndAttach", "1")
+    state = parse_cdxml_document(ET.tostring(root)).state
+    _bond(state, "30")["style"] = "bold_in"
+    raw = update_native_document(state)
+    assert b"ChemvasDocument:" not in raw
+    reopened = parse_cdxml_document(raw).state
+    saved = _save(reopened)
+    _assert_attachment_mapping(saved)
+    assert saved["5"].get("NodeType") == "Nickname"
+    assert saved["5"].findtext("t/s") == "L"
+    assert _endpoint_offsets(saved["30"]) == {"3": None, "5": "1"}
+    assert saved["5"].get("Geometry") is None
+    assert saved["3"].get("BondOrdering") is None
+    assert saved["3"].get("Geometry") is None
+    assert _bond(reopened, "30")["style"] == "bold_in"
+
+
+@pytest.mark.parametrize("edit", ["colour", "double_position"])
+def test_presentation_edit_keeps_native_attachment_metadata(edit: str) -> None:
+    state = _attachment_state("Solid", "2")
+    original = _save(state)
+    if edit == "colour":
+        _bond(state, "30")["color"] = "#ff0000"
+    else:
+        _bond(state, "30")["style"] = "double_center"
+    saved = _save(parse_cdxml_document(update_native_document(state)).state)
+    _assert_attachment_mapping(saved)
+    assert _endpoint_offsets(saved["30"]) == {"3": None, "5": "2"}
+    for identity in ("3", "5", "102"):
+        assert ET.tostring(saved[identity]) == ET.tostring(original[identity])
+    assert saved["30"].get("BS") == "N"
+    assert saved["30"].get("CIP") == "N"
+
+
+def test_multiple_style_edits_at_moved_fragment_keep_attachment_mapping() -> None:
+    state = _attachment_state()
+    _bond(state, "30")["style"] = "bold_in"
+    bond = _bond(state, "31")
+    bond.update(style="double", order=2)
+    bond["a"], bond["b"] = bond["b"], bond["a"]
+    _atom(state, "5")["x"] += 5
+    _atom(state, "5")["color"] = "#ff0000"
+    saved = _save(parse_cdxml_document(update_native_document(state)).state)
+    _assert_attachment_mapping(saved)
+    assert _endpoint_offsets(saved["30"]) == {"3": None, "5": "2"}
+    assert _endpoint_offsets(saved["31"]) == {"4": None, "5": None}
+    assert saved["5"].get("p") == "105 100"
+    assert saved["7"].get("p") == "95 100"
+
+
+def test_style_edit_does_not_restore_attachments_of_replaced_fragment_label() -> None:
+    state = _attachment_state(begin_attach="1")
+    _atom(state, "5")["element"] = "C"
+    _bond(state, "30")["style"] = "bold_in"
+    saved = _save(parse_cdxml_document(update_native_document(state)).state)
+    assert saved["5"].get("BondOrdering") is None
+    assert saved["5"].get("Geometry") is None
+    assert saved["5"].find("fragment") is None
+    assert saved["30"].get("EndAttach") is None
