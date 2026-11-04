@@ -28,6 +28,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Reject new bonds to retained native CDXML fragment and nickname definitions
+  with undo guidance before replacing the file, instead of losing their internal
+  attachment mappings. Ordinary atom additions and supported explicit label
+  replacements remain available.
 - Preserve native CDXML fragment and nickname attachment mappings and bond-label
   attachment offsets when restyling existing bonds, including order changes and
   reversed direction. Offsets follow their original endpoint; stereo descriptors
