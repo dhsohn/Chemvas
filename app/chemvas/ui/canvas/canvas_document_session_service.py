@@ -569,6 +569,15 @@ class CanvasDocumentSessionService:
 
     def restore_state(self, state: dict) -> None:
         self.apply_state(state)
+        from chemvas.ui.canvas.document_font_availability import (
+            missing_document_fonts,
+        )
+
+        # Checked once per loaded document; the status bar reports it for the
+        # active tab so substituted text is never silently passed off as exact.
+        self.canvas.runtime_state.document_metadata_state.missing_fonts = (
+            missing_document_fonts(state)
+        )
 
     def snapshot_state_with_warnings(self) -> tuple[dict, list[str]]:
         return snapshot_canvas_document_state_with_warnings(self.canvas)

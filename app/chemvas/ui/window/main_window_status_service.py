@@ -116,9 +116,20 @@ class _ZoomPercentButton(QToolButton):
 
 
 # A paused Quit or autosave is painted first, so recovery guidance never hides it.
-_NOTICE_ORDER = ("quit", "autosave", "recovery")
+_NOTICE_ORDER = ("quit", "autosave", "recovery", "fonts")
 # QStatusBar places this much space between two visible items.
 _STATUS_ITEM_SPACING = 6
+
+
+def font_notice_text(missing: tuple[str, ...]) -> str | None:
+    if not missing:
+        return None
+    names = ", ".join(missing)
+    return (
+        f"Missing fonts: {names}\n"
+        "These fonts are not installed. Their text is shown with a substitute "
+        "font, so its width and line breaks can differ from the original."
+    )
 
 
 class _NoticeLabel(QLabel):
@@ -465,6 +476,7 @@ class MainWindowStatusService:
         self.update_selection_status_label(window)
         if update_zoom:
             self.update_zoom_label(current_zoom_percent_for_window(window))
+        self.update_font_notice(window)
         self.show_active_tool_hint(window)
 
     def update_tool_status_label(self, window: MainWindowLike) -> None:
@@ -540,6 +552,22 @@ class MainWindowStatusService:
             button.setToolTip(message or "")
             button.setAccessibleDescription(message or "")
             button.setVisible(message is not None)
+        self._sync_feedback_space(window, status_bar_for(window).currentMessage())
+
+    def update_font_notice(self, window: MainWindowLike) -> None:
+        """Say which of the active document's fonts are drawn as substitutes."""
+        if self.autosave_error_label is None:
+            return
+        canvas = active_canvas_or_none_for_window(window)
+        missing = (
+            ()
+            if canvas is None
+            else canvas.runtime_state.document_metadata_state.missing_fonts
+        )
+        message = font_notice_text(missing)
+        if self._persistent_notices.get("fonts") == message:
+            return
+        self._set_persistent_notice("fonts", message)
         self._sync_feedback_space(window, status_bar_for(window).currentMessage())
 
     def set_quit_notice(self, window: MainWindowLike, message: str | None) -> None:

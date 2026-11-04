@@ -101,6 +101,7 @@ class MainWindowActiveCanvasUIService:
             atom_input.blockSignals(False)
         if self._status.has_zoom_label():
             self._status.update_zoom_label(self.current_zoom_percent(window))
+        self._status.update_font_notice(window)
         self._tool_state.sync_tool_actions_from_canvas(window)
         self._refresh_selection_derived_ui(window)
 
