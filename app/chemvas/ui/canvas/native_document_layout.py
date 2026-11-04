@@ -104,6 +104,18 @@ def place_native_caption(
 ) -> None:
     if placement is None:
         return
+    set_derived_layout = getattr(item, "set_derived_layout", None)
+    if set_derived_layout is not None:
+        # Editable captions re-anchor whenever their text or format changes;
+        # the installer applies the placement once immediately.
+        set_derived_layout(lambda note: _place_caption(note, placement))
+    else:
+        _place_caption(item, placement)
+    # Captions are annotations above the retained graphic projections.
+    item.setZValue(2)
+
+
+def _place_caption(item, placement: tuple[float, float, str, float]) -> None:
     px, py, alignment, rotation = placement
     item.boundingRect()  # Materialize QTextLayout before reading its baseline.
     layout = item.document().begin().layout()
@@ -122,8 +134,6 @@ def place_native_caption(
             -layout.position().y() - line.y() - line.ascent(),
         )
     )
-    # Captions are annotations above the retained graphic projections.
-    item.setZValue(2)
 
 
 def apply_native_presentation(context: SceneRenderContext, item) -> None:
@@ -141,3 +151,6 @@ def apply_native_presentation(context: SceneRenderContext, item) -> None:
     placement = state.native_caption_placements.get(record_id)
     if placement is not None:
         place_native_caption(item, placement)
+    elif hasattr(item, "set_derived_layout"):
+        # A projection without a retained caption anchor keeps Qt's layout.
+        item.set_derived_layout(None)
