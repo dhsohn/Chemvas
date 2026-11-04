@@ -30,6 +30,8 @@ class CanvasDocumentMetadataState:
     clean_non_notes_digest: str | None = None
     clean_notes: tuple[str, ...] = ()
     note_chrome_session: _NoteChromeSession | None = None
+    # Families the loaded document's text names that this system substitutes.
+    missing_fonts: tuple[str, ...] = ()
 
     def set_display_name(self, name: str) -> None:
         self.display_name = name
