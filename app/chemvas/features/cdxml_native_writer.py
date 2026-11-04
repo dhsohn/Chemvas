@@ -36,6 +36,11 @@ def _is_native_pure_element_label(symbol: str) -> bool:
     )
 
 
+def _label_shown(atom: dict[str, Any]) -> bool:
+    """True when an atom record draws its element symbol as native text."""
+    return atom["element"] != "C" or bool(atom["explicit_label"])
+
+
 def transform_native(
     e: ET.Element, *, sx: float = 1, sy: float = 1, tx: float = 0, ty: float = 0
 ) -> None:
@@ -196,37 +201,96 @@ class _NativeWriter:
                     e.attrib.pop("Element", None)
                     e.set("NodeType", "GenericNickname")
                     e.set("GenericNickname", "R" if symbol.startswith("R") else symbol)
-                if symbol != "C" or after["explicit_label"]:
-                    t = ET.SubElement(e, "t", p=e.get("p", ""))
-                    ET.SubElement(
-                        t,
-                        "s",
-                        font=self.root.get("LabelFont", "3"),
-                        size=self.root.get("LabelSize", "10"),
-                        face="96",
-                    ).text = symbol
+                if _label_shown(after):
+                    self.append_label(e, symbol)
                 self.changed_nodes.add(native)
+            elif _label_shown(after) != _label_shown(before):
+                # Same element, only its symbol's visibility changed: a hidden
+                # carbon gains or loses its native text without touching any
+                # chemical property (charge, isotope, stereo) of the node.
+                self.set_label_visibility(e, after)
             if after["color"] != before["color"]:
                 color = self.color_index(after["color"])
                 e.set("color", color)
                 for run in e.findall("./t/s"):
                     run.set("color", color)
 
+    def append_label(self, node: ET.Element, symbol: str) -> None:
+        t = ET.SubElement(node, "t", p=node.get("p", ""))
+        ET.SubElement(
+            t,
+            "s",
+            font=self.root.get("LabelFont", "3"),
+            size=self.root.get("LabelSize", "10"),
+            face="96",
+        ).text = symbol
+
+    def set_label_visibility(self, e: ET.Element, after: dict[str, Any]) -> None:
+        if e.find("fragment") is not None or e.get("NodeType", "Element") != "Element":
+            raise ValueError(
+                "Showing or hiding a contracted native label is unsupported; the file was not replaced."
+            )
+        labels = e.findall("t")
+        if _label_shown(after):
+            if not labels:
+                self.append_label(e, after["element"])
+                if e.get("color"):
+                    for run in e.findall("./t/s"):
+                        run.set("color", e.attrib["color"])
+            return
+        for label in labels:
+            self.removed_ids.update(n.attrib["id"] for n in label.iter() if n.get("id"))
+            e.remove(label)
+
+    def new_atom_fragments(self) -> dict[str, tuple[str, ET.Element | None]]:
+        """Decide each new atom's native fragment from the whole graph.
+
+        New atoms bonded to each other form one component, whatever order the
+        model stores them in (Undo re-inserts a deleted atom at the end). A
+        component bonded to an existing native fragment joins it; any other
+        component maps to ``None`` and gets one fresh fragment. A component
+        bridging two existing fragments is left to the bond check, which
+        refuses that merge.
+        """
+        new = [key for key in self.atoms if key not in self.atom_native]
+        roots = {key: key for key in new}
+
+        def root(key: str) -> str:
+            while roots[key] != key:
+                roots[key] = roots[roots[key]]
+                key = roots[key]
+            return key
+
+        anchors: dict[str, set[str]] = {}
+        for bond in self.state["model"]["bonds"]:
+            a, b = str(bond["a"]), str(bond["b"])
+            if a in roots and b in roots:
+                roots[root(a)] = root(b)
+            elif a in roots and b in self.atom_native:
+                anchors.setdefault(a, set()).add(self.atom_native[b])
+            elif b in roots and a in self.atom_native:
+                anchors.setdefault(b, set()).add(self.atom_native[a])
+        component_natives: dict[str, set[str]] = {}
+        for key, natives in anchors.items():
+            component_natives.setdefault(root(key), set()).update(natives)
+        component_fragment = {
+            component: self.parents[self.byid[min(natives, key=int)]]
+            for component, natives in component_natives.items()
+        }
+        return {key: (root(key), component_fragment.get(root(key))) for key in new}
+
     def add_atoms(self) -> None:
+        planned = self.new_atom_fragments()
+        fresh_fragments: dict[str, ET.Element] = {}
         for key, after in self.atoms.items():
             if key in self.atom_native:
                 continue
-            fragment = None
-            for bond in self.state["model"]["bonds"]:
-                ends = [str(bond["a"]), str(bond["b"])]
-                if key not in ends:
-                    continue
-                other = ends[1] if ends[0] == key else ends[0]
-                if other in self.atom_native:
-                    fragment = self.parents.get(self.byid[self.atom_native[other]])
-                    break
+            component, fragment = planned[key]
             if fragment is None:
-                fragment = ET.SubElement(self.page, "fragment", id=self.fresh())
+                fragment = fresh_fragments.get(component)
+                if fragment is None:
+                    fragment = ET.SubElement(self.page, "fragment", id=self.fresh())
+                    fresh_fragments[component] = fragment
             symbol = after["element"]
             if not _is_native_pure_element_label(
                 symbol
@@ -250,15 +314,8 @@ class _NativeWriter:
                 node.attrib.pop("Element", None)
                 node.set("NodeType", "GenericNickname")
                 node.set("GenericNickname", "R" if symbol.startswith("R") else symbol)
-            if symbol != "C" or after["explicit_label"]:
-                t = ET.SubElement(node, "t", p=node.get("p", ""))
-                ET.SubElement(
-                    t,
-                    "s",
-                    font=self.root.get("LabelFont", "3"),
-                    size=self.root.get("LabelSize", "10"),
-                    face="96",
-                ).text = symbol
+            if _label_shown(after):
+                self.append_label(node, symbol)
             self.atom_native[key] = node.attrib["id"]
             self.byid[node.attrib["id"]] = node
             self.parents[node] = fragment
