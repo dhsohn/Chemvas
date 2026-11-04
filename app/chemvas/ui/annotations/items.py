@@ -128,6 +128,7 @@ class NoteItem(ExportTextItem):
         self._last_html = ""
         self.format_popup_open = False
         self._fitting_text_width = False
+        self._derived_layout: Callable[[NoteItem], None] | None = None
         document = self.document()
         assert document is not None
         document.contentsChanged.connect(self._text_changed)
@@ -149,20 +150,40 @@ class NoteItem(ExportTextItem):
             if updated != current:
                 self.notes.records[self.record_id] = updated
 
+    def set_derived_layout(self, layout: Callable[[NoteItem], None] | None) -> None:
+        """Install the placement recomputed from the text after each change.
+
+        Native captions anchor their source justification point by measuring
+        the laid-out text, so any change of content or format must re-measure
+        it before the selection box and scene bounds read the item.
+        """
+        self._derived_layout = layout
+        self.refresh_derived_layout()
+
+    def refresh_derived_layout(self) -> None:
+        if self._derived_layout is not None:
+            self._derived_layout(self)
+
     def _text_changed(self) -> None:
         self._fit_text_width()
+        self.refresh_derived_layout()
         self.publish_text()
 
     @override
     def setHtml(self, html: str | None) -> None:
         super().setHtml(html)
         # Rollback deliberately blocks QTextDocument signals. Explicit text
-        # replacement still has to restore the document record in that case.
+        # replacement still has to restore the document record and its derived
+        # layout in that case.
+        self._fit_text_width()
+        self.refresh_derived_layout()
         self.publish_text()
 
     @override
     def setPlainText(self, text: str | None) -> None:
         super().setPlainText(text)
+        self._fit_text_width()
+        self.refresh_derived_layout()
         self.publish_text()
 
     @override
