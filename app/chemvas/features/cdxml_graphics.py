@@ -13,6 +13,8 @@ from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     import xml.etree.ElementTree as ET
+
+    from chemvas.features.cdxml_preservation import PreservingImporter
 from PIL import Image, ImageDraw
 
 from chemvas.domain.document.images import MAX_IMAGE_BYTES, image_state_from_bytes
@@ -25,15 +27,120 @@ def graphic_image(reader: Any, e: ET.Element) -> dict[str, object] | None:
     return _GraphicProjection(reader, e).render()
 
 
-def native_image_z(reader: Any, e: ET.Element) -> float:
+def native_image_z(
+    reader: Any,
+    e: ET.Element,
+    *,
+    bounds: tuple[float, float, float, float] | None = None,
+) -> float:
+    """Choose an existing paint band, without changing retained native ranks.
+
+    Raster projections supply their actual native-coordinate extent: an oval's
+    BoundingBox, for example, can describe its axis and center, not its extent.
+    Only overlapping chemistry can decide whether that projection is behind
+    bonds. Editable arrows keep their established classification (no bounds).
+    This is not a general cross-layer ordering solver; mixed foreground and
+    background overlaps still use the conservative foreground band and the
+    document writer's existing representability checks.
+    """
     if e.tag == "ColoredMolecularArea":
         return -3.0
-    chemical = reader.nodes + reader.native_bonds
+    chemical = (
+        reader.nodes + reader.native_bonds
+        if bounds is None
+        else _overlapping_chemistry(reader, bounds)
+    )
     if chemical and reader.number(e.get("Z", "0"), e) < min(
         reader.number(node.get("Z", "0"), node) for node in chemical
     ):
         return -3.0
     return 1.0
+
+
+def _segment_in_box(
+    a: tuple[float, float],
+    b: tuple[float, float],
+    bounds: tuple[float, float, float, float],
+    padding: float = 0.0,
+) -> bool:
+    """Clip a segment against a stroke-expanded box, including boundary contact."""
+    start, end = 0.0, 1.0
+    for p, q, low, high in zip(a, b, bounds[:2], bounds[2:], strict=True):
+        low, high = low - padding, high + padding
+        if p == q:
+            if not low <= p <= high:
+                return False
+        else:
+            near, far = sorted(((low - p) / (q - p), (high - p) / (q - p)))
+            start, end = max(start, near), min(end, far)
+            if start > end:
+                return False
+    return True
+
+
+def _overlapping_chemistry(
+    reader: PreservingImporter, bounds: tuple[float, float, float, float]
+) -> list[ET.Element]:
+    """Conservative native geometry, excluding invisible carbon hit targets.
+
+    Bond endpoints outside the graphic can still cross it; conversely a diagonal
+    bond's enclosing rectangle alone does not establish overlap. Text boxes are
+    a conservative guard, not a second font-layout engine. Cached node/bond boxes
+    never replace their authoritative positions/endpoints.
+    """
+    result = []
+    positions = {}
+    for node in reader.nodes:
+        x, y = (reader.number(v, node) for v in node.get("p", "").split())
+        positions[node.get("id")] = (x, y)
+        text = node.find("t")
+        if text is None and node.get("Element", "6") == "6":
+            continue
+        relevant = _segment_in_box((x, y), (x, y), bounds)
+        if text is not None:
+            box = text.get("BoundingBox", "").split()
+            if len(box) == 4:
+                x1, y1, x2, y2 = (reader.number(v, text) for v in box)
+                relevant |= (
+                    max(x1, x2) >= bounds[0]
+                    and min(x1, x2) <= bounds[2]
+                    and max(y1, y2) >= bounds[1]
+                    and min(y1, y2) <= bounds[3]
+                )
+        if relevant:
+            result.append(node)
+    for bond in reader.native_bonds:
+
+        def number(name: str, default: str, element: ET.Element = bond) -> float:
+            return reader.number(reader.inherited(element, name, default), element)
+
+        try:
+            padding = number("LineWidth", "0.6") / 2
+            display = bond.get("Display", "Solid")
+            if display == "Bold":
+                padding = max(padding, number("BoldWidth", "2") / 2)
+            elif display in {"Wavy", "Hash"}:
+                # The native uncertain-bond painter caps its transverse
+                # displacement at 1.4 scene units, in addition to the stroke.
+                padding += 1.4
+            elif display not in {"Solid", "Dash"}:
+                # Wedges and wedged hashes include the transverse width AND
+                # the outline/hash pen, not just the larger of the two.
+                padding += number("BoldWidth", "2") / 2
+            if bond.get("Order", "1") != "1":
+                padding += (
+                    number("BondSpacing", "18") * number("BondLength", "14.4") / 100
+                )
+        except ValueError:
+            # Invalid stroke metrics are rejected by the native presentation
+            # owner on scene creation. Unknown bounds cannot prove separation.
+            result.append(bond)
+            continue
+        if _segment_in_box(
+            positions[bond.get("B")], positions[bond.get("E")], bounds, padding
+        ):
+            result.append(bond)
+    return result
 
 
 def embedded_image(reader: Any, e: ET.Element) -> dict[str, object]:
@@ -55,7 +162,7 @@ def embedded_image(reader: Any, e: ET.Element) -> dict[str, object]:
         y=top - reader.offset[1],
         width=right - left,
         height=bottom - top,
-        z=native_image_z(reader, e),
+        z=native_image_z(reader, e, bounds=(left, top, right, bottom)),
     )
 
 
@@ -441,7 +548,7 @@ class _GraphicProjection:
                     )
         output = io.BytesIO()
         raster.save(output, format="PNG")
-        z = native_image_z(self.reader, self.e)
+        z = native_image_z(self.reader, self.e, bounds=(left, top, right, bottom))
         return image_state_from_bytes(
             output.getvalue(),
             x=left - self.reader.offset[0],

@@ -279,9 +279,87 @@ def test_canvas_save_preserves_untouched_native_xml(tmp_path, edit_other):
         service.save_to_file(str(path))
         root = ET.fromstring(path.read_bytes())
         for identity in ("9", "10"):
-            assert (
-                root.find(f'.//*[@id="{identity}"]').attrib
-                == original.find(f'.//*[@id="{identity}"]').attrib
-            )
+            # Saving resolves missing/tied Z at the document boundary while
+            # keeping every native vector attribute, including exact decimals.
+            saved = root.find(f'.//*[@id="{identity}"]')
+            assert {
+                key: value for key, value in saved.attrib.items() if key != "Z"
+            } == original.find(f'.//*[@id="{identity}"]').attrib
+        z = [
+            int(root.find(f'.//*[@id="{identity}"]').get("Z"))
+            for identity in ("9", "10", "11")
+        ]
+        assert len(set(z)) == 3 and min(z) > 0
         if edit_other:
             assert root.find('.//*[@id="11"]').get("Head3D") == "130 90 0"
+
+
+@pytest.mark.parametrize("fill_z,expected", [(1, "#000000"), (3, "#ff0000")])
+def test_untouched_arrow_fill_overlap_and_fallback_keep_native_reopen_pixels(
+    tmp_path, fill_z, expected
+):
+    from PyQt6.QtCore import QRectF, Qt
+    from PyQt6.QtGui import QImage, QPainter
+
+    from chemvas.bootstrap.document_cli_shared import offscreen_canvas
+    from chemvas.features.document_files import read_document
+
+    raw = drawing(
+        f'<graphic id="7" Z="{fill_z}" GraphicType="Rectangle" RectangleType="Filled" '
+        'BoundingBox="40.000 35.000 80.000 65.000" color="2"/>'
+        '<graphic id="8" SupersededBy="9" GraphicType="Line" '
+        'BoundingBox="100.000 50.000 20.000 50.000"/>'
+        '<graphic id="9" SupersededBy="10" GraphicType="Line" '
+        'BoundingBox="100.000 50.000 20.000 50.000"/>'
+        '<arrow id="10" Z="2" Tail3D="20.000 50.000 0.000" '
+        'Head3D="100.000 50.000 0.000" LineWidth="2.000" ArrowheadHead="Full"/>'
+        '<arrow id="11" Tail3D="20 80 0" Head3D="100 80 0"/>'
+    ).replace(
+        b'<CDXML LineWidth="0.75">',
+        b'<CDXML LineWidth="0.75"><colortable><color r="1" g="0" b="0"/></colortable>',
+    )
+    state = parse_cdxml_document(raw).state
+    original = ET.fromstring(state["cdxml_source"]["xml"])
+
+    def render(canvas):
+        image = QImage(800, 600, QImage.Format.Format_ARGB32_Premultiplied)
+        image.fill(Qt.GlobalColor.white)
+        painter = QPainter(image)
+        canvas.scene().render(
+            painter, QRectF(0, 0, 800, 600), QRectF(-200, -150, 400, 300)
+        )
+        painter.end()
+        return image
+
+    with offscreen_canvas(state, command="overlapping-native-arrow") as (
+        canvas,
+        service,
+    ):
+        before = render(canvas)
+        assert before.pixelColor(120, 100).name() == expected
+        path = tmp_path / "overlap.cdxml"
+        service.save_to_file(str(path))
+        saved = path.read_bytes()
+        root = ET.fromstring(saved)
+        for old, new in zip(original.iter(), root.iter(), strict=True):
+            assert old.tag == new.tag and old.text == new.text
+            assert {k: v for k, v in old.attrib.items() if k != "Z"} == {
+                k: v for k, v in new.attrib.items() if k != "Z"
+            }
+        ranks = [
+            int(root.find(f'.//*[@id="{identity}"]').get("Z"))
+            for identity in (7, 8, 9, 10, 11)
+        ]
+        assert len(set(ranks)) == 5 and min(ranks) > 0
+        assert (ranks[0] < ranks[3]) == (fill_z < 2)
+        assert root.find('.//*[@id="8"]').get("SupersededBy") == "9"
+        assert root.find('.//*[@id="9"]').get("SupersededBy") == "10"
+        assert root.find(".//step").get("ReactionStepArrows") == "10"
+        for reopened in (
+            read_document(path).state,
+            parse_cdxml_document(saved.split(b"\n<!--")[0]).state,
+        ):
+            service.apply_state(reopened)
+            assert render(canvas) == before
+            service.save_to_file(str(path))
+            assert path.read_bytes().split(b"\n<!--")[0] == saved.split(b"\n<!--")[0]

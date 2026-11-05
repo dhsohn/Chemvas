@@ -10,7 +10,7 @@ from copy import deepcopy
 
 import pytest
 from PyQt6.QtCore import QPointF
-from PyQt6.QtGui import QFontInfo
+from PyQt6.QtGui import QFontInfo, QTextCharFormat
 from PyQt6.QtWidgets import QApplication
 
 from chemvas.features.cdxml_document import parse_cdxml_document
@@ -84,6 +84,60 @@ def test_caption_edit_retains_native_size_in_saved_xml():
     assert text is not None
     assert all(float(run.get("size")) == 5 for run in text.findall("s"))
     assert "tuned" in "".join(text.itertext())
+
+
+@pytest.mark.parametrize(
+    "size", ["5", "4.9", "5.123456789", "8.2437732235", "10.499999", "1000"]
+)
+@pytest.mark.parametrize("inherited", [False, True])
+def test_caption_precision_survives_sanitizing_into_resolved_qt_font(size, inherited):
+    run_size = "" if inherited else f' size="{size}"'
+    raw = (
+        f'<CDXML CaptionFont="3" CaptionSize="{size}">'
+        '<fonttable><font id="3" name="Arial"/></fonttable>'
+        '<page id="1" BoundingBox="0 0 200 200">'
+        '<t id="2" p="50 50" Justification="Center" LabelAlignment="Right">\n'
+        f'  <s font="3"{run_size} face="1"> A  </s>\n'
+        f'  <s font="3"{run_size} face="32">2</s>\n'
+        f'  <s font="3"{run_size} face="64">+\nB </s>\n'
+        "</t></page></CDXML>"
+    ).encode()
+    document = parse_cdxml_document(raw).state
+    original = deepcopy(document)
+    assert document["notes"][0]["text"] == " A  2+\nB "
+    with detached_document_scene(document) as context:
+        item = next(iter(context.state.scene_items_state.note_items.values()))
+        assert item.toPlainText() == " A  2+\nB "
+        item.boundingRect()
+        block = item.document().begin()
+        fragments = block.begin()
+        base = fragments.fragment().charFormat()
+        font = base.font().resolve(item.font())
+        expected_pixels = int(float(size) + 0.5)
+        assert QFontInfo(font).pixelSize() == expected_pixels
+        assert base.font().bold()
+        # Check the shaped glyphs, not just the HTML's declared size.
+        glyph = block.layout().glyphRuns(1, 1)[0]
+        assert glyph.rawFont().pixelSize() == pytest.approx(expected_pixels)
+        fragments += 1
+        assert fragments.fragment().text() == "2"
+        assert (
+            fragments.fragment().charFormat().verticalAlignment()
+            == QTextCharFormat.VerticalAlignment.AlignSubScript
+        )
+        fragments += 1
+        assert (
+            fragments.fragment().charFormat().verticalAlignment()
+            == QTextCharFormat.VerticalAlignment.AlignSuperScript
+        )
+        line = block.layout().lineAt(0)
+        anchor = QPointF(
+            block.layout().position().x() + line.naturalTextRect().center().x(),
+            block.layout().position().y() + line.y() + line.ascent(),
+        )
+        assert item.mapToScene(anchor) == QPointF(-50, -50)
+    assert document == original
+    assert update_native_document(document) == update_native_document(original)
 
 
 @pytest.mark.parametrize("value", ["nan", "inf", "0", "-1"])

@@ -19,6 +19,7 @@ from chemvas.ui.canvas.native_document_layout import (
     apply_native_presentation,
     native_bond_metrics,
     native_caption_layouts,
+    restore_native_paint_order,
 )
 from chemvas.ui.canvas.sheet_setup_logic import normalize_sheet_setup
 from chemvas.ui.scene.scene_selectability import make_item_selectable
@@ -214,3 +215,4 @@ def populate_document_scene(
             {**item_state, "kind": "orbital", "orbital_kind": item_state["kind"]},
             "orbital_items",
         )
+    restore_native_paint_order(context, state)

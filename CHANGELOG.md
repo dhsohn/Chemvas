@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Keep native highlights behind overlapping chemistry when distant objects have
+  lower Z values, while retaining foreground drawings over nearby bonds.
+- Fix working-document CDXML saves that retained ambiguous missing or duplicate
+  paint-order values. Where the live scene establishes an order, assign unique
+  positive INT16 Z values while preserving native chemistry, graphics, and
+  references. Refuse ambiguous overlapping order before replacing the file.
+- Preserve native atom-label formatting when CDXML text runs are indented,
+  retain high-precision caption font sizes through HTML sanitizing, and keep
+  explicit node label display separate from automatic token reordering while
+  preserving authored text anchors.
+- Preserve plain native atom labels when CDXML omits a run's font face, while
+  retaining explicit formula and subscript/superscript styles.
+
 ## [0.28.0] - 2026-11-04
 
 ### Removed

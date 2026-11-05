@@ -74,6 +74,20 @@ def transform_native(
 
 
 def update_native_document(state: dict[str, Any], *, note_writer: Any = None) -> bytes:
+    root, _ = native_document_tree(state, note_writer=note_writer)
+    return b'<?xml version="1.0" encoding="UTF-8"?>\n' + cast(
+        "bytes", ET.tostring(root, encoding="utf-8")
+    )
+
+
+def native_document_tree(
+    state: dict[str, Any], *, note_writer: Any = None
+) -> tuple[ET.Element, dict[tuple[str, str | int], str]]:
+    """Updated XML and the native IDs of its editable drawing records.
+
+    The document-save boundary uses these bindings to retain scene paint order,
+    including objects allocated during this write. The source state is untouched.
+    """
     return _NativeWriter(state, note_writer).build()
 
 
@@ -118,6 +132,7 @@ class _NativeWriter:
         self.old_atoms = {str(k): v for k, v in self.original["model"]["atoms"].items()}
         self.atoms = {str(k): v for k, v in self.state["model"]["atoms"].items()}
         self.atom_native = dict(self.source["atoms"])
+        self.bond_native = dict(self.source["bonds"])
         self.changed_nodes: set[str] = set()
         self.stale_stereo: set[ET.Element] = set()
         self.removed_ids: set[str] = set()
@@ -411,6 +426,7 @@ class _NativeWriter:
                 if native
                 else ET.SubElement(self.parents[self.byid[begin]], "b", id=self.fresh())
             )
+            self.bond_native[key] = e.attrib["id"]
             # SDK BeginAttach/EndAttach are label-character offsets, not port
             # numbers. Bind them to the original XML endpoints: importing an
             # End-style wedge/hash may already have reversed the model's a/b.
@@ -636,7 +652,7 @@ class _NativeWriter:
                         f"Deleting this object would break native {e.tag}.{key} references; undo the deletion before saving."
                     )
 
-    def build(self) -> bytes:
+    def build(self) -> tuple[ET.Element, dict[tuple[str, str | int], str]]:
         self.update_atoms()
         self.add_atoms()
         self.update_charges()
@@ -658,7 +674,7 @@ class _NativeWriter:
                 e.attrib.pop(key, None)
         from chemvas.features.cdxml_new_objects import append_new_objects
 
-        append_new_objects(
+        items = append_new_objects(
             self.root,
             self.state,
             fresh=self.fresh,
@@ -666,6 +682,16 @@ class _NativeWriter:
             note_writer=self.note_writer,
             atom_native=self.atom_native,
         )
-        return b'<?xml version="1.0" encoding="UTF-8"?>\n' + cast(
-            "bytes", ET.tostring(self.root, encoding="utf-8")
+        objects: dict[tuple[str, str | int], str] = {
+            ("atoms", key): identity for key, identity in self.atom_native.items()
+        }
+        objects.update(
+            (("bonds", key), identity) for key, identity in self.bond_native.items()
         )
+        objects.update(
+            ((kind, index), identity)
+            for kind, identities in items.items()
+            for index, identity in enumerate(identities)
+            if identity is not None
+        )
+        return self.root, objects

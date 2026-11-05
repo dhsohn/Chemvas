@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import pytest
+
 from chemvas.features.annotations import MAX_NOTE_HTML_CHARS, sanitize_note_html
 
 
@@ -128,3 +130,19 @@ def test_empty_paragraph_marker_accepts_only_the_qt_empty_value():
         '<p style="white-space:pre-wrap">x</p>'
     )
     assert sanitize_note_html(sanitized) == sanitized
+
+
+@pytest.mark.parametrize("size", ["5.123456789px", "10.499999px", "1000.0px"])
+def test_fractional_native_pixel_sizes_survive_repeated_sanitizing(size):
+    html = f'<span style="font-size:{size};color:#123456">size</span>'
+    sanitized = sanitize_note_html(html)
+    assert f"font-size:{size}" in sanitized
+    assert sanitize_note_html(sanitized) == sanitized
+
+
+@pytest.mark.parametrize(
+    "size", ["1000.1px", "1001px", "1e9px", "nanpx", "infpx", "-5.123px", "5px url(x)"]
+)
+def test_native_pixel_size_extension_still_rejects_invalid_values(size):
+    html = f'<span style="font-size:{size};color:#123456">size</span>'
+    assert sanitize_note_html(html) == '<span style="color:#123456">size</span>'

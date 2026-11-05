@@ -90,6 +90,10 @@ MAX_NOTE_HTML_CHARS = 1_000_000
 _CSS_COLOR_RE = re.compile(r"#(?:[0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})\Z")
 _CSS_FONT_WEIGHT_RE = re.compile(r"[1-9]00\Z")
 _CSS_LENGTH_RE = re.compile(r"\d{1,3}(?:\.\d{1,2})?(?:em|pt|px|rem|%)\Z")
+# Native CDXML captions can carry fractional sizes beyond two decimals. Keep
+# those validated pixel sizes through sanitizing, including the importer's
+# 1000-point upper bound, without widening unrelated CSS lengths.
+_CSS_PIXEL_FONT_SIZE_RE = re.compile(r"\d{1,4}(?:\.\d{1,16})?px\Z")
 _CSS_NUMBER_RE = re.compile(r"\d{1,3}(?:\.\d{1,2})?\Z")
 _CSS_RGB_COLOR_RE = re.compile(
     r"rgba?\(\s*(?:\d{1,3}%?\s*,\s*){2}\d{1,3}%?(?:\s*,\s*(?:0|1|0?\.\d{1,3}|\d{1,3}%))?\s*\)\Z"
@@ -295,6 +299,10 @@ def _is_safe_style_property_value(property_name: str, value: str) -> bool:
         return (
             lower_value in _CSS_FONT_SIZE_KEYWORDS
             or _CSS_LENGTH_RE.fullmatch(lower_value) is not None
+            or (
+                _CSS_PIXEL_FONT_SIZE_RE.fullmatch(lower_value) is not None
+                and 0 < float(lower_value[:-2]) <= 1000
+            )
         )
     if property_name == "font-style":
         return lower_value in {"italic", "normal", "oblique"}
