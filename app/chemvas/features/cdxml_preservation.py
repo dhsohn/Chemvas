@@ -310,6 +310,7 @@ class PreservingImporter:
 
     def state(self) -> dict[str, Any]:
         from chemvas.features.cdxml_editable_arrows import editable_arrow
+        from chemvas.features.cdxml_editable_rectangles import editable_rectangle
         from chemvas.features.cdxml_graphics import graphic_image
 
         atoms = [self.atom(e, i) for i, e in enumerate(self.nodes)]
@@ -342,8 +343,10 @@ class PreservingImporter:
             "notes": [],
             "images": [],
             "arrows": [],
+            "shapes": [],
         }
         state["images"] = []
+        state["shapes"] = []
         for e in self.page.iter():
             if self.has_ancestor(e, "n"):
                 continue
@@ -362,6 +365,11 @@ class PreservingImporter:
                 if arrow is not None:
                     state["arrows"].append(arrow)
                     bindings["arrows"].append(e.get("id"))
+                    continue
+                rectangle = editable_rectangle(self, e)
+                if rectangle is not None:
+                    state["shapes"].append(rectangle)
+                    bindings["shapes"].append(e.get("id"))
                     continue
                 image = graphic_image(self, e)
                 if image is not None:
