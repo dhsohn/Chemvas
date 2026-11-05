@@ -116,7 +116,12 @@ def test_external_note_patch_roundtrip_preserves_charge_and_source(
     assert source.stat().st_mtime_ns == before_stat.st_mtime_ns
     root = ET.fromstring(output.read_bytes())
     original_node = ET.fromstring(raw).find(".//n")
-    assert root.find(".//n").attrib == original_node.attrib
+    # The canonical save assigns Z; native chemistry and coordinates are exact.
+    assert {
+        key: value for key, value in root.find(".//n").attrib.items() if key != "Z"
+    } == original_node.attrib
+    z = [int(e.attrib["Z"]) for e in root.iter() if e.tag in {"n", "t"}]
+    assert len(z) == len(set(z)) and min(z) > 0
     assert len(root.findall(".//n")) == 1
     assert len(root.findall(".//graphic")) == 0
     # Check both snapshot reopening and a consumer that reads native XML only.

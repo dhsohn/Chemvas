@@ -21,13 +21,14 @@ def append_new_objects(
     color_index: Any,
     note_writer: Any,
     atom_native: dict[str, str],
-) -> None:
+) -> dict[str, list[str | None]]:
     source = state["cdxml_source"]
     offset = source["offset"]
     page = root.find("page")
     assert page is not None
     atoms = {str(k): v for k, v in state["model"]["atoms"].items()}
     mark_z = _top_z(root)
+    result: dict[str, list[str | None]] = {}
 
     def point(value: list[float] | tuple[float, ...]) -> str:
         return f"{value[0] + offset[0]:.12g} {value[1] + offset[1]:.12g} 0"
@@ -46,7 +47,8 @@ def append_new_objects(
     ):
         records = state.get(kind, [])
         bindings = source["items"].get(kind, [None] * len(records))
-        for identity, item in zip(bindings, records, strict=True):
+        result[kind] = list(bindings)
+        for index, (identity, item) in enumerate(zip(bindings, records, strict=True)):
             if identity is not None:
                 continue
             if kind == "notes":
@@ -60,7 +62,7 @@ def append_new_objects(
                 )
                 note_writer(root, e, item)
             elif kind == "arrows":
-                _append_arrow(page, item, point, fresh, color_index)
+                e = _append_arrow(page, item, point, fresh, color_index)
             elif kind == "shapes":
                 if (
                     item["shape_kind"] != "rect"
@@ -86,13 +88,15 @@ def append_new_objects(
                     e.set("color", color_index(item["fill"]))
             elif kind == "marks":
                 mark_z += 1
-                _append_mark(
+                e = _append_mark(
                     page, item, atoms, offset, fresh, color_index, atom_native, mark_z
                 )
             else:
                 raise ValueError(
                     f"New {kind} are not yet supported in a preserved CDXML document; the file was not replaced."
                 )
+            result[kind][index] = e.attrib["id"]
+    return result
 
 
 def _append_mark(
@@ -104,7 +108,7 @@ def _append_mark(
     color_index: Any,
     atom_native: dict[str, str],
     z: int,
-) -> None:
+) -> ET.Element:
     # The atom Charge itself is written by the native writer's charge plan.
     kind = item.get("kind")
     if not isinstance(kind, str) or kind not in MARK_SYMBOLS:
@@ -141,6 +145,7 @@ def _append_mark(
             attribute="Charge",
             object=atom_native[str(atom_id)],
         )
+    return graphic
 
 
 def _top_z(root: ET.Element) -> int:
@@ -159,7 +164,7 @@ def _top_z(root: ET.Element) -> int:
 
 def _append_arrow(
     page: ET.Element, item: dict[str, Any], point: Any, fresh: Any, color_index: Any
-) -> None:
+) -> ET.Element:
     kind = item["kind"]
     color = color_index(item.get("color", "#000000"))
     if kind in {"curved_single", "curved_double"}:
@@ -170,7 +175,7 @@ def _append_arrow(
         c1 = [a[i] + 2 / 3 * (control[i] - a[i]) for i in range(2)]
         c2 = [b[i] + 2 / 3 * (control[i] - b[i]) for i in range(2)]
         coords = " ".join(" ".join(point(p).split()[:2]) for p in (a, a, c1, c2, b, b))
-        ET.SubElement(
+        return ET.SubElement(
             page,
             "curve",
             id=fresh(),
@@ -179,7 +184,6 @@ def _append_arrow(
             ArrowheadType="Solid",
             color=color,
         )
-        return
     head, tail = {
         "arrow": ("Full", "None"),
         "dotted": ("Full", "None"),
@@ -209,3 +213,4 @@ def _append_arrow(
         e.set("LineWidth", "2")
     if any(item.get("labels", {}).values()):
         raise ValueError("Native arrow labels require separate text objects.")
+    return e

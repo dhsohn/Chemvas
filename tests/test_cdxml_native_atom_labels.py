@@ -5,6 +5,7 @@ import os
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from copy import deepcopy
+from html import escape
 
 import pytest
 from PyQt6.QtCore import QPointF, QRectF
@@ -249,3 +250,168 @@ def test_rotated_native_atom_label_keeps_baseline_anchor():
         context.model.atoms[3].x += 3
         context.atom_labels.relayout_atom_label(3)
         assert item.mapToScene(local_anchor) == anchor + QPointF(3, 0)
+
+
+@pytest.mark.parametrize("separator", ["", "\n      ", "\n\t"])
+@pytest.mark.parametrize("first,last", [("K", "+"), (" K  ", "+\nR ")])
+def test_run_whitespace_keeps_native_identity_and_literal_formatting(
+    separator, first, last
+):
+    runs = separator.join(
+        (
+            f'<s font="3" size="8" face="1">{escape(first)}</s>',
+            '<s font="3" size="8" face="32">2</s>',
+            f'<s font="3" size="8" face="64">{escape(last)}</s>',
+        )
+    )
+    raw = (
+        '<CDXML><fonttable><font id="3" name="Arial"/></fonttable>'
+        '<page id="1" BoundingBox="0 0 200 200"><fragment id="2">'
+        '<n id="3" p="50 50" NodeType="GenericNickname" LabelDisplay="Center">'
+        '<t id="4" p="50 54" LabelJustification="Center" LabelAlignment="Right">'
+        f"{separator}{runs}{separator}</t></n></fragment></page></CDXML>"
+    ).encode()
+    document = parse_cdxml_document(raw).state
+    original = deepcopy(document)
+    literal = first + "2" + last
+    assert document["model"]["atoms"][0]["element"] == literal.strip()
+    with detached_document_scene(document) as context:
+        item = context.state.atom_graphics_state.atom_items[0]
+        assert isinstance(item, NativeAtomLabelItem)
+        assert item.toPlainText() == literal
+        assert baseline(item) == pytest.approx(-46)
+        line = item.document().begin().layout().lineAt(0)
+        assert item.x() + line.naturalTextWidth() * item.scale() / 2 == pytest.approx(
+            -50
+        )
+        fragments = item.document().begin().begin()
+        assert fragments.fragment().charFormat().font().bold()
+        fragments += 1
+        assert fragments.fragment().text() == "2"
+        assert (
+            fragments.fragment().charFormat().verticalAlignment()
+            == QTextCharFormat.VerticalAlignment.AlignSubScript
+        )
+        fragments += 1
+        assert (
+            fragments.fragment().charFormat().verticalAlignment()
+            == QTextCharFormat.VerticalAlignment.AlignSuperScript
+        )
+    assert document == original
+    reopened = parse_cdxml_document(update_native_document(document)).state
+    assert reopened["model"] == document["model"]
+
+
+@pytest.mark.parametrize(
+    "display,child_alignment,expected",
+    [
+        ("Center", "Right", "NH2"),
+        ("Left", "Below", "NH2"),
+        ("Right", "Left", "NH2"),
+        ("Right", "Right", "NH2"),
+        ("Above", "Left", "NH2"),
+        ("Below", "Right", "NH2"),
+        ("Auto", "Right", "H2N"),
+        ("Auto", "Above", "H2\nN"),
+        ("Auto", "Below", "N\nH2"),
+        ("", "Right", "H2N"),
+        ("", "Below", "N\nH2"),
+    ],
+)
+@pytest.mark.parametrize(
+    "justification,fraction", [("Left", 0), ("Center", 0.5), ("Right", 1)]
+)
+def test_node_label_display_controls_direction_not_text_baseline_anchor(
+    display, child_alignment, expected, justification, fraction
+):
+    # Owner's Windows ChemDraw 25 Open/SaveAs raster shows NH2 for explicit
+    # Right and H2N for Auto + resolved Right; both retain source text NH2.
+    # The owner's second native raster also keeps explicit Above/Below on one
+    # line. Auto vertical cases preserve the existing resolved-child projection;
+    # they do not assert how ChemDraw recalculates Auto from attached bonds.
+    node_style = f' LabelDisplay="{display}"' if display else ""
+    raw = (
+        '<CDXML><fonttable><font id="3" name="Arial"/></fonttable>'
+        '<page id="1" BoundingBox="0 0 200 200"><fragment id="2">'
+        f'<n id="3" p="50 50" Element="7" NumHydrogens="2"{node_style}>'
+        f'<t id="4" p="52 54" LabelAlignment="{child_alignment}" '
+        f'LabelJustification="{justification}">'
+        '<s font="3" size="8" face="96">NH2</s></t></n>'
+        "</fragment></page></CDXML>"
+    ).encode()
+    document = parse_cdxml_document(raw).state
+    before = deepcopy(document)
+    with detached_document_scene(document) as context:
+        item = context.state.atom_graphics_state.atom_items[0]
+        assert item.toPlainText() == expected
+        assert context.model.atoms[0].element == "NH2"
+        assert baseline(item) == pytest.approx(-46)
+        line = item.document().begin().layout().lineAt(0)
+        assert (
+            item.x() + line.naturalTextWidth() * item.scale() * fraction
+            == pytest.approx(-48)
+        )
+    assert document == before
+    assert update_native_document(document) == update_native_document(before)
+
+
+@pytest.mark.parametrize("display,text", [("Above", "H2\nN"), ("Below", "N\nH2")])
+def test_explicit_vertical_label_keeps_authored_lines(display, text):
+    # Owner's native raster retains these authored lines in explicit stacks.
+    raw = (
+        '<CDXML><fonttable><font id="3" name="Arial"/></fonttable>'
+        '<page id="1" BoundingBox="0 0 200 200"><fragment id="2">'
+        f'<n id="3" p="50 50" Element="7" LabelDisplay="{display}">'
+        '<t id="4" p="52 54" LabelAlignment="Right" LabelJustification="Left">'
+        f'<s font="3" size="8" face="96">{text}</s></t></n>'
+        "</fragment></page></CDXML>"
+    ).encode()
+    document = parse_cdxml_document(raw).state
+    before = deepcopy(document)
+    with detached_document_scene(document) as context:
+        item = context.state.atom_graphics_state.atom_items[0]
+        assert isinstance(item, NativeAtomLabelItem)
+        assert item.toPlainText() == text
+        assert baseline(item) == pytest.approx(-46)
+        assert item.x() == pytest.approx(-48)
+    assert document == before
+    assert update_native_document(document) == update_native_document(before)
+
+
+@pytest.mark.parametrize("size", ["5.123456789", "8.2437732235"])
+def test_high_precision_atom_label_size_already_uses_native_font(size):
+    document = parse_cdxml_document(
+        SOURCE.replace(b'size="5"', f'size="{size}"'.encode())
+    ).state
+    with detached_document_scene(document) as context:
+        item = context.state.atom_graphics_state.atom_items[0]
+        assert QFontInfo(item.font()).pixelSize() * item.scale() == pytest.approx(
+            float(size), abs=0.005
+        )
+
+
+@pytest.mark.parametrize("label", ["Ph", "R2"])
+def test_centered_literal_nickname_does_not_gain_chemical_reversal(label):
+    raw = (
+        '<CDXML><fonttable><font id="3" name="Arial"/></fonttable>'
+        '<page id="1" BoundingBox="0 0 200 200"><fragment id="2">'
+        '<n id="3" p="50 50" NodeType="GenericNickname" LabelDisplay="Center">'
+        '<t id="4" p="50 54" LabelAlignment="Right" LabelJustification="Center">'
+        f'<s font="3" size="8" face="0">{label}</s></t></n>'
+        "</fragment></page></CDXML>"
+    ).encode()
+    document = parse_cdxml_document(raw).state
+    with detached_document_scene(document) as context:
+        item = context.state.atom_graphics_state.atom_items[0]
+        assert item.toPlainText() == label
+        assert context.model.atoms[0].element == label
+        item.boundingRect()
+        line = item.document().begin().layout().lineAt(0)
+        assert item.x() + line.naturalTextWidth() * item.scale() / 2 == pytest.approx(
+            context.model.atoms[0].x
+        )
+
+
+def test_legacy_unstyled_atom_text_keeps_existing_projection():
+    raw = b'<CDXML><page id="1" BoundingBox="0 0 200 200"><fragment id="2"><n id="3" p="50 50" Element="8"><t> O </t></n></fragment></page></CDXML>'
+    assert parse_cdxml_document(raw).state["model"]["atoms"][0]["element"] == "O"
