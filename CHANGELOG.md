@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Draw ChemDraw Bold lines, arrows, curves, rectangles and ovals at the
+  document's BoldWidth instead of LineWidth, as ChemDraw does. Arrowheads stay
+  sized by LineWidth, and Bold dashed lines keep the LineWidth dash period.
 - Open ChemDraw CDXML files whose formula or molecular-weight captions are
   linked chemical properties. The caption opens as ordinary text and the link
   is preserved; editing or deleting the caption, or deleting part of its
