@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Keep native CDXML rectangles, ovals, brackets and curves at their exact
+  stroke width. Their raster projection rounded a 0.6 pt stroke to 0.5 pt.
 - Draw ChemDraw Bold lines, arrows, curves, rectangles and ovals at the
   document's BoldWidth instead of LineWidth, as ChemDraw does. Arrowheads stay
   sized by LineWidth, and Bold dashed lines keep the LineWidth dash period.
