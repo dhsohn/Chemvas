@@ -136,6 +136,7 @@ class _NativeWriter:
         self.changed_nodes: set[str] = set()
         self.stale_stereo: set[ET.Element] = set()
         self.removed_ids: set[str] = set()
+        self.edited_notes: set[str] = set()
 
     def fresh(self) -> str:
         self.allocated += 1
@@ -592,6 +593,7 @@ class _NativeWriter:
                                 "Native rich-text writer is required for caption edits."
                             )
                         self.note_writer(self.root, e, after)
+                        self.edited_notes.add(identity)
 
     def remove_deleted_fallbacks(self) -> None:
         # Superseded graphics are hidden alternate representations of their target,
@@ -614,6 +616,18 @@ class _NativeWriter:
                     if n.get("id") and n.attrib["id"] not in self.removed_ids
                 )
                 self.delete(graphic)
+
+    def detach_chemical_properties(self) -> None:
+        # A ChemDraw chemical property links a caption (formula, weight, ...)
+        # to the objects it was computed from. Chemvas treats the caption as
+        # plain text. Once the caption is edited or deleted, or the structure
+        # loses an object, the link no longer describes that text: drop the
+        # link and keep whatever caption remains as ordinary text.
+        for e in list(self.root.iter("chemicalproperty")):
+            display = e.get("ChemicalPropertyDisplayID", "")
+            references = {display, *e.get("BasisObjects", "").split()}
+            if display in self.edited_notes or self.removed_ids & references:
+                self.delete(e)
 
     def validate_references(self) -> None:
         reference_keys = {
@@ -659,6 +673,7 @@ class _NativeWriter:
         self.update_bonds()
         self.update_items()
         self.remove_deleted_fallbacks()
+        self.detach_chemical_properties()
         self.validate_references()
         for fragment in self.stale_stereo:
             for node in fragment.iter("n"):

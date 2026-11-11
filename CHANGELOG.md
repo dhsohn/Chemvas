@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Open ChemDraw CDXML files whose formula or molecular-weight captions are
+  linked chemical properties. The caption opens as ordinary text and the link
+  is preserved; editing or deleting the caption, or deleting part of its
+  structure, drops the link and keeps the caption as plain text.
 - Keep native highlights behind overlapping chemistry when distant objects have
   lower Z values, while retaining foreground drawings over nearby bonds.
 - Fix working-document CDXML saves that retained ambiguous missing or duplicate
