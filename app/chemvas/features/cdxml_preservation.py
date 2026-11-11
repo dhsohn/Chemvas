@@ -66,6 +66,9 @@ class PreservingImporter:
             "ColoredMolecularArea",
             "embeddedobject",
             "annotation",
+            # ChemDraw's computed formula/weight link. Its visible text is an
+            # ordinary caption; the link itself is preserved metadata only.
+            "chemicalproperty",
         }
         for e in root.iter():
             if e.tag not in known:
