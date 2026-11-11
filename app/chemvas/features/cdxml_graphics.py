@@ -166,6 +166,19 @@ def embedded_image(reader: Any, e: ET.Element) -> dict[str, object]:
     )
 
 
+def native_stroke_width(reader: Any, e: ET.Element, line_width: float) -> float:
+    """Return the stroke width ChemDraw draws for a native graphic or arrow."""
+    styles = " ".join(
+        e.get(key, "") for key in ("LineType", "RectangleType", "OvalType")
+    )
+    if "Bold" not in styles.split():
+        return line_width
+    width = float(reader.number(reader.inherited(e, "BoldWidth", "2"), e))
+    if not 0 < width <= 100:
+        reader.unsupported(e, "bold width")
+    return width
+
+
 class _GraphicProjection:
     def __init__(self, reader: Any, e: ET.Element) -> None:
         self.reader = reader
@@ -176,6 +189,9 @@ class _GraphicProjection:
         )
         if not 0 < self.width <= 100:
             self.reader.unsupported(self.e, "line width")
+        # ChemDraw strokes Bold lines, rectangles and ovals at BoldWidth, while
+        # arrowheads, lips and corners stay proportional to LineWidth.
+        self.stroke = native_stroke_width(reader, e, self.width)
         self.paths: list[tuple[list[tuple[float, float]], bool, str | None]] = []
         self.tag = self.e.tag
         self.kind = self.e.get("GraphicType", "")
@@ -491,7 +507,7 @@ class _GraphicProjection:
         allpoints = [p for ps, _, _ in self.paths for p in ps]
         if not allpoints:
             self.reader.unsupported(self.e, "empty native graphic")
-        padding = max(self.width, 1.5)
+        padding = max(self.stroke, 1.5)
         left = min(p[0] for p in allpoints) - padding
         top = min(p[1] for p in allpoints) - padding
         right = max(p[0] for p in allpoints) + padding
@@ -504,6 +520,8 @@ class _GraphicProjection:
         raster = Image.new("RGBA", pixels, (0, 0, 0, 0))
         draw = ImageDraw.Draw(raster)
         for ps, closed, fill in self.paths:
+            # Filled heads keep their LineWidth outline; Bold widens strokes only.
+            stroke = self.width if fill else self.stroke
             coords = [((x - left) * scale, (y - top) * scale) for x, y in ps]
             if fill:
                 draw.polygon(coords, fill=fill)
@@ -535,7 +553,7 @@ class _GraphicProjection:
                                 draw.line(
                                     endpoints,
                                     fill=self.color,
-                                    width=max(1, round(self.width * scale)),
+                                    width=max(1, round(stroke * scale)),
                                 )
                             position += step
                             phase = (phase + step) % (2 * dash)
@@ -543,7 +561,7 @@ class _GraphicProjection:
                     draw.line(
                         coords,
                         fill=self.color,
-                        width=max(1, round(self.width * scale)),
+                        width=max(1, round(stroke * scale)),
                         joint="curve",
                     )
         output = io.BytesIO()

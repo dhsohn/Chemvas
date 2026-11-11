@@ -5,6 +5,7 @@ from copy import deepcopy
 from dataclasses import replace
 
 import pytest
+from PyQt6.QtCore import QPointF
 
 from chemvas.features.cdxml_document import parse_cdxml_document
 from chemvas.features.cdxml_native_writer import update_native_document
@@ -224,7 +225,8 @@ def test_scene_native_strokes_retain_metrics_during_edit_and_kind_change(attrs, 
         context = canvas.render_context
         item = next(iter(context.state.scene_items_state.arrow_items.values()))
         assert item.data(0) == kind
-        assert item.pen().widthF() == 0.75
+        # ChemDraw strokes a Bold line at the inherited BoldWidth (default 2).
+        assert item.pen().widthF() == (2.0 if kind == "line_bold" else 0.75)
         record = context.arrows.record(item)
         context.arrows.set_record(
             item, replace(record, kind="line_dashed", mirrored=False)
@@ -363,3 +365,50 @@ def test_untouched_arrow_fill_overlap_and_fallback_keep_native_reopen_pixels(
             assert render(canvas) == before
             service.save_to_file(str(path))
             assert path.read_bytes().split(b"\n<!--")[0] == saved.split(b"\n<!--")[0]
+
+
+def test_bold_arrow_thickens_only_its_shaft_like_chemdraw():
+    from chemvas.bootstrap.document_cli_shared import offscreen_canvas
+
+    state = parse_cdxml_document(
+        drawing(
+            '<arrow id="10" Tail3D="20 50 0" Head3D="100 50 0" LineType="Bold" '
+            'ArrowheadHead="Full" HeadSize="1000" ArrowheadWidth="250"/>'
+        ).replace(b'LineWidth="0.75"', b'LineWidth="0.6" BoldWidth="2"')
+    ).state
+    with offscreen_canvas(state, command="test-native-bold-arrow") as (canvas, _):
+        context = canvas.render_context
+        item = next(iter(context.state.scene_items_state.arrow_items.values()))
+        assert item.pen().widthF() == 0.6
+        shape = item.path()
+        # Shaft: BoldWidth wide (outline plus the LineWidth pen).
+        box = shape.boundingRect()
+        x, cy = box.left() + 20, box.center().y()
+        mid = [
+            cy + dy / 1000
+            for dy in range(-2000, 2000)
+            if shape.contains(QPointF(x, cy + dy / 1000))
+        ]
+        assert abs((max(mid) - min(mid)) + 0.6 - 2.0) < 0.05
+        # Head: HeadSize/ArrowheadWidth stay in hundredths of LineWidth.
+        assert abs(shape.boundingRect().height() - 2 * 2.5 * 0.6) < 0.05
+
+
+def test_bold_dashed_line_keeps_line_width_dash_period():
+    from PyQt6.QtCore import Qt
+
+    from chemvas.bootstrap.document_cli_shared import offscreen_canvas
+
+    state = parse_cdxml_document(
+        drawing(
+            '<arrow id="10" Tail3D="20 50 0" Head3D="100 50 0" LineType="Dashed Bold"/>'
+        ).replace(b'LineWidth="0.75"', b'LineWidth="0.6" BoldWidth="2"')
+    ).state
+    with offscreen_canvas(state, command="test-native-bold-dash") as (canvas, _):
+        context = canvas.render_context
+        item = next(iter(context.state.scene_items_state.arrow_items.values()))
+        pen = item.pen()
+        assert pen.widthF() == 2.0
+        assert pen.capStyle() == Qt.PenCapStyle.FlatCap
+        # Dash and gap are each four LineWidths (2.4 pt), not four BoldWidths.
+        assert [round(v * pen.widthF(), 6) for v in pen.dashPattern()] == [2.4, 2.4]
