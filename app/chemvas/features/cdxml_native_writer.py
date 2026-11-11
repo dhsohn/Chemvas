@@ -577,6 +577,12 @@ class _NativeWriter:
                                     "color",
                                     self.color_index(after.get("color") or "#000000"),
                                 )
+                elif collection == "shapes":
+                    from chemvas.features.cdxml_editable_rectangles import (
+                        update_rectangle,
+                    )
+
+                    update_rectangle(e, before, after, self.offset, self.color_index)
                 elif collection == "notes":
                     transform_native(
                         e, tx=after["x"] - before["x"], ty=after["y"] - before["y"]

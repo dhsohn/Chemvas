@@ -281,7 +281,11 @@ ID도 직렬화하지 않습니다. `features.cdxml_editable_arrows`는 네이�
 화살표 레코드(`ImageArrowPromotion`)를 각각 준비한 뒤,
 `promote_linked_images_to_arrows`가 두 투영의 변경을 모두 스테이징해 각 투영의
 이미지 순서와 남은 이미지 순서를 보존하며 원자적으로 반영합니다
-([ADR 0060](adr/0060-editable-native-arrows-and-local-platform-gates.md)). 준비에
+([ADR 0060](adr/0060-editable-native-arrows-and-local-platform-gates.md)).
+`features.cdxml_editable_rectangles`는 검은 Plain·검은 Filled 네이티브 사각형을
+바인딩된 도형 레코드로 가져오고 저장 시 `BoundingBox`·`RectangleType`·`color`를
+다시 쓰며, 도형에 선 색이 없어 색이 있는 사각형과 그 밖의 스타일은 래스터
+투영으로 남깁니다. 준비에
 실패하면 입력 상태는 바뀌지 않으며, `xml`·`offset`·원자/결합 바인딩·미지원 네이티브
 XML·저장 스키마는 그대로 유지됩니다. `ui.canvas.canvas_cdxml_source`는 런타임
 `AnnotationCollection` 레코드 ID와 저장 위치 기반 바인딩 사이의 경계를 유지합니다.

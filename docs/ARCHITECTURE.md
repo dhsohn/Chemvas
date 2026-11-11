@@ -304,7 +304,11 @@ retains native stroke representability, raster/opacity eligibility and endpoint
 math, preparing distinct live and baseline arrow records (`ImageArrowPromotion`)
 before `promote_linked_images_to_arrows` stages and publishes both projections
 in each projection's image order while preserving retained image order
-([ADR 0060](adr/0060-editable-native-arrows-and-local-platform-gates.md)). A
+([ADR 0060](adr/0060-editable-native-arrows-and-local-platform-gates.md)).
+`features.cdxml_editable_rectangles` maps black Plain and black Filled native
+rectangles to bound shape records and rewrites `BoundingBox`, `RectangleType`
+and `color` on save; coloured rectangles stay raster because shapes have no
+stroke colour, and other rectangle styles remain raster projections. A
 preparation failure leaves the input unchanged, and `xml`, `offset`, atom/bond
 bindings, unsupported native XML and the persisted schema stay unchanged.
 `ui.canvas.canvas_cdxml_source` retains the boundary between runtime
