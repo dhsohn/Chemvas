@@ -513,9 +513,19 @@ class _GraphicProjection:
         right = max(p[0] for p in allpoints) + padding
         bottom = max(p[1] for p in allpoints) + padding
         w, h = (right - left, bottom - top)
-        scale = 4
-        pixels = (max(1, math.ceil(w * scale)), max(1, math.ceil(h * scale)))
-        if pixels[0] * pixels[1] > 8000000:
+        # Raster strokes are whole pixels. Pick the scale so the main stroke is
+        # an exact pixel count near eight per point; a fixed 4 px/pt rounded a
+        # 0.6 pt stroke down to 0.5 pt. Large graphics keep the 4 px/pt budget.
+        scale = max(1, round(self.stroke * 8)) / self.stroke
+        for candidate in (scale, 4.0):
+            pixels = (
+                max(1, math.ceil(w * candidate)),
+                max(1, math.ceil(h * candidate)),
+            )
+            if pixels[0] * pixels[1] <= 8000000:
+                scale = candidate
+                break
+        else:
             self.reader.unsupported(self.e, "oversized graphic")
         raster = Image.new("RGBA", pixels, (0, 0, 0, 0))
         draw = ImageDraw.Draw(raster)
