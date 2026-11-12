@@ -423,3 +423,4 @@ Qt scene contract rather than alternate test-only scene representations.
 - [ADR 0066: Linux per-user frozen installation](adr/0066-linux-user-installation.md)
 - [ADR 0067: Coupled native CDXML collections](adr/0067-coupled-native-cdxml-collections.md)
 - [ADR 0068: Retire the browser adapter](adr/0068-retire-browser-adapter.md)
+- [ADR 0069: Plain filled native CDXML shapes](adr/0069-plain-filled-native-cdxml-shapes.md)

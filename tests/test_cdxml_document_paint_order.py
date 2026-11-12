@@ -141,7 +141,7 @@ def test_unbound_mark_overlapping_fill_keeps_native_order_on_repeated_save(
             canvas.render_context.bonds.redraw_bond(0)
         mark = add_mark_for(canvas, QPointF(60, -20), kind="plus")
         mark.setSelected(False)
-        fill = canvas.runtime_state.image_items()[0]
+        fill = canvas.runtime_state.scene_items("shape_items")[0]
         ranks = {item: n for n, item in enumerate(canvas.scene().items())}
         assert ranks[mark] > ranks[fill]
         assert mark.sceneBoundingRect().intersects(fill.sceneBoundingRect())

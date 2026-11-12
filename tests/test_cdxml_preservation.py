@@ -434,8 +434,8 @@ def test_native_background_fill_stays_below_bonds():
         )
     )
     state = parse_cdxml_document(raw).state
-    index = state["cdxml_source"]["items"]["images"].index("32")
-    assert state["images"][index]["z"] < 0
+    index = state["cdxml_source"]["items"]["shapes"].index("32")
+    assert state["shapes"][index]["z"] < 0
     assert native(state).find('.//graphic[@id="32"]').get("Z") == "10"
 
 
