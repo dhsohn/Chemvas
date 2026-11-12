@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Edit plain ChemDraw filled rectangles and circle-filled ovals in preserved
+  CDXML documents as vector shapes when local outline width is zero or
+  omitted.
+
 ### Fixed
 
 - Keep native CDXML rectangles, ovals, brackets and curves at their exact

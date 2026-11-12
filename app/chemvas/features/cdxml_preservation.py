@@ -313,6 +313,7 @@ class PreservingImporter:
 
     def state(self) -> dict[str, Any]:
         from chemvas.features.cdxml_editable_arrows import editable_arrow
+        from chemvas.features.cdxml_editable_shapes import editable_shape
         from chemvas.features.cdxml_graphics import graphic_image
 
         atoms = [self.atom(e, i) for i, e in enumerate(self.nodes)]
@@ -345,8 +346,14 @@ class PreservingImporter:
             "notes": [],
             "images": [],
             "arrows": [],
+            "shapes": [],
         }
         state["images"] = []
+        fallback_targets = {
+            target
+            for graphic in self.page.iter("graphic")
+            if (target := graphic.get("SupersededBy"))
+        }
         for e in self.page.iter():
             if self.has_ancestor(e, "n"):
                 continue
@@ -365,6 +372,16 @@ class PreservingImporter:
                 if arrow is not None:
                     state["arrows"].append(arrow)
                     bindings["arrows"].append(e.get("id"))
+                    continue
+                # The image writer also transforms linked fallback graphics.
+                shape = (
+                    editable_shape(self, e)
+                    if e.get("id") not in fallback_targets
+                    else None
+                )
+                if shape is not None:
+                    state["shapes"].append(shape)
+                    bindings["shapes"].append(e.get("id"))
                     continue
                 image = graphic_image(self, e)
                 if image is not None:

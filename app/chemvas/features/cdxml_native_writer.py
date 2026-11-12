@@ -542,6 +542,10 @@ class _NativeWriter:
                     ]
                     for graphic in superseded:
                         transform_native(graphic, sx=sx, sy=sy, tx=tx, ty=ty)
+                elif collection == "shapes":
+                    from chemvas.features.cdxml_editable_shapes import update_shape
+
+                    update_shape(e, before, after, self.offset, self.color_index)
                 elif collection == "arrows":
                     from chemvas.features.cdxml_editable_arrows import update_arrow
 
