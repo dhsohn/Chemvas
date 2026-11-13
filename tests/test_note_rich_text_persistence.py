@@ -9,7 +9,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 import pytest
 from PyQt6.QtCore import QPointF, Qt
-from PyQt6.QtGui import QTextDocument
+from PyQt6.QtGui import QTextCursor, QTextDocument, QTextTable
 
 from chemvas.bootstrap.document_cli_shared import offscreen_document_scene
 from chemvas.features.annotations import sanitize_note_html
@@ -40,18 +40,84 @@ _TABLE_HTML = (
     "<table><tr><td>A</td><td>B</td></tr><tr><td>C</td><td>D</td></tr></table>"
 )
 _TABLE_SPAN_HTML = (
-    '<table border="1" cellpadding="2"><tr>'
-    '<td colspan="2" rowspan="1">AB</td></tr><tr><td>C</td><td>D</td></tr></table>'
+    "<table><tr>"
+    '<td colspan="2" rowspan="2">AB</td></tr><tr></tr>'
+    "<tr><td>C</td><td>D</td></tr></table>"
 )
 _TABLE_NESTED_HTML = (
     "<table><tr><td><table><tr><td>in</td></tr></table></td><td>out</td></tr></table>"
 )
-_nested_preview = QTextDocument()
-_nested_preview.setHtml(_TABLE_NESTED_HTML)
-_TABLE_NESTED_TEXT = _nested_preview.toPlainText()
+_TABLE_NESTED_TEXT = "\n\nin\n\nout\n"
 _TABLE_TEXT = "\nA\nB\nC\nD\n"
 _TABLE_SPAN_TEXT = "\nAB\nC\nD\n"
 _PLAIN_CONTROL = "A  x\nB\tC"
+_HEADING_SPACES_TEXT = "A   b"
+
+
+def _cell_text(cell) -> str:
+    start, end = cell.firstCursorPosition(), cell.lastCursorPosition()
+    cursor = QTextCursor(start)
+    cursor.setPosition(start.position(), QTextCursor.MoveMode.MoveAnchor)
+    cursor.setPosition(end.position(), QTextCursor.MoveMode.KeepAnchor)
+    return cursor.selectedText().replace("\u2029", "\n").strip()
+
+
+def _table_cell_shapes(table) -> tuple:
+    cells = []
+    for row in range(table.rows()):
+        for column in range(table.columns()):
+            cell = table.cellAt(row, column)
+            if not cell.isValid() or cell.row() != row or cell.column() != column:
+                continue
+            cells.append(
+                (row, column, cell.rowSpan(), cell.columnSpan(), _cell_text(cell))
+            )
+    return tuple(cells)
+
+
+def _collect_tables(frame) -> list:
+    tables = []
+    for child in frame.childFrames():
+        if isinstance(child, QTextTable):
+            tables.append((child.rows(), child.columns(), _table_cell_shapes(child)))
+            tables.extend(_collect_tables(child))
+        else:
+            tables.extend(_collect_tables(child))
+    return tables
+
+
+def _note_qt_structure(document) -> tuple:
+    blocks = []
+    block = document.begin()
+    while block.isValid():
+        block_format = block.blockFormat()
+        blocks.append(
+            (
+                block_format.headingLevel(),
+                block_format.nonBreakableLines(),
+                block.text(),
+            )
+        )
+        block = block.next()
+    return (tuple(blocks), tuple(_collect_tables(document.rootFrame())))
+
+
+def _structure_from_html(html: str) -> tuple:
+    document = QTextDocument()
+    document.setHtml(html)
+    return _note_qt_structure(document)
+
+
+def _assert_note_matches_structure(note, expected: tuple) -> None:
+    assert _note_qt_structure(note.document()) == expected
+
+
+def _heading_block_texts(document) -> tuple[str, ...]:
+    return tuple(
+        text
+        for heading_level, _pre, text in _note_qt_structure(document)[0]
+        if heading_level > 0
+    )
 
 
 def _commit_html_note(drawing, html: str, *, route: str = "cmd_v") -> tuple:
@@ -61,34 +127,14 @@ def _commit_html_note(drawing, html: str, *, route: str = "cmd_v") -> tuple:
     note = canvas.runtime_state.note_items()[-1]
     _set_note_clipboard(html=html)
     _paste_into_note(window, canvas, route)
-    expected = note.toPlainText()
+    expected_text = note.toPlainText()
+    qt_structure = _note_qt_structure(note.document())
     _commit_note_by_defocus(window, canvas)
-    return window, canvas, note, expected
+    return window, canvas, note, expected_text, qt_structure
 
 
 def _note_matching_text(canvas, text: str):
     return next(n for n in canvas.runtime_state.note_items() if n.toPlainText() == text)
-
-
-def _note_html_signature(html: str) -> tuple:
-    lowered = html.lower()
-    return (
-        "h1" in lowered,
-        "<pre" in lowered,
-        "<table" in lowered,
-        'colspan="2"' in lowered,
-        'rowspan="2"' in lowered,
-        'border="1"' in lowered,
-        'cellpadding="2"' in lowered,
-        lowered.count("<table"),
-    )
-
-
-def _live_html_signature(note) -> tuple:
-    document = note.document()
-    sanitized = sanitize_note_html(document.toHtml())
-    assert sanitized is not None
-    return _note_html_signature(sanitized)
 
 
 @pytest.mark.parametrize(
@@ -107,26 +153,28 @@ def _live_html_signature(note) -> tuple:
 def test_rich_note_html_survives_commit_snapshot_and_file_roundtrip(
     drawing, tmp_path, html, expected_text, route
 ):
-    window, canvas, note, live_text = (
-        _commit_html_note(drawing, html, route=route)
-        if html is not None
-        else _commit_plain_note(drawing, expected_text, route=route)
-    )
+    if html is not None:
+        window, canvas, note, live_text, expected_structure = _commit_html_note(
+            drawing, html, route=route
+        )
+    else:
+        window, canvas, note, live_text = _commit_plain_note(
+            drawing, expected_text, route=route
+        )
+        expected_structure = _note_qt_structure(note.document())
     assert live_text == expected_text
-    expected_signature = _live_html_signature(note) if html is not None else None
+    _assert_note_matches_structure(note, expected_structure)
 
     session = canvas.services.canvas_document_session_service
     state = session.snapshot_state()
     record = next(n for n in state["notes"] if n["text"] == expected_text)
-    assert record.get("html")
-    if expected_signature is not None:
-        assert _note_html_signature(record["html"]) == expected_signature
+    if record.get("html"):
+        assert _structure_from_html(record["html"]) == expected_structure
 
     session.restore_state(state)
     restored = _note_matching_text(canvas, expected_text)
     assert restored.toPlainText() == expected_text
-    if expected_signature is not None:
-        assert _live_html_signature(restored) == expected_signature
+    _assert_note_matches_structure(restored, expected_structure)
 
     path = tmp_path / "rich-note.cdxml"
     assert window.services.document_action_service.save_canvas_to_path(
@@ -138,8 +186,7 @@ def test_rich_note_html_survives_commit_snapshot_and_file_roundtrip(
     )
     reopened = _note_matching_text(canvas, expected_text)
     assert reopened.toPlainText() == expected_text
-    if expected_signature is not None:
-        assert _live_html_signature(reopened) == expected_signature
+    _assert_note_matches_structure(reopened, expected_structure)
 
     _tool(window, "select")
     _click(canvas, reopened.sceneBoundingRect().center())
@@ -151,35 +198,54 @@ def test_rich_note_html_survives_commit_snapshot_and_file_roundtrip(
         if item is not reopened and item.toPlainText() == expected_text
     )
     assert copied.toPlainText() == expected_text
-    if expected_signature is not None:
-        assert _live_html_signature(copied) == expected_signature
+    _assert_note_matches_structure(copied, expected_structure)
 
 
 def test_heading_preserves_internal_spaces_through_commit_and_reopen(drawing, tmp_path):
-    html = "<h1>A   b</h1>"
-    window, canvas, note, _live_text = _commit_html_note(drawing, html)
-    record = note.note_state()
-    assert "white-space:pre-wrap" in record["html"]
+    window, canvas = drawing
+    _tool(window, "note")
+    _click(canvas, QPointF(-80, 35))
+    note = canvas.runtime_state.note_items()[-1]
+    _set_note_clipboard(html="<h1>.</h1>")
+    _paste_into_note(window, canvas, "cmd_v")
+    cursor = QTextCursor(note.document())
+    cursor.select(QTextCursor.SelectionType.Document)
+    cursor.removeSelectedText()
+    block_format = cursor.blockFormat()
+    block_format.setHeadingLevel(1)
+    cursor.setBlockFormat(block_format)
+    cursor.insertText(_HEADING_SPACES_TEXT)
+    expected_structure = _note_qt_structure(note.document())
+    assert _heading_block_texts(note.document()) == (_HEADING_SPACES_TEXT,)
+
+    _commit_note_by_defocus(window, canvas)
+    assert _heading_block_texts(note.document()) == (_HEADING_SPACES_TEXT,)
+    _assert_note_matches_structure(note, expected_structure)
 
     path = tmp_path / "heading-spaces.cdxml"
     assert window.services.document_action_service.save_canvas_to_path(
         window, str(path)
     )
     payload = read_payload(path.read_text(encoding="utf-8"))
-    record = payload["state"]["notes"][-1]
-    assert "white-space:pre-wrap" in record["html"]
+    record = next(
+        n for n in payload["state"]["notes"] if _HEADING_SPACES_TEXT in n["text"]
+    )
+    stored = QTextDocument()
+    stored.setHtml(record["html"])
+    assert _heading_block_texts(stored) == (_HEADING_SPACES_TEXT,)
     window.services.canvas_document_service.replace_canvas_with_state(
         window, canvas, state=payload["state"], file_path=str(path)
     )
-    reopened = canvas.runtime_state.note_items()[-1]
-    assert "white-space:pre-wrap" in sanitize_note_html(reopened.document().toHtml())
+    reopened = _note_matching_text(canvas, _HEADING_SPACES_TEXT)
+    assert _heading_block_texts(reopened.document()) == (_HEADING_SPACES_TEXT,)
+    _assert_note_matches_structure(reopened, expected_structure)
 
 
 def test_oversized_table_note_save_and_reopen_completes(drawing, tmp_path):
     wide = "".join(f"<td>{i}</td>" for i in range(101))
     narrow = "".join("<tr><td>x</td></tr>" for _ in range(99))
     html = f"<table><tr>{wide}</tr>{narrow}</table>"
-    window, canvas, note, _live_text = _commit_html_note(drawing, html)
+    window, canvas, note, _live_text = _commit_html_note(drawing, html)[:4]
     record = note.note_state()
     assert "<table" not in record["html"].lower()
 
