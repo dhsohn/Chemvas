@@ -80,14 +80,18 @@ def collect_open_documents() -> list[DocDescriptor | WithheldDoc]:
                     )
                 )
                 continue
+            metadata = canvas.runtime_state.document_metadata_state
             documents.append(
                 DocDescriptor(
                     state=state,
-                    file_path=canvas.runtime_state.document_metadata_state.file_path,
+                    file_path=metadata.file_path,
                     display_name=display_name,
                     dirty=dirty,
                     state_digest=state_digest,
                     key=canvas,
+                    protected_import_source_path=metadata.protected_import_source_path
+                    if dirty
+                    else None,
                 )
             )
     return documents
@@ -201,6 +205,8 @@ class SessionRecoveryService:
                             file_path=None,
                             display_name=display_name,
                         )
+                        if document.protected_import_source_path:
+                            canvas.runtime_state.document_metadata_state.protected_import_source_path = document.protected_import_source_path
                     except Exception:
                         # A retry opens this copy under the same name, and a
                         # window opened for it does not stay behind blank.

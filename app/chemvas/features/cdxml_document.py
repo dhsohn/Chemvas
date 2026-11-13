@@ -37,6 +37,8 @@ _MARKER = re.compile(
 class CdxmlDocument:
     state: dict[str, Any]
     source_sha256: str
+    omitted_decorations: int = 0
+    has_snapshot: bool = False
 
 
 def embed_document(raw: bytes, state: dict[str, Any]) -> bytes:
@@ -61,7 +63,9 @@ def read_cdxml_document(path: str | Path) -> CdxmlDocument:
     return parse_cdxml_document(raw)
 
 
-def parse_cdxml_document(raw: bytes) -> CdxmlDocument:
+def parse_cdxml_document(
+    raw: bytes, *, allow_decorative_omissions: bool = False
+) -> CdxmlDocument:
     if len(raw) > MAX_DOCUMENT_BYTES:
         raise ValueError("CDXML document exceeds the document byte limit")
     digest = hashlib.sha256(raw).hexdigest()
@@ -91,8 +95,13 @@ def parse_cdxml_document(raw: bytes) -> CdxmlDocument:
 
         promote_snapshot_arrows(normalized["state"])
         build_document_payload(normalized["state"], CANVAS_FILE_VERSION)
-        return CdxmlDocument(normalized["state"], digest)
+        return CdxmlDocument(normalized["state"], digest, has_snapshot=True)
     from chemvas.features.cdxml_preservation import PreservingImporter
 
-    state = PreservingImporter(text).state()
-    return CdxmlDocument(state, digest)
+    importer = PreservingImporter(text)
+    omitted = 0
+    if allow_decorative_omissions:
+        from chemvas.features.cdxml_decorative_omissions import omit_decorative_arcs
+
+        omitted = omit_decorative_arcs(importer)
+    return CdxmlDocument(importer.state(), digest, omitted)

@@ -6,7 +6,7 @@ import math
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from chemvas.core.document_io import atomic_write_via_temp
+from chemvas.core.document_io import atomic_create_bytes, atomic_write_via_temp
 from chemvas.features.export import (
     ExportPlan,
     points_for_mm,
@@ -212,6 +212,7 @@ class FigureExportService:
         min_font_pt: float | None = None,
         label_bindings: CdxmlLabelBindings | None = None,
         layout_reference: CdxmlTextLayoutReference | None = None,
+        create_only: bool = False,
     ) -> ExportPlan:
         if label_bindings is not None and fmt.lower() != "cdxml":
             raise ValueError(
@@ -283,7 +284,10 @@ class FigureExportService:
             def write_cdxml(tmp: Path) -> None:
                 tmp.write_bytes(cdxml_bytes)
 
-            atomic_write_via_temp(Path(path), write_cdxml)
+            if create_only:
+                atomic_create_bytes(path, cdxml_bytes)
+            else:
+                atomic_write_via_temp(Path(path), write_cdxml)
             return plan
 
         if min_font_pt is not None:

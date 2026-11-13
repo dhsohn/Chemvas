@@ -92,3 +92,18 @@ def _reset_chemvas_window_registry():
     reset_window_registry()
     yield
     reset_window_registry()
+
+
+@pytest.fixture(autouse=True)
+def _dismiss_external_cdxml_compatibility_notice(monkeypatch):
+    """Acknowledge the compatibility notice without modal input in tests."""
+    from PyQt6.QtWidgets import QMessageBox
+
+    warning = QMessageBox.warning
+
+    def acknowledge(parent, title, message, *args, **kwargs):
+        if title == "External CDXML":
+            return QMessageBox.StandardButton.Ok
+        return warning(parent, title, message, *args, **kwargs)
+
+    monkeypatch.setattr(QMessageBox, "warning", staticmethod(acknowledge))

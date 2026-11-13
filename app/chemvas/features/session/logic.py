@@ -53,6 +53,7 @@ class DocDescriptor:
     dirty: bool
     state_digest: str | None = None
     key: Hashable | None = None
+    protected_import_source_path: str | None = None
 
 
 @dataclass(frozen=True)
@@ -76,6 +77,7 @@ class DocEntry:
     display_name: str
     dirty: bool
     snapshot: str | None  # payload filename, or None for a clean saved doc
+    protected_import_source_path: str | None = None
 
 
 @dataclass
@@ -95,6 +97,7 @@ class RestoredDoc:
     display_name: str
     dirty: bool
     recovery_key: str | None = None
+    protected_import_source_path: str | None = None
 
 
 def should_persist(*, has_path: bool, dirty: bool) -> bool:
@@ -184,11 +187,10 @@ def entries_to_restore(manifest: SessionManifest) -> list[DocEntry]:
 
 
 def manifest_to_json(manifest: SessionManifest) -> JsonObject:
-    """Serialize the manifest in the v1 shape understood by older Chemvas.
+    """Serialize the session and the protected source of each partial draft.
 
-    Process identity is persisted by the store in a separate owner sidecar.
-    Keeping this file strictly v1-readable prevents an older concurrently
-    running binary from treating a live newer session as an unreadable orphan.
+    Ordinary entries retain the v1 shape. Older builds with an exact field
+    check leave a session containing a partial draft on disk for this version.
     """
     return {
         "version": SESSION_SCHEMA_VERSION,
@@ -200,6 +202,11 @@ def manifest_to_json(manifest: SessionManifest) -> JsonObject:
                 "display_name": entry.display_name,
                 "dirty": entry.dirty,
                 "snapshot": entry.snapshot,
+                **(
+                    {"protected_import_source_path": entry.protected_import_source_path}
+                    if entry.protected_import_source_path
+                    else {}
+                ),
             }
             for entry in manifest.docs
         ],
@@ -242,22 +249,37 @@ def manifest_from_json(data: object) -> SessionManifest | None:
         return None
     docs: list[DocEntry] = []
     for raw in raw_docs:
-        if not isinstance(raw, dict) or set(raw) != {
+        allowed = {
             "file_path",
             "display_name",
             "dirty",
             "snapshot",
-        }:
+            "protected_import_source_path",
+        }
+        if not isinstance(raw, dict) or set(raw) not in (
+            allowed,
+            allowed - {"protected_import_source_path"},
+        ):
             return None
         display_name = raw.get("display_name")
         file_path = raw.get("file_path")
         dirty = raw.get("dirty")
         snapshot = raw.get("snapshot")
+        protected = raw.get("protected_import_source_path")
         if (
             not isinstance(display_name, str)
             or (file_path is not None and not isinstance(file_path, str))
             or type(dirty) is not bool
             or (snapshot is not None and not isinstance(snapshot, str))
+            or (
+                protected is not None
+                and (
+                    not isinstance(protected, str)
+                    or not protected
+                    or not dirty
+                    or snapshot is None
+                )
+            )
         ):
             return None
         docs.append(
@@ -266,6 +288,7 @@ def manifest_from_json(data: object) -> SessionManifest | None:
                 display_name=display_name,
                 dirty=dirty,
                 snapshot=snapshot,
+                protected_import_source_path=protected,
             )
         )
     return SessionManifest(

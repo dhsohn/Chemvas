@@ -127,7 +127,7 @@ class MainWindowPanelActionsTest(unittest.TestCase):
                 return_value=("/tmp/input.cdxml", ""),
             ) as dialog,
             mock.patch(
-                "chemvas.ui.window.main_window_document_action_service.default_read_document",
+                "chemvas.ui.window.main_window_document_action_service.read_desktop_cdxml_document",
                 return_value=ChemvasDocument(
                     payload={}, state=state, source_sha256=source_sha256
                 ),
@@ -167,7 +167,7 @@ class MainWindowPanelActionsTest(unittest.TestCase):
                 return_value=("/tmp/broken.cdxml", ""),
             ),
             mock.patch(
-                "chemvas.ui.window.main_window_document_action_service.default_read_document",
+                "chemvas.ui.window.main_window_document_action_service.read_desktop_cdxml_document",
                 side_effect=RuntimeError("bad file"),
             ),
             mock.patch(
@@ -196,7 +196,7 @@ class MainWindowPanelActionsTest(unittest.TestCase):
                 return_value=("/tmp/restore-broken.cdxml", ""),
             ),
             mock.patch(
-                "chemvas.ui.window.main_window_document_action_service.default_read_document",
+                "chemvas.ui.window.main_window_document_action_service.read_desktop_cdxml_document",
                 return_value=ChemvasDocument(
                     payload={}, state={"model": {}}, source_sha256=source_sha256
                 ),

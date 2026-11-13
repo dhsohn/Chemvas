@@ -179,6 +179,7 @@ class ReviewedCdxmlSnapshot:
         target_width_mm: float | None,
         max_height_mm: float | None,
         min_font_pt: float | None,
+        create_only: bool = False,
     ) -> ExportPlan:
         state = json.loads(self.document_json)
         with detached_document_scene(state) as context:
@@ -219,6 +220,7 @@ class ReviewedCdxmlSnapshot:
                 max_height_mm=max_height_mm,
                 min_font_pt=min_font_pt,
                 label_bindings=self.label_bindings,
+                create_only=create_only,
             )
 
 

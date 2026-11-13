@@ -6,9 +6,7 @@ from typing import TYPE_CHECKING, Any
 from PyQt6.QtCore import QRectF
 from PyQt6.QtWidgets import QGraphicsItem, QGraphicsScene, QGraphicsView
 
-from chemvas.core.document_io import (
-    atomic_write_text,
-)
+from chemvas.core.document_io import atomic_write_text
 from chemvas.core.molfile import export_molfile_block
 from chemvas.domain.document import (
     deserialize_model_state,
@@ -45,6 +43,7 @@ from chemvas.ui.scene.scene_signal_blocking import blocked_scene_signals
 from chemvas.ui.selection.selection_queries import (
     selection_items_for_copy_for,
 )
+from chemvas.ui.session.open_document_lookup import paths_refer_to_same_document
 from chemvas.ui.transactions.document import runtime_state_object_for
 from chemvas.ui.transactions.object_graph_snapshot import (
     ContainerGraphSnapshot as _ContainerGraphSnapshot,
@@ -586,12 +585,22 @@ class CanvasDocumentSessionService:
         if not is_saved_document_path(path):
             msg = "Chemvas documents must use the .cdxml filename extension."
             raise ValueError(msg)
+        metadata = self.canvas.runtime_state.document_metadata_state
+        protected = metadata.protected_import_source_path
+        if protected and paths_refer_to_same_document(protected, path):
+            raise ValueError("Choose a new file name to keep the original CDXML.")
         require_preserved_calculation_plan_for(self.canvas)
         state, warnings = self.snapshot_state_with_warnings()
         from chemvas.ui.export.cdxml_document_writer import save_cdxml_document
 
-        digest = save_cdxml_document(self.canvas, path, state)
-        self.canvas.runtime_state.document_metadata_state.set_source_sha256(digest)
+        if protected and (
+            metadata.file_path is None
+            or not paths_refer_to_same_document(metadata.file_path, path)
+        ):
+            digest = save_cdxml_document(self.canvas, path, state, create_only=True)
+        else:
+            digest = save_cdxml_document(self.canvas, path, state)
+        metadata.set_source_sha256(digest)
         return warnings
 
     def export_mol(self, path: str, *, selected_only: bool = False) -> None:
@@ -623,6 +632,9 @@ class CanvasDocumentSessionService:
         min_font_pt: float | None = None,
         reviewed_cdxml_snapshot: ReviewedCdxmlSnapshot | None = None,
     ) -> ExportPlan:
+        protected = self.canvas.runtime_state.document_metadata_state.protected_import_source_path
+        if protected and paths_refer_to_same_document(protected, path):
+            raise ValueError("Choose a new file name to keep the original CDXML.")
         if reviewed_cdxml_snapshot is not None:
             if fmt.lower() != "cdxml" or scope != reviewed_cdxml_snapshot.scope:
                 raise ValueError(
@@ -636,6 +648,7 @@ class CanvasDocumentSessionService:
                 target_width_mm=target_width_mm,
                 max_height_mm=max_height_mm,
                 min_font_pt=min_font_pt,
+                **({"create_only": True} if protected else {}),
             )
         exporter = FigureExportService(
             self.canvas.render_context,
@@ -656,6 +669,7 @@ class CanvasDocumentSessionService:
             target_width_mm=target_width_mm,
             max_height_mm=max_height_mm,
             min_font_pt=min_font_pt,
+            create_only=bool(protected) and fmt.lower() == "cdxml",
         )
 
     def plan_figure_export(
