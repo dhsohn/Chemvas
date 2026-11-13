@@ -541,6 +541,7 @@ class SessionSnapshotStore:
                     display_name=doc.display_name,
                     dirty=doc.dirty,
                     snapshot=snapshot_name,
+                    protected_import_source_path=doc.protected_import_source_path,
                 )
             )
         self._write_manifest(
@@ -782,6 +783,7 @@ class SessionSnapshotStore:
                     file_path=file_path,
                     display_name=entry.display_name,
                     dirty=entry.dirty,
+                    protected_import_source_path=entry.protected_import_source_path,
                 )
         return None
 

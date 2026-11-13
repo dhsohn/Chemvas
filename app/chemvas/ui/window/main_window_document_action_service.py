@@ -8,11 +8,13 @@ from typing import TYPE_CHECKING
 from PyQt6.QtWidgets import QFileDialog, QMessageBox
 
 from chemvas.core.molfile import fit_molfile_model, read_molfile
-from chemvas.domain.document import (
-    MoleculeModel,
-    serialize_model_state,
+from chemvas.domain.document import MoleculeModel, serialize_model_state
+from chemvas.features.document_files import (
+    read_desktop_cdxml_document,
 )
-from chemvas.features.document_files import read_document as default_read_document
+from chemvas.features.document_files import (
+    read_document as default_read_document,
+)
 from chemvas.features.export import (
     default_export_path,
     export_error_message,
@@ -27,7 +29,10 @@ from chemvas.features.insertion import (
 )
 from chemvas.features.session import request_snapshot
 from chemvas.shell.window_registry import open_windows
-from chemvas.ui.canvas.canvas_document_metadata_state import document_is_dirty_for
+from chemvas.ui.canvas.canvas_document_metadata_state import (
+    document_is_dirty_for,
+    mark_document_dirty_for,
+)
 from chemvas.ui.canvas.canvas_document_state import (
     require_preserved_calculation_plan_for,
 )
@@ -49,6 +54,7 @@ from chemvas.ui.window.main_window_document_dialogs import (
 from chemvas.ui.window.main_window_path_logic import (
     is_desktop_document_path,
     is_saved_document_path,
+    suggested_partial_import_copy_path,
 )
 from chemvas.ui.window.main_window_path_logic import (
     resolve_load_path as default_resolve_load_path,
@@ -68,6 +74,23 @@ from chemvas.ui.window.recent_documents_store import record_recent
 
 if TYPE_CHECKING:
     from chemvas.ui.window.main_window_like import MainWindowLike
+
+
+def _new_file_dialog_options(create_only: bool) -> dict[str, QFileDialog.Option]:
+    if create_only:
+        return {
+            "options": QFileDialog.Option.DontUseNativeDialog
+            | QFileDialog.Option.DontConfirmOverwrite
+        }
+    return {}
+
+
+def _warn_about_external_cdxml(window: MainWindowLike) -> None:
+    QMessageBox.warning(
+        window,
+        "External CDXML",
+        "Chemvas supports a subset of ChemDraw drawing features.",
+    )
 
 
 def _annotation_mark_states(model: MoleculeModel) -> list[dict[str, object]]:
@@ -131,7 +154,16 @@ class MainWindowDocumentActionService:
     def default_save_dialog_path(
         self, window: MainWindowLike, *, canvas: CanvasView | None = None
     ) -> str:
-        return self.current_file_path(window, canvas=canvas) or ""
+        target = active_canvas_for_window(window) if canvas is None else canvas
+        current = self.current_file_path(window, canvas=target)
+        if current:
+            return current
+        protected = (
+            target.runtime_state.document_metadata_state.protected_import_source_path
+        )
+        if protected:
+            return suggested_partial_import_copy_path(protected)
+        return ""
 
     def save_canvas_to_path(
         self,
@@ -153,6 +185,9 @@ class MainWindowDocumentActionService:
         # of the working directory at restore time.
         path = os.path.abspath(path)
         target = active_canvas_for_window(window) if canvas is None else canvas
+        protected = (
+            target.runtime_state.document_metadata_state.protected_import_source_path
+        )
         owner = find_open_document(path, exclude_canvas=target)
         if owner is not None:
             message_box.warning(
@@ -173,7 +208,7 @@ class MainWindowDocumentActionService:
         # Atomic replacement of a symlink path would replace the link itself and
         # leave its target unchanged. Write to the resolved destination instead;
         # keep ``path`` as the user-facing document path and recent-file entry.
-        write_path = resolved_document_path(path)
+        write_path = path if protected else resolved_document_path(path)
         try:
             # Refuse before the overwrite prompt: this save cannot succeed.
             require_preserved_calculation_plan_for(target)
@@ -290,11 +325,16 @@ class MainWindowDocumentActionService:
             if resolve_save_as_path is None
             else resolve_save_as_path
         )
+        target = active_canvas_for_window(window) if canvas is None else canvas
+        protected = (
+            target.runtime_state.document_metadata_state.protected_import_source_path
+        )
         dialog_path, selected_filter = file_dialog.getSaveFileName(
             window,
             "Save Drawing As",
             self.default_save_dialog_path(window, canvas=canvas),
             "ChemDraw XML (*.cdxml);;All Files (*)",
+            **_new_file_dialog_options(bool(protected)),
         )
         candidate_path = dialog_path
         if (
@@ -306,10 +346,14 @@ class MainWindowDocumentActionService:
         path = resolve_save_as_path(candidate_path)
         if path is None:
             return False
-        if not self._confirm_normalized_overwrite(
+        if not protected and not self._confirm_normalized_overwrite(
             window, dialog_path, path, message_box
         ):
             return False
+        if protected:
+            return self.save_canvas_to_path(
+                window, path, canvas=target, message_box=message_box
+            )
         return self.save_canvas_to_path(window, path, canvas=canvas)
 
     def export_mol(
@@ -376,16 +420,21 @@ class MainWindowDocumentActionService:
         if options is None:
             return
         fmt = options.fmt
+        metadata = active_canvas_for_window(
+            window
+        ).runtime_state.document_metadata_state
+        create_only = fmt == "cdxml" and bool(metadata.protected_import_source_path)
         dialog_path, _ = file_dialog.getSaveFileName(
             window,
             "Export Figure",
             default_export_path(self.current_file_path(window), fmt),
             file_filter_for_format(fmt),
+            **_new_file_dialog_options(create_only),
         )
         path = normalize_export_path(dialog_path, fmt)
         if path is None:
             return
-        if not self._confirm_normalized_overwrite(
+        if not create_only and not self._confirm_normalized_overwrite(
             window, dialog_path, path, message_box
         ):
             return
@@ -511,7 +560,7 @@ class MainWindowDocumentActionService:
             )
             return False
         read_document = (
-            default_read_document if read_document is None else read_document
+            read_desktop_cdxml_document if read_document is None else read_document
         )
         # Bind the document to an absolute path up front: a relative path (e.g. a
         # CLI "chemvas ./file.cdxml") would otherwise be stored as the file
@@ -548,17 +597,41 @@ class MainWindowDocumentActionService:
                 status_bar_for(target).showMessage(f"Imported MOL: {path}", 4000)
                 request_snapshot()
                 return True
-            document = read_document(path)
+            loaded = read_document(path)
+            protected = getattr(loaded, "protected_import_source_path", None)
+            if protected:
+                answer = message_box.question(
+                    window,
+                    "Open External CDXML",
+                    "Chemvas will omit some drawing elements. "
+                    "Save this drawing under a new name to keep the original.",
+                    QMessageBox.StandardButton.Open | QMessageBox.StandardButton.Cancel,
+                    QMessageBox.StandardButton.Cancel,
+                )
+                if answer != QMessageBox.StandardButton.Open:
+                    return False
+            elif getattr(loaded, "bare_external", False):
+                _warn_about_external_cdxml(window)
             target = target_provider() if target_provider is not None else window
-            # The destination owns its UI callbacks; another window's service
-            # would bind this canvas to that window's status and options widgets.
+            file_path = None if protected else path
+            display_name = Path(path).name
             canvas = target.services.canvas_document_service.open_state(
-                target, state=document.state, file_path=path
+                target,
+                state=loaded.state,
+                file_path=file_path,
+                display_name=display_name,
             )
             state_opened = True
-            canvas.runtime_state.document_metadata_state.set_source_sha256(
-                document.source_sha256
-            )
+            if protected:
+                canvas.runtime_state.document_metadata_state.protected_import_source_path = protected
+                mark_document_dirty_for(canvas)
+                target.services.canvas_document_service.refresh_tab_title(
+                    target, canvas
+                )
+            else:
+                canvas.runtime_state.document_metadata_state.set_source_sha256(
+                    loaded.source_sha256
+                )
         except Exception as exc:
             if (
                 not state_opened
@@ -568,11 +641,11 @@ class MainWindowDocumentActionService:
                 target.close_after_confirmation()
             message_box.warning(window, "Load Error", f"Failed to load file:\n{exc}")
             return False
-        status_bar_for(target).showMessage(
-            f"Loaded: {path}",
-            6000,
-        )
-        record_recent(path)
+        if protected:
+            status_bar_for(target).showMessage("Save under a new name.", 6000)
+        else:
+            status_bar_for(target).showMessage(f"Loaded: {path}", 6000)
+            record_recent(path)
         # Capture the newly-opened document in the session now, so opening a file
         # and quitting before the next timer tick does not drop it from restore.
         request_snapshot()
