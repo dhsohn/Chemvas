@@ -17,7 +17,7 @@ from chemvas.shell.theme import (
     TOOLBAR_BUTTON_STYLE,
     TOOLBAR_ICON_SIZE,
 )
-from chemvas.shell.toolbar_buttons import CornerMenuToolButton
+from chemvas.shell.toolbar_buttons import ActionToolButton, CornerMenuToolButton
 from chemvas.ui.window.main_window_config import (
     TEXT_FONT_FAMILY_CHOICES,
     TOOLBAR_TOOL_ACTION_ORDER,
@@ -160,7 +160,7 @@ def _build_tool_action_button(
     action: QAction,
     action_key: str,
 ) -> QToolButton:
-    button = QToolButton()
+    button = ActionToolButton()
     button.setDefaultAction(action)
     button.setObjectName(f"toolButton_{action_key}")
     button.setIconSize(panel_bar.iconSize())

@@ -22,6 +22,42 @@ def _chevron_icon(direction: str) -> QIcon:
     return icon
 
 
+class ActionToolButton(QToolButton):
+    """QToolButton whose default QAction triggers when accessibility checks it.
+
+    Qt's accessibility toggle calls ``toggle()``/``setChecked()`` and syncs through
+    ``checkStateSet`` without emitting ``QAction::triggered``. A mouse click uses
+    ``nextCheckState()`` which does trigger the action.
+    """
+
+    @override
+    def checkStateSet(self) -> None:
+        action = self.defaultAction()
+        if (
+            self.isChecked()
+            and action is not None
+            and action.isCheckable()
+            and not action.isChecked()
+        ):
+            action.trigger()
+            return
+        super().checkStateSet()
+
+
+class CheckableOptionToolButton(ActionToolButton):
+    """Checkable toolbar option without a default QAction (context bar)."""
+
+    @override
+    def toggle(self) -> None:
+        if self.signalsBlocked():
+            super().toggle()
+            return
+        if not self.isChecked():
+            self.click()
+            return
+        super().toggle()
+
+
 class ArrowButton(QToolButton):
     def __init__(self, direction: str, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -32,7 +68,7 @@ class ArrowButton(QToolButton):
         self.setIconSize(QSize(12, 12))
 
 
-class CornerMenuButton(QToolButton):
+class CornerMenuButton(ActionToolButton):
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self._menu_chevron = _chevron_icon("down")
@@ -78,7 +114,9 @@ class CornerMenuToolButton(CornerMenuButton):
 
 
 __all__ = [
+    "ActionToolButton",
     "ArrowButton",
+    "CheckableOptionToolButton",
     "CornerMenuButton",
     "CornerMenuToolButton",
 ]

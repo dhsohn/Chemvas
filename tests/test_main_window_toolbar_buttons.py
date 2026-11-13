@@ -5,12 +5,14 @@ from unittest import mock
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PyQt6.QtCore import QPoint, Qt
-from PyQt6.QtGui import QAction
+from PyQt6.QtGui import QAction, QActionGroup
 from PyQt6.QtTest import QTest
 from PyQt6.QtWidgets import QApplication, QMainWindow, QMenu, QWidget
 
 from chemvas.shell.toolbar_buttons import (
+    ActionToolButton,
     ArrowButton,
+    CheckableOptionToolButton,
     CornerMenuButton,
     CornerMenuToolButton,
 )
@@ -52,6 +54,41 @@ class MainWindowToolbarButtonsTest(unittest.TestCase):
             QTest.mouseClick(button, Qt.MouseButton.LeftButton, pos=QPoint(13, 13))
             show_menu.assert_not_called()
             triggered.assert_called_once()
+
+    def test_action_tool_button_accessibility_toggle_triggers_default_action(
+        self,
+    ) -> None:
+        window = QMainWindow()
+        self.addCleanup(window.close)
+        group = QActionGroup(window)
+        group.setExclusive(True)
+        bond = QAction("Bond", window)
+        bond.setCheckable(True)
+        bond.setChecked(True)
+        group.addAction(bond)
+        ring = QAction("Ring", window)
+        ring.setCheckable(True)
+        group.addAction(ring)
+        ring_button = ActionToolButton(window)
+        ring_button.setDefaultAction(ring)
+        ring_button.setCheckable(True)
+        ring_button.show()
+        self.app.processEvents()
+        triggered = mock.Mock()
+        ring.triggered.connect(lambda checked=False: triggered())
+        ring_button.toggle()
+        triggered.assert_called_once()
+        self.assertTrue(ring.isChecked())
+
+    def test_checkable_option_tool_button_accessibility_toggle_clicks_once(
+        self,
+    ) -> None:
+        button = CheckableOptionToolButton()
+        button.setCheckable(True)
+        handler = mock.Mock()
+        button.clicked.connect(handler)
+        button.toggle()
+        handler.assert_called_once()
 
     def test_custom_buttons_paint(self) -> None:
         owner = QWidget()
