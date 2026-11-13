@@ -6,7 +6,17 @@ from dataclasses import replace
 from typing import TYPE_CHECKING, Any, cast, override
 
 from PyQt6.QtCore import QEvent, QPointF, QRectF, Qt
-from PyQt6.QtGui import QBrush, QColor, QImage, QPainter, QPen, QPolygonF
+from PyQt6.QtGui import (
+    QBrush,
+    QColor,
+    QImage,
+    QKeySequence,
+    QPainter,
+    QPen,
+    QPolygonF,
+    QTextBlockFormat,
+    QTextCursor,
+)
 from PyQt6.QtWidgets import (
     QGraphicsItem,
     QGraphicsItemGroup,
@@ -229,9 +239,68 @@ class NoteItem(ExportTextItem):
             return True
         return super().sceneEvent(event)
 
+    def _keep_line_height(self, insert: Callable[[], None]) -> None:
+        document = self.document()
+        assert document is not None
+        current = self.textCursor().blockFormat()
+        spacing = QTextBlockFormat()
+        spacing.setLineHeight(current.lineHeight(), current.lineHeightType())
+        changes: list[tuple[int, int]] = []
+
+        def record(position: int, _removed: int, added: int) -> None:
+            changes.append((position, position + added))
+
+        document.contentsChange.connect(record)
+        try:
+            insert()
+        finally:
+            document.contentsChange.disconnect(record)
+        if not changes:
+            return
+        caret = QTextCursor(self.textCursor())
+        wanted = (current.lineHeight(), current.lineHeightType())
+        block = document.findBlock(min(start for start, _ in changes))
+        end = document.findBlock(
+            min(max(stop for _, stop in changes), document.characterCount() - 1)
+        )
+        # Each block-format command becomes Qt's redo caret target at that
+        # paragraph's end, so only touch paragraphs that lost the spacing.
+        edit: QTextCursor | None = None
+        try:
+            while block.isValid() and block.position() <= end.position():
+                fmt = block.blockFormat()
+                if (fmt.lineHeight(), fmt.lineHeightType()) != wanted:
+                    if edit is None:
+                        edit = QTextCursor(document)
+                        edit.joinPreviousEditBlock()
+                    edit.setPosition(block.position())
+                    edit.mergeBlockFormat(spacing)
+                block = block.next()
+            if edit is not None:
+                # Qt still leaves redo on the last formatting op when several
+                # blocks change; a no-op insert/delete in the same undo group
+                # re-anchors the caret after the pasted text without altering it.
+                edit.setPosition(caret.position())
+                edit.insertText(" ")
+                edit.deletePreviousChar()
+        finally:
+            if edit is not None:
+                edit.endEditBlock()
+        self.setTextCursor(caret)
+
     @override
     def keyPressEvent(self, event) -> None:
         cursor = self.textCursor()
+        if (
+            event.matches(QKeySequence.StandardKey.Paste)
+            and self.textInteractionFlags() & Qt.TextInteractionFlag.TextEditable
+        ):
+
+            def paste() -> None:
+                super(NoteItem, self).keyPressEvent(event)
+
+            self._keep_line_height(paste)
+            return
         if (
             event.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter)
             and not event.modifiers() & ~Qt.KeyboardModifier.KeypadModifier
@@ -247,6 +316,17 @@ class NoteItem(ExportTextItem):
             event.accept()
             return
         super().keyPressEvent(event)
+
+    @override
+    def dropEvent(self, event) -> None:
+        if self.textInteractionFlags() & Qt.TextInteractionFlag.TextEditable:
+
+            def drop() -> None:
+                super(NoteItem, self).dropEvent(event)
+
+            self._keep_line_height(drop)
+        else:
+            super().dropEvent(event)
 
     def committed_text(self) -> str:
         return self._last_text

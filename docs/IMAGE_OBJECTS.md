@@ -13,7 +13,7 @@ Chemvas allows embedding PNG and JPEG images directly into `.cdxml` documents al
 - **Image Properties**: Select an image and choose **Edit ▸ Image Properties…** to adjust:
   - Position (X, Y) and dimensions (width, height in canvas units).
   - Aspect ratio locking (`lock_aspect`).
-  - Layer opacity (from 0.0 to 1.0).
+  - Layer opacity (from 0% to 100%).
 - **Clipboard Paste**: Copy any image from your operating system or web browser and press `Ctrl+V` to paste it directly onto the canvas.
 - **Layer Stacking**: Use **Edit ▸ Bring to Front** and **Edit ▸ Send to Back** to adjust image layering relative to other annotations and shapes.
 

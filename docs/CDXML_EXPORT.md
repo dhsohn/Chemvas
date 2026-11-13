@@ -2,13 +2,17 @@
 
 [한국어](CDXML_EXPORT.ko.md)
 
-Chemvas exports editable CDXML (ChemDraw XML) through File > Export Figure
-(`.cdxml` format) and the CLI `render-document --output file.cdxml`.
+Chemvas exports strict native CDXML (ChemDraw XML) figures through the CLI
+`chemvas render-document doc.cdxml --output file.cdxml`. In the desktop GUI,
+**File > Export Figure** offers publication formats (`SVG`, `PDF`, `PNG`, `TIFF`)
+only; `.cdxml` working documents are saved through **File > Save**
+and **File > Save As**.
 
 ChemDraw checks are bounded to the cases described below; they do not establish
-whole-document visual equivalence. The desktop now opens and saves a supported
-single-page native CDXML documents; see [desktop editing limits](adr/0058-desktop-cdxml-documents.md).
-The `.cdxml` format remains the default document format.
+whole-document visual equivalence. Desktop working-document saves and CLI
+native CDXML export have different contracts and supported subsets; see
+[Source format](#source-format) and [desktop editing limits](adr/0058-desktop-cdxml-documents.md).
+The `.cdxml` format remains the default working-document format.
 
 ## Supported
 
@@ -81,8 +85,9 @@ Each meaning takes exactly its own field as an exact `str` (`element` for
 A binding with an extra or conflicting field, a missing or non-`str` value, or
 an unknown meaning is refused; it is never dropped or converted.
 
-Bindings are not stored in the `.cdxml` file. The CLI reads the explicit
-sidecar; the GUI passes none, so an ambiguous `Ar` refuses there. The typed export
+Bindings are not stored in the `.cdxml` file. Only the CLI `render-document`
+path reads an explicit sidecar; the desktop GUI does not take label-binding
+sidecars, and strict CLI native CDXML export refuses an unbound `Ar`. The typed export
 plan separates displayed text from chemical meaning. The `ARY` query represents
 an unspecified aryl group, not a concrete molecular structure or formula.
 
@@ -209,11 +214,15 @@ inferred, aligned or flattened.
 
 ## Scale
 
-One uniform scale `s = out_w_pt / source_w` applies to all coordinates,
-font sizes, line widths, and geometry. When no `--width-mm` is given, the
-CLI sizes by bond length (no fixed page width); the GUI custom-width
-default is 84 mm. Use `--width-mm 170` for a 170 mm page.
-Numeric precision is 12 significant digits.
+In CLI native CDXML export, one uniform scale `s = out_w_pt / source_w`
+applies to all coordinates, font sizes, line widths, and geometry. When no
+`--width-mm` is given, `render-document` sizes by bond length (no fixed page
+width). Use `--width-mm 84` for an 84 mm single-column width or
+`--width-mm 170` for a 170 mm page. Desktop **File > Save** and **Save As**
+keep canvas or retained native coordinates instead of rescaling through
+**File > Export Figure** (whose 84 mm custom-width default applies to `SVG`,
+`PDF`, `PNG`, and `TIFF` figure outputs). Numeric precision is 12
+significant digits.
 
 ## Font handling
 
@@ -227,27 +236,47 @@ replacement is performed.
 
 ## GUI and CLI
 
-- **GUI**: File > Export Figure > CDXML format. The dialog label reads
-  "CDXML - ChemDraw XML (not verified in ChemDraw)".
-- **CLI**: `chemvas render-document doc.cdxml --output out.cdxml`
-  (also accepts `--width-mm`, `--background`, and `--cdxml-label-bindings`
-  for the sidecar above). `--min-font-pt` is not supported for CDXML output.
+- **GUI working documents (`File > Save` / `File > Save As`)**: Saves the active
+  drawing as `.cdxml` (`ChemDraw XML (*.cdxml)`). **File > Export Figure** offers
+  publication formats (`SVG`, `PDF`, `PNG`, `TIFF`) only and no longer includes a
+  CDXML format option or label-binding selector ([ADR 0062](adr/0062-publication-only-figure-export-dialog.md)).
+- **CLI native CDXML export**: `chemvas render-document doc.cdxml --output out.cdxml`
+  (also accepts `--width-mm`, `--max-height-mm`, `--background`,
+  `--cdxml-label-bindings` for the sidecar above, and
+  `--cdxml-layout-reference`). `--min-font-pt` is not supported for CDXML output.
 
 ## Source format
 
-The `.cdxml` source document is never modified by export. Preflight checks
+The `.cdxml` source document is never modified by CLI export. Preflight checks
 run before output is written, preserving existing destination files on error.
-The desktop can open supported single-page `.cdxml` files, edit them and save
-back with File > Save or Save As. `.cdxml` remains the default source format;
-the CLI figure-export command is not a document roundtrip.
+The desktop opens supported single-page `.cdxml` files, edits them and saves
+back with **File > Save** or **File > Save As**. `.cdxml` is the working
+document format; the CLI `render-document` figure-export command is not a
+document roundtrip, and working-document saves do not produce identical data or
+accept the same subset as CLI native export:
 
-Desktop CDXML Save includes native objects plus an integrity-bound Chemvas
-snapshot comment. If another editor changes the native XML, Chemvas imports
-those objects instead of restoring stale snapshot data. Imported external files
-use Chemvas drawing styles while retaining their native XML, nested fragments,
-reaction references and vector graphics. Unsupported objects reject import;
-unsupported edits reject save before replacement. Supported inputs and
-limits are listed in [ADR 0058](adr/0058-desktop-cdxml-documents.md).
+- **CLI `render-document --output out.cdxml`** writes only the strict native
+  CDXML subset in the [Supported](#supported) and
+  [Refused](#refused-with-error-before-any-file-is-written) tables above (plus any
+  explicit CLI label-binding or layout-reference sidecar), without a Chemvas
+  editing snapshot or raster fallback projections. Any unsupported object or
+  unbound ambiguous label refuses before writing.
+- **Desktop `File > Save` / `Save As` on new Chemvas drawings** writes native
+  CDXML objects where supported, embeds PNG visual projections
+  (`<embeddedobject>`) for drawing styles outside the native export subset (such
+  as images, orbitals, or unsupported note/arrow/shape styles), and
+  includes an integrity-bound Chemvas snapshot comment so reopening in Chemvas
+  restores full editing state ([ADR 0059](adr/0059-cdxml-only-working-documents.md)).
+- **Desktop `File > Save` / `Save As` on imported external `.cdxml` files**
+  uses Chemvas drawing styles on screen while retaining the source native XML,
+  nested fragments, reaction references, and vector graphics, plus the
+  integrity-bound Chemvas snapshot comment. If another editor changes the native
+  XML, Chemvas imports those objects instead of restoring stale snapshot data.
+  Unsupported objects reject import, and unsupported in-place edits (such as
+  new alias/ambiguous `Ar` labels or cross-fragment bonds) reject save before
+  replacement; see [ADR 0058](adr/0058-desktop-cdxml-documents.md). External
+  files with standalone headless legacy arcs open as unsaved copies that save
+  only to a new `.cdxml` path ([ADR 0070](adr/0070-partial-external-cdxml-open.md)).
 
 ## Limitations
 
@@ -593,14 +622,14 @@ design and measured preview plan, not an implemented GUI feature. Mac ChemDraw
 roundtrip remains unverified when the application is unavailable.
 
 
-## Reviewed label meanings in desktop export
+## Script geometry and historical desktop reviewed-binding export
 
-Select CDXML in **File → Export Figure**, then browse to the reviewed binding
-JSON for the current saved drawing. A binding is never selected automatically
-or carried into the next export dialog. Save any edits, review meanings for that
-saved version, and choose its matching binding. Unsaved changes, stale bindings,
-external file replacements and uncertain snapshots refuse before writing.
-The source drawing is not changed and label meanings are not guessed.
+Desktop **File → Export Figure** no longer offers a CDXML format option or a
+reviewed label-binding picker ([ADR 0062](adr/0062-publication-only-figure-export-dialog.md)),
+and **File → Save / Save As** writes working documents without a label-binding
+sidecar. Use the CLI (`chemvas render-document doc.cdxml --output out.cdxml --cdxml-label-bindings labels.json`)
+when exporting native CDXML with reviewed label meanings; the source drawing is
+not changed and label meanings are never guessed.
 
 Bold line annotations use the common flat stroke width in native unheaded
 arrows. HTML and CSS sub/superscripts retain native face bits, bold/color/font
@@ -609,10 +638,15 @@ positioned, individually editable native text runs to preserve shaped placement.
 Normal lines keep their existing encoding. Italic, decorations and other
 unsupported combinations continue to refuse. See [ADR 0053](adr/0053-reviewed-desktop-cdxml-and-script-geometry.md).
 
-Reviewed desktop CDXML uses one detached snapshot of the checked saved document
-for meanings, preflight and output. Deleting a bond and saving can compact its
-saved ID without changing editor history; a freshly reviewed v2 documentary
-contact binding now works immediately, without reopening. Visibility and
-selection use saved references. Groups that touch the export scope still refuse;
-groups outside selection remain outside it. Source bytes, sidecar IDs and the
-live editor are unchanged. See [ADR 0054](adr/0054-saved-cdxml-export-snapshot.md).
+Historically, before [ADR 0062](adr/0062-publication-only-figure-export-dialog.md)
+retired CDXML from desktop **Export Figure**, [ADR 0053](adr/0053-reviewed-desktop-cdxml-and-script-geometry.md)
+and [ADR 0054](adr/0054-saved-cdxml-export-snapshot.md) bound reviewed desktop
+CDXML export to one detached snapshot (`ReviewedCdxmlSnapshot`) of the checked
+saved document for meanings, preflight and output, refusing unsaved changes,
+stale bindings, external file replacements and uncertain snapshots before
+writing. Because deleting a bond and saving can compact its saved ID without
+changing editor history, rebuilding from the saved snapshot let a freshly
+reviewed v2 documentary contact binding work immediately without reopening,
+using saved references for visibility and selection while still refusing groups
+that touch the export scope and leaving groups outside selection, source bytes,
+sidecar IDs and the live editor unchanged.

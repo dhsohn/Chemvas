@@ -23,6 +23,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Re-apply the active Color swatch to a new selection when assistive technology
   activates the already-checked preset swatch, without changing the displayed
   preset or adding an extra undo step.
+- Reset the status-bar zoom readout to 100% when activated through Qt's
+  accessible click path, without intercepting delayed single- or double-click
+  mouse behavior or changing document state or undo history.
+- Retain destination paragraph line spacing when pasting or dropping plain
+  text or HTML into a note via Cmd+V/Ctrl+V, Edit > Paste, or drag-and-drop,
+  preserving rich character formatting and single-step undo with caret
+  restoration without recording an undo step for a no-op paste.
+- Preserve allowlisted note headings (`h1`–`h6`), preformatted blocks (`pre`),
+  and bounded tables (`table`, `tr`, `td`, `th`) with sanitized styles,
+  validated integer table/cell attributes, and repeated spaces across
+  working-document save, restore, and copy, while stripping external-resource
+  and active attributes, flattening oversized or ambiguous table-bearing markup
+  to cell text while keeping safe inline formatting, and continuing to refuse
+  strict native CDXML table export. The table grid preflight matches Qt span
+  placement on strictly nested saved markup; live paste and drop are unchanged.
 - Keep native CDXML rectangles, ovals, brackets and curves at their exact
   stroke width. Their raster projection rounded a 0.6 pt stroke to 0.5 pt.
 - Draw ChemDraw Bold lines, arrows, curves, rectangles and ovals at the
@@ -44,6 +59,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   preserving authored text anchors.
 - Preserve plain native atom labels when CDXML omits a run's font face, while
   retaining explicit formula and subscript/superscript styles.
+- Update English and Korean export, reference, and image documentation to match
+  desktop Save/Save As CDXML working documents, CLI-only native CDXML export and
+  reviewed label bindings, the 1200 DPI Figure Export ceiling, and 0–100% Image
+  Properties opacity, align the Export Figure status tip (SVG/PDF/PNG/TIFF, not
+  CDXML), and show dialog-oriented Export Figure preview errors with native
+  accessibility name and description exposure that clears when settings are
+  valid.
 
 ## [0.28.0] - 2026-11-04
 

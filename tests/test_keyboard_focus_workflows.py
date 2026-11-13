@@ -1,7 +1,8 @@
 """Actual widget traversal remains available before and after note editing."""
 
 import pytest
-from PyQt6.QtCore import QPointF, Qt, QTimer
+from PyQt6.QtCore import QEvent, QMetaObject, QPointF, Qt, QTimer
+from PyQt6.QtGui import QKeyEvent, QMouseEvent
 from PyQt6.QtTest import QTest
 from PyQt6.QtWidgets import QApplication, QDialog, QSpinBox, QToolButton
 
@@ -15,6 +16,10 @@ from tests.gui_workflow_support import _click, _tool
 from tests.gui_workflow_support import app as app
 from tests.gui_workflow_support import fresh_window as fresh_window
 from tests.gui_workflow_support import qt_errors as qt_errors
+
+
+def _cpp_click(button: QToolButton) -> None:
+    QMetaObject.invokeMethod(button, "click", Qt.ConnectionType.DirectConnection)
 
 
 def _tab_cycle(window, canvas, backwards):
@@ -164,6 +169,20 @@ def test_zoom_percent_space_resets_without_mouse_delay(fresh_window):
     assert current_zoom_percent_for_window(window) == 100
 
 
+def test_zoom_percent_accessibility_click_resets_without_document_change(fresh_window):
+    window, canvas = fresh_window
+    set_zoom_percent_for_window(window, 150)
+    button = window.findChild(_ZoomPercentButton)
+    button.setFocus()
+    before = canvas.services.canvas_document_session_service.snapshot_state()
+    history = canvas.services.history_service
+    stacks = (list(history.state.history), list(history.state.redo_stack))
+    _cpp_click(button)
+    assert current_zoom_percent_for_window(window) == 100
+    assert canvas.services.canvas_document_session_service.snapshot_state() == before
+    assert (history.state.history, history.state.redo_stack) == stacks
+
+
 def test_zoom_dialog_accepts_enter_from_its_text_field(fresh_window):
     window, canvas = fresh_window
     set_zoom_percent_for_window(window, 175)
@@ -207,4 +226,91 @@ def test_zoom_percent_mouse_single_double_contract_is_unchanged(app):
     QTest.mouseDClick(button, Qt.MouseButton.LeftButton)
     button._emit_single()
     assert calls == ["single", "double"]
+    button.close()
+
+
+def test_zoom_percent_cpp_click_invokes_single_once(app):
+    calls = []
+    button = _ZoomPercentButton(
+        lambda: calls.append("single"), lambda: calls.append("double")
+    )
+    button.show()
+    _cpp_click(button)
+    assert calls == ["single"]
+    button.close()
+
+
+def test_zoom_percent_cpp_click_after_mouse_release_coalesces_to_one(app):
+    calls = []
+    button = _ZoomPercentButton(
+        lambda: calls.append("single"), lambda: calls.append("double")
+    )
+    button.show()
+    QTest.mouseClick(button, Qt.MouseButton.LeftButton)
+    assert calls == []
+    _cpp_click(button)
+    assert calls == ["single"]
+    button._emit_single()
+    assert calls == ["single"]
+    button.close()
+
+
+def test_zoom_percent_full_mouse_double_sequence_stays_double_only(app):
+    calls = []
+    button = _ZoomPercentButton(
+        lambda: calls.append("single"), lambda: calls.append("double")
+    )
+    button.show()
+    local = QPointF(button.rect().center())
+    global_pos = QPointF(button.mapToGlobal(button.rect().center()))
+    QTest.mousePress(button, Qt.MouseButton.LeftButton)
+    QTest.mouseRelease(button, Qt.MouseButton.LeftButton)
+    QTest.mousePress(button, Qt.MouseButton.LeftButton)
+    QApplication.sendEvent(
+        button,
+        QMouseEvent(
+            QEvent.Type.MouseButtonDblClick,
+            local,
+            global_pos,
+            Qt.MouseButton.LeftButton,
+            Qt.MouseButton.LeftButton,
+            Qt.KeyboardModifier.NoModifier,
+        ),
+    )
+    QTest.mouseRelease(button, Qt.MouseButton.LeftButton)
+    assert calls == ["double"]
+    button._emit_single()
+    assert calls == ["double"]
+    button.close()
+
+
+def test_zoom_percent_disabled_cpp_click_is_noop(app):
+    calls = []
+    button = _ZoomPercentButton(
+        lambda: calls.append("single"), lambda: calls.append("double")
+    )
+    button.show()
+    button.setEnabled(False)
+    _cpp_click(button)
+    assert calls == []
+    button.close()
+
+
+def test_zoom_percent_space_autorepeat_fires_single_once(app):
+    calls = []
+    button = _ZoomPercentButton(
+        lambda: calls.append("single"), lambda: calls.append("double")
+    )
+    button.show()
+    QTest.keyClick(button, Qt.Key.Key_Space)
+    repeat = QKeyEvent(
+        QEvent.Type.KeyPress,
+        Qt.Key.Key_Space,
+        Qt.KeyboardModifier.NoModifier,
+        "",
+        True,
+        2,
+    )
+    QApplication.sendEvent(button, repeat)
+    assert calls == ["single"]
     button.close()

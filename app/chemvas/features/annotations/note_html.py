@@ -13,16 +13,27 @@ SAFE_NOTE_HTML_TAGS = frozenset(
         "div",
         "em",
         "font",
+        "h1",
+        "h2",
+        "h3",
+        "h4",
+        "h5",
+        "h6",
         "i",
         "li",
         "ol",
         "p",
+        "pre",
         "s",
         "span",
         "strike",
         "strong",
         "sub",
         "sup",
+        "table",
+        "td",
+        "th",
+        "tr",
         "u",
         "ul",
     )
@@ -45,6 +56,7 @@ SKIP_NOTE_HTML_CONTENT_TAGS = frozenset(
 SAFE_NOTE_HTML_ATTRS_BY_TAG = {
     tag: frozenset(("style",)) for tag in SAFE_NOTE_HTML_TAGS - VOID_NOTE_HTML_TAGS
 }
+_HEADING_NOTE_HTML_TAGS = frozenset(f"h{n}" for n in range(1, 7))
 SAFE_NOTE_HTML_ATTRS_BY_TAG.update(
     {
         "blockquote": frozenset(("align", "style")),
@@ -53,7 +65,11 @@ SAFE_NOTE_HTML_ATTRS_BY_TAG.update(
         "li": frozenset(("align", "style", "type", "value")),
         "ol": frozenset(("start", "style", "type")),
         "p": frozenset(("align", "style")),
+        "table": frozenset(("border", "cellpadding", "cellspacing", "style")),
+        "td": frozenset(("colspan", "rowspan", "style")),
+        "th": frozenset(("colspan", "rowspan", "style")),
         "ul": frozenset(("style", "type")),
+        **{tag: frozenset(("align", "style")) for tag in _HEADING_NOTE_HTML_TAGS},
     }
 )
 SAFE_NOTE_ALIGN_VALUES = frozenset(("center", "justify", "left", "right"))
@@ -87,6 +103,11 @@ SAFE_NOTE_STYLE_PROPERTIES = frozenset(
     )
 )
 MAX_NOTE_HTML_CHARS = 1_000_000
+# Qt materializes every grid slot of a ragged or spanning table, so a short
+# input can expand quadratically. Above this many slots the note keeps its
+# cell text as paragraphs, as before tables were accepted.
+MAX_NOTE_TABLE_CELLS = 10_000
+_NOTE_TABLE_TAGS = frozenset(("table", "td", "th", "tr"))
 _CSS_COLOR_RE = re.compile(r"#(?:[0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})\Z")
 _CSS_FONT_WEIGHT_RE = re.compile(r"[1-9]00\Z")
 _CSS_LENGTH_RE = re.compile(r"\d{1,3}(?:\.\d{1,2})?(?:em|pt|px|rem|%)\Z")
@@ -131,7 +152,7 @@ _CSS_NAMED_COLORS = frozenset(
     ).split()
 )
 _HTML_FONT_SIZE_RE = re.compile(r"[+-]?[1-7]\Z")
-_HTML_INTEGER_RE = re.compile(r"\d{1,4}\Z")
+_HTML_INTEGER_RE = re.compile(r"[0-9]{1,4}\Z")
 
 
 def sanitize_note_html(value: object) -> str | None:
@@ -139,18 +160,183 @@ def sanitize_note_html(value: object) -> str | None:
         return None
     if len(value) > MAX_NOTE_HTML_CHARS:
         return None
-    parser = _NoteHtmlSanitizer()
-    parser.feed(value)
-    parser.close()
-    sanitized = "".join(parser.parts).strip()
+    sanitized = _sanitized_parts(value, allow_tables=True)
+    if _table_grid_cells(sanitized) > MAX_NOTE_TABLE_CELLS:
+        sanitized = _sanitized_parts(value, allow_tables=False)
     return sanitized or None
 
 
-class _NoteHtmlSanitizer(HTMLParser):
+def _sanitized_parts(value: str, *, allow_tables: bool) -> str:
+    parser = _NoteHtmlSanitizer(allow_tables=allow_tables)
+    parser.feed(value)
+    parser.close()
+    return "".join(parser.parts).strip()
+
+
+def _table_grid_cells(sanitized: str) -> int:
+    # td, th and tr are the only other allowlisted tags starting with "t"; Qt
+    # wraps orphan rows and cells in an implicit table, so they count too.
+    if "<t" not in sanitized:
+        return 0
+    scanner = _TableGridScanner()
+    scanner.feed(sanitized)
+    scanner.close()
+    return scanner.cells()
+
+
+class _TableGrid:
+    """Mirror QTextHtmlImporter::scanTable row and column counting."""
+
     def __init__(self) -> None:
+        self.rows = 0
+        self.columns = 0
+        self.column = 0
+        # Per column: (start row, rowspan, colspan) of the last cell placed.
+        self.spans: list[tuple[int, int, int]] = []
+
+    def start_row(self) -> None:
+        self.rows += 1
+        self.column = 0
+
+    def add_cell(self, colspan: int, rowspan: int) -> None:
+        row = self.rows - 1
+        while self.column < len(self.spans):
+            start, span_rows, span_columns = self.spans[self.column]
+            if start + span_rows <= row:
+                break
+            self.column += span_columns
+        first = self.column
+        self.column += colspan
+        if len(self.spans) < self.column:
+            self.spans.extend([(0, 0, 1)] * (self.column - len(self.spans)))
+        for column in range(first, self.column):
+            self.spans[column] = (row, rowspan, colspan)
+        self.columns = max(self.columns, self.column)
+
+    def cells(self) -> int:
+        return self.rows * self.columns
+
+
+class _TableGridScanner(HTMLParser):
+    """Count the grid slots Qt allocates for the sanitized tables.
+
+    Counting is exact only for strictly nested markup Qt emits on save and load.
+    Orphan rows or cells, misplaced cells, implicit table closes, and ambiguous
+    nested paragraphs or list items make the note exceed the budget and lose table
+    markup instead. Live paste and drop reach Qt before this guard runs.
+    """
+
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=True)
+        self.open: list[str] = []
+        self.open_counts: dict[str, int] = {}
+        self.tables: list[_TableGrid] = []
+        self.closed = 0
+        self.open_slots = 0
+
+    def cells(self) -> int:
+        return self.closed + self.open_slots
+
+    def _reject(self) -> None:
+        self.closed = MAX_NOTE_TABLE_CELLS + 1
+        self.tables.clear()
+        self.open_slots = 0
+
+    @override
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        if self.closed > MAX_NOTE_TABLE_CELLS:
+            return
+        tag = tag.lower()
+        if tag in VOID_NOTE_HTML_TAGS:
+            return
+        top = self.open[-1] if self.open else None
+        if (
+            (tag == "tr" and top != "table")
+            or (tag in {"td", "th"} and top != "tr")
+            or (tag == "p" and self.open_counts.get("p"))
+            or (tag == "li" and top == "li")
+        ):
+            self._reject()
+            return
+        self.open.append(tag)
+        self.open_counts[tag] = self.open_counts.get(tag, 0) + 1
+        if tag == "table":
+            self.tables.append(_TableGrid())
+        elif tag == "tr":
+            table = self.tables[-1]
+            before = table.cells()
+            table.start_row()
+            self.open_slots += table.cells() - before
+        elif tag in {"td", "th"}:
+            colspan, rowspan = _table_cell_spans(attrs)
+            table = self.tables[-1]
+            before = table.cells()
+            table.add_cell(colspan, rowspan)
+            self.open_slots += table.cells() - before
+        if self.cells() > MAX_NOTE_TABLE_CELLS:
+            self._reject()
+
+    @override
+    def handle_endtag(self, tag: str) -> None:
+        if self.closed > MAX_NOTE_TABLE_CELLS:
+            return
+        tag = tag.lower()
+        if not self.open_counts.get(tag):
+            return
+        if self.open[-1] != tag:
+            self._reject()
+            return
+        self.open.pop()
+        self.open_counts[tag] -= 1
+        if tag == "table":
+            finished = self.tables.pop()
+            self.open_slots -= finished.cells()
+            self.closed += finished.cells()
+
+    @override
+    def close(self) -> None:
+        while self.tables:
+            finished = self.tables.pop()
+            self.open_slots -= finished.cells()
+            self.closed += finished.cells()
+        super().close()
+
+
+def _table_cell_spans(attrs: list[tuple[str, str | None]]) -> tuple[int, int]:
+    colspan = 1
+    rowspan = 1
+    seen: set[str] = set()
+    for name, value in attrs:
+        name = name.lower()
+        if name not in {"colspan", "rowspan"} or value is None:
+            continue
+        if name in seen:
+            continue
+        seen.add(name)
+        value = value.strip()
+        if not _HTML_INTEGER_RE.fullmatch(value):
+            continue
+        count = int(value)
+        if count < 1:
+            count = 1
+        count = min(count, MAX_NOTE_TABLE_CELLS)
+        if name == "colspan":
+            colspan = count
+        else:
+            rowspan = count
+    return colspan, rowspan
+
+
+class _NoteHtmlSanitizer(HTMLParser):
+    def __init__(self, *, allow_tables: bool = True) -> None:
         super().__init__(convert_charrefs=True)
         self.parts: list[str] = []
         self._skip_depth = 0
+        self._allowed_tags = (
+            SAFE_NOTE_HTML_TAGS
+            if allow_tables
+            else SAFE_NOTE_HTML_TAGS - _NOTE_TABLE_TAGS
+        )
 
     @override
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
@@ -158,7 +344,7 @@ class _NoteHtmlSanitizer(HTMLParser):
         if tag in SKIP_NOTE_HTML_CONTENT_TAGS:
             self._skip_depth += 1
             return
-        if self._skip_depth or tag not in SAFE_NOTE_HTML_TAGS:
+        if self._skip_depth or tag not in self._allowed_tags:
             return
         attr_text = self._sanitized_attrs(tag, attrs)
         self.parts.append(f"<{tag}{attr_text}>")
@@ -168,7 +354,7 @@ class _NoteHtmlSanitizer(HTMLParser):
         tag = tag.lower()
         if tag in SKIP_NOTE_HTML_CONTENT_TAGS:
             return
-        if self._skip_depth or tag not in SAFE_NOTE_HTML_TAGS:
+        if self._skip_depth or tag not in self._allowed_tags:
             return
         attr_text = self._sanitized_attrs(tag, attrs)
         if tag in VOID_NOTE_HTML_TAGS:
@@ -185,7 +371,7 @@ class _NoteHtmlSanitizer(HTMLParser):
             return
         if (
             self._skip_depth
-            or tag not in SAFE_NOTE_HTML_TAGS
+            or tag not in self._allowed_tags
             or tag in VOID_NOTE_HTML_TAGS
         ):
             return
@@ -237,14 +423,22 @@ class _NoteHtmlSanitizer(HTMLParser):
                 value = _sanitized_list_type_value(tag, value)
                 if value is None:
                     continue
-            elif name in {"start", "value"}:
+            elif name in {
+                "border",
+                "cellpadding",
+                "cellspacing",
+                "colspan",
+                "rowspan",
+                "start",
+                "value",
+            }:
                 value = _sanitized_integer_attr_value(value)
                 if value is None:
                     continue
             if not _is_safe_attr_value(value):
                 continue
             parts.append(f' {name}="{escape(value, quote=True)}"')
-        if tag in {"p", "li"}:
+        if tag in {"p", "li"} | _HEADING_NOTE_HTML_TAGS:
             # Qt exports this rule in a head stylesheet, which is deliberately
             # removed above. Keep its paragraph whitespace policy as a fixed
             # inline rule, without accepting arbitrary stylesheets or CSS.
@@ -410,4 +604,4 @@ def _sanitized_integer_attr_value(value: str) -> str | None:
     return value if _HTML_INTEGER_RE.fullmatch(value) is not None else None
 
 
-__all__ = ["MAX_NOTE_HTML_CHARS", "sanitize_note_html"]
+__all__ = ["MAX_NOTE_HTML_CHARS", "MAX_NOTE_TABLE_CELLS", "sanitize_note_html"]

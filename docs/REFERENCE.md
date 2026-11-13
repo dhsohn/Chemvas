@@ -125,7 +125,7 @@ CDXML working documents use Save or Save As rather than Figure Export.
 Export publication-grade figures in plain SVG, PDF, PNG, or TIFF formats:
 
 - **Vector Outlines**: Atom and arrow labels are rendered as vector glyph outlines in SVG and PDF, ensuring perfect typography across all platforms without requiring local font installations.
-- **Physical Column Presets**: Match standard publication column widths (e.g., 84 mm for 1-column, 174 mm for 2-column) at explicit target DPIs (up to 600 DPI).
+- **Physical Column Presets**: Match standard publication column widths (e.g., 84 mm for 1-column, 174 mm for 2-column) at explicit target DPIs (up to 1200 DPI).
 - **Lossless TIFF**: Exports with lossless LZW compression and full transparency support.
 
 ## Chemistry I/O
