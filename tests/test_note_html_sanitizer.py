@@ -317,7 +317,7 @@ def test_sanitize_note_html_flattens_unclosed_oversized_fragment() -> None:
     assert "y" in sanitized
 
 
-def test_sanitize_note_html_scanner_uses_first_duplicate_span_attr() -> None:
+def test_sanitize_note_html_deduplicates_duplicate_span_attrs_on_output() -> None:
     html = '<table><tr><td colspan="2" colspan="9999">x</td></tr></table>'
     sanitized = sanitize_note_html(html)
     assert sanitized is not None
@@ -340,15 +340,55 @@ def test_sanitize_note_html_preserves_rowspan_in_bounded_table() -> None:
     assert 'rowspan="2"' in sanitized
 
 
-def test_sanitize_note_html_orphan_table_cells_do_not_expand_budget() -> None:
+def test_sanitize_note_html_orphan_table_cells_are_flattened() -> None:
     html = "<td>x</td><table><tr><td>y</td></tr></table>"
     sanitized = sanitize_note_html(html)
     assert sanitized is not None
-    assert "<table" in sanitized
+    assert "<table" not in sanitized
+    assert "x" in sanitized
+    assert "y" in sanitized
+
+
+def _assert_flattened(html: str, *texts: str) -> None:
+    sanitized = sanitize_note_html(html)
+    assert sanitized is not None
+    assert not any(f"<{tag}" in sanitized for tag in ("table", "tr", "td", "th"))
+    for text in texts:
+        assert text in sanitized
+
+
+def test_orphan_rows_without_table_tag_count_toward_budget() -> None:
+    wide = "".join("<td>x</td>" for _ in range(101))
+    narrow = "".join("<tr><td>y</td></tr>" for _ in range(99))
+    _assert_flattened(f"<tr>{wide}</tr>{narrow}", "x", "y")
+
+
+def test_implicitly_closed_inner_table_counts_rows_in_outer_table() -> None:
+    wide = "".join("<td>x</td>" for _ in range(101))
+    narrow = "".join("<tr><td>y</td></tr>" for _ in range(99))
+    inner = "<td><table><tr><td>i</td></tr></td></tr>"
+    _assert_flattened(f"<table><tr>{wide}{inner}{narrow}</table>", "x", "y", "i")
+
+
+def test_rowspan_occupancy_widens_later_rows_past_budget() -> None:
+    first = "".join('<td rowspan="100">r</td>' for _ in range(100))
+    rest = "".join("<tr><td>y</td></tr>" for _ in range(99))
+    _assert_flattened(f"<table><tr>{first}</tr>{rest}</table>", "r", "y")
+
+
+def test_one_slot_over_budget_flattens() -> None:
+    row = "<tr>" + "<td>x</td>" * 137 + "</tr>"
+    _assert_flattened("<table>" + row * 73 + "</table>", "x")
+
+
+def test_cell_overlapping_rowspan_uses_qt_column_skip() -> None:
+    first = '<tr><td>a</td><td colspan="71" rowspan="71">x</td></tr>'
+    rest = '<tr><td colspan="71">b</td><td>c</td></tr>' * 70
+    _assert_flattened(f"<table>{first}{rest}</table>", "a", "b", "c")
 
 
 def test_heading_whitespace_behavior_after_sanitize_roundtrip(qt_application) -> None:
-    html = '<h1 style="color:red">A   b</h1>'
+    html = '<h1 style="white-space:pre-wrap">A   b</h1>'
     sanitized = sanitize_note_html(html)
     assert sanitized is not None
     assert "white-space:pre-wrap" in sanitized

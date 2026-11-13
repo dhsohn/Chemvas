@@ -34,9 +34,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and bounded tables (`table`, `tr`, `td`, `th`) with sanitized styles,
   validated integer table/cell attributes, and repeated spaces across
   working-document save, restore, and copy, while stripping external-resource
-  and active attributes, flattening oversized table layouts to cell text while
-  keeping safe inline formatting, and continuing to refuse strict native CDXML
-  table export.
+  and active attributes, flattening oversized or ambiguous table-bearing markup
+  to cell text while keeping safe inline formatting, and continuing to refuse
+  strict native CDXML table export. The table grid preflight matches Qt span
+  placement on strictly nested saved markup; live paste and drop are unchanged.
 - Keep native CDXML rectangles, ovals, brackets and curves at their exact
   stroke width. Their raster projection rounded a 0.6 pt stroke to 0.5 pt.
 - Draw ChemDraw Bold lines, arrows, curves, rectangles and ovals at the

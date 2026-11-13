@@ -174,7 +174,9 @@ def _sanitized_parts(value: str, *, allow_tables: bool) -> str:
 
 
 def _table_grid_cells(sanitized: str) -> int:
-    if "<table" not in sanitized:
+    # td, th and tr are the only other allowlisted tags starting with "t"; Qt
+    # wraps orphan rows and cells in an implicit table, so they count too.
+    if "<t" not in sanitized:
         return 0
     scanner = _TableGridScanner()
     scanner.feed(sanitized)
@@ -183,71 +185,120 @@ def _table_grid_cells(sanitized: str) -> int:
 
 
 class _TableGrid:
+    """Mirror QTextHtmlImporter::scanTable row and column counting."""
+
     def __init__(self) -> None:
         self.rows = 0
         self.columns = 0
         self.column = 0
-        self.occupied: dict[int, int] = {}
+        # Per column: (start row, rowspan, colspan) of the last cell placed.
+        self.spans: list[tuple[int, int, int]] = []
 
     def start_row(self) -> None:
         self.rows += 1
         self.column = 0
-        self.occupied = {c: n - 1 for c, n in self.occupied.items() if n > 1}
-        if self.occupied:
-            self.columns = max(self.columns, max(self.occupied) + 1)
 
     def add_cell(self, colspan: int, rowspan: int) -> None:
-        if self.rows == 0:
-            self.start_row()
-        while self.column in self.occupied:
-            self.column += 1
-        if rowspan > 1:
-            for column in range(self.column, self.column + colspan):
-                self.occupied[column] = rowspan
+        row = self.rows - 1
+        while self.column < len(self.spans):
+            start, span_rows, span_columns = self.spans[self.column]
+            if start + span_rows <= row:
+                break
+            self.column += span_columns
+        first = self.column
         self.column += colspan
+        if len(self.spans) < self.column:
+            self.spans.extend([(0, 0, 1)] * (self.column - len(self.spans)))
+        for column in range(first, self.column):
+            self.spans[column] = (row, rowspan, colspan)
         self.columns = max(self.columns, self.column)
 
     def cells(self) -> int:
-        return max(self.rows, 1) * self.columns
+        return self.rows * self.columns
 
 
 class _TableGridScanner(HTMLParser):
-    """Count the grid slots Qt allocates for the sanitized tables."""
+    """Count the grid slots Qt allocates for the sanitized tables.
+
+    Counting is exact only for strictly nested markup Qt emits on save and load.
+    Orphan rows or cells, misplaced cells, implicit table closes, and ambiguous
+    nested paragraphs or list items make the note exceed the budget and lose table
+    markup instead. Live paste and drop reach Qt before this guard runs.
+    """
 
     def __init__(self) -> None:
         super().__init__(convert_charrefs=True)
-        self.stack: list[_TableGrid] = []
+        self.open: list[str] = []
+        self.open_counts: dict[str, int] = {}
+        self.tables: list[_TableGrid] = []
         self.closed = 0
+        self.open_slots = 0
 
     def cells(self) -> int:
-        return self.closed + sum(table.cells() for table in self.stack)
+        return self.closed + self.open_slots
+
+    def _reject(self) -> None:
+        self.closed = MAX_NOTE_TABLE_CELLS + 1
+        self.tables.clear()
+        self.open_slots = 0
 
     @override
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
         if self.closed > MAX_NOTE_TABLE_CELLS:
             return
         tag = tag.lower()
+        if tag in VOID_NOTE_HTML_TAGS:
+            return
+        top = self.open[-1] if self.open else None
+        if (
+            (tag == "tr" and top != "table")
+            or (tag in {"td", "th"} and top != "tr")
+            or (tag == "p" and self.open_counts.get("p"))
+            or (tag == "li" and top == "li")
+        ):
+            self._reject()
+            return
+        self.open.append(tag)
+        self.open_counts[tag] = self.open_counts.get(tag, 0) + 1
         if tag == "table":
-            self.stack.append(_TableGrid())
-        elif self.stack and tag == "tr":
-            self.stack[-1].start_row()
-        elif self.stack and tag in {"td", "th"}:
+            self.tables.append(_TableGrid())
+        elif tag == "tr":
+            table = self.tables[-1]
+            before = table.cells()
+            table.start_row()
+            self.open_slots += table.cells() - before
+        elif tag in {"td", "th"}:
             colspan, rowspan = _table_cell_spans(attrs)
-            self.stack[-1].add_cell(colspan, rowspan)
-            if self.cells() > MAX_NOTE_TABLE_CELLS:
-                self.closed = MAX_NOTE_TABLE_CELLS + 1
-                self.stack.clear()
+            table = self.tables[-1]
+            before = table.cells()
+            table.add_cell(colspan, rowspan)
+            self.open_slots += table.cells() - before
+        if self.cells() > MAX_NOTE_TABLE_CELLS:
+            self._reject()
 
     @override
     def handle_endtag(self, tag: str) -> None:
+        if self.closed > MAX_NOTE_TABLE_CELLS:
+            return
         tag = tag.lower()
-        if tag == "table" and self.stack:
-            self.closed += self.stack.pop().cells()
+        if not self.open_counts.get(tag):
+            return
+        if self.open[-1] != tag:
+            self._reject()
+            return
+        self.open.pop()
+        self.open_counts[tag] -= 1
+        if tag == "table":
+            finished = self.tables.pop()
+            self.open_slots -= finished.cells()
+            self.closed += finished.cells()
 
     @override
     def close(self) -> None:
-        while self.stack:
-            self.closed += self.stack.pop().cells()
+        while self.tables:
+            finished = self.tables.pop()
+            self.open_slots -= finished.cells()
+            self.closed += finished.cells()
         super().close()
 
 

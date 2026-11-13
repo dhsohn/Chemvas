@@ -187,9 +187,10 @@ Native editor changes publish those values while Qt retains cursor, focus and
 text Undo. Sanitized note HTML preserves allowlisted heading (`h1`–`h6`),
 preformatted (`pre`) and bounded table (`table`, `tr`, `td`, `th`) structure
 alongside inline, paragraph and list formatting while stripping external-resource
-and event attributes; notes that exceed the table grid slot budget keep cell text
-and safe inline formatting without table layout
-([ADR 0071](adr/0071-bounded-note-table-grid-preflight.md)). Marks retain kind,
+and event attributes; notes that exceed the table grid slot budget or carry
+ambiguous table-bearing markup on the persistence path keep cell text and safe
+inline formatting without table layout. Live paste and drop reach Qt before this
+guard ([ADR 0071](adr/0071-bounded-note-table-grid-preflight.md)). Marks retain kind,
 text, atom binding, offsets, center and color;
 metadata roles are derived from these records. Save, atom-bound mark copying and
 electronic-state reconciliation read records even when views are absent. Failed
