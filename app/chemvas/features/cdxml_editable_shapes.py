@@ -5,6 +5,7 @@ from __future__ import annotations
 import math
 from typing import TYPE_CHECKING, Any
 
+from chemvas.domain.document.shapes import inscribed_circle_size
 from chemvas.features.cdxml_graphics import native_image_z
 
 if TYPE_CHECKING:
@@ -159,10 +160,8 @@ def update_shape(
             ty = top + oy - sy * (before["top"] + oy)
             transform_native(e, sx=sx, sy=sy, tx=tx, ty=ty)
         else:
-            # Match the canvas: an irregular resize box inscribes a circle
-            # centred in that box, with the shorter side as its diameter.
             cx, cy = (left + right) / 2 + ox, (top + bottom) / 2 + oy
-            radius = min(width, height) / 2
+            _, radius = inscribed_circle_size(width, height)
             if max(abs(cx) + radius, abs(cy) + radius) > 1_000_000:
                 raise ValueError("Native coordinate transform exceeds limits.")
             e.set("BoundingBox", f"{cx + radius:.12g} {cy:.12g} {cx:.12g} {cy:.12g}")

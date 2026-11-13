@@ -95,5 +95,4 @@ def parse_cdxml_document(raw: bytes) -> CdxmlDocument:
     from chemvas.features.cdxml_preservation import PreservingImporter
 
     state = PreservingImporter(text).state()
-    build_document_payload(state, CANVAS_FILE_VERSION)
     return CdxmlDocument(state, digest)

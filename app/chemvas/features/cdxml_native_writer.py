@@ -27,6 +27,18 @@ _GENERIC_NICKNAME = re.compile(r"R[0-9]*|X|A|Q")
 _DOUBLE_POSITIONS = {"double_center": "Center", "double_outer": "Right"}
 
 
+def _graphics_by_superseding_id(
+    root: ET.Element,
+) -> dict[str | None, list[tuple[int, ET.Element]]]:
+    """Index fallback graphics with their positions in the current tree."""
+    fallbacks: dict[str | None, list[tuple[int, ET.Element]]] = {}
+    for position, graphic in enumerate(root.iter("graphic")):
+        fallbacks.setdefault(graphic.get("SupersededBy"), []).append(
+            (position, graphic)
+        )
+    return fallbacks
+
+
 def _is_native_pure_element_label(symbol: str) -> bool:
     """True when ``symbol`` may be written as a native ``Element`` atomic number."""
     return (
@@ -535,12 +547,8 @@ class _NativeWriter:
                         - sy * (before["y"] + self.offset[1])
                     )
                     transform_native(e, sx=sx, sy=sy, tx=tx, ty=ty)
-                    superseded = [
-                        g
-                        for g in self.root.iter("graphic")
-                        if g.get("SupersededBy") == identity
-                    ]
-                    for graphic in superseded:
+                    fallbacks = _graphics_by_superseding_id(self.root)
+                    for _, graphic in fallbacks.get(identity, []):
                         transform_native(graphic, sx=sx, sy=sy, tx=tx, ty=ty)
                 elif collection == "shapes":
                     from chemvas.features.cdxml_editable_shapes import update_shape
@@ -552,19 +560,22 @@ class _NativeWriter:
                     update_arrow(e, before, after, self.offset, self.color_index)
                     # Update transitive legacy line copies as well. Their IDs may
                     # themselves be used by reaction metadata.
-                    pending = {identity}
-                    remaining = list(self.root.iter("graphic"))
+                    pending: set[str | None] = {identity}
+                    fallbacks = _graphics_by_superseding_id(self.root)
                     while pending:
                         targets, pending = pending, set()
-                        for graphic in remaining[:]:
-                            if graphic.get("SupersededBy") not in targets:
-                                continue
+                        # Branches in the same wave are handled in document order.
+                        wave = [
+                            entry
+                            for target in targets
+                            for entry in fallbacks.pop(target, [])
+                        ]
+                        for _, graphic in sorted(wave, key=lambda entry: entry[0]):
                             if graphic.find(".//represent") is not None:
                                 raise ValueError(
                                     "Editing a native chemical annotation requires updating its atom property."
                                 )
                             pending.add(graphic.get("id"))
-                            remaining.remove(graphic)
                             if graphic.get("GraphicType", "Line") != "Line":
                                 raise ValueError("Native arrow fallback is not a line.")
                             coordinates = [
@@ -602,14 +613,12 @@ class _NativeWriter:
     def remove_deleted_fallbacks(self) -> None:
         # Superseded graphics are hidden alternate representations of their target,
         # not independent artwork. Remove the fallback too, never reactivate it.
-        fallbacks: dict[str, list[ET.Element]] = {}
-        for graphic in self.root.iter("graphic"):
-            target = graphic.get("SupersededBy")
-            if target:
-                fallbacks.setdefault(target, []).append(graphic)
-        pending = list(self.removed_ids)
+        pending = [identity for identity in self.removed_ids if identity]
+        if not pending:
+            return
+        fallbacks = _graphics_by_superseding_id(self.root)
         while pending:
-            for graphic in fallbacks.pop(pending.pop(), []):
+            for _, graphic in fallbacks.pop(pending.pop(), []):
                 if graphic.find(".//represent") is not None:
                     raise ValueError(
                         "Deleting a native chemical annotation requires updating its atom property; the file was not replaced."
