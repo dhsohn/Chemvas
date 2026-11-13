@@ -69,14 +69,23 @@ class _ZoomPercentButton(QToolButton):
         self._on_double = on_double
         self._pending_single = False
         self._suppress_release = False
+        self._in_mouse_release = False
         self._timer = QTimer(self)
         self._timer.setSingleShot(True)
         self._timer.timeout.connect(self._emit_single)
+        self.clicked.connect(self._on_accessibility_activate)
 
     def _emit_single(self) -> None:
         if self._pending_single:
             self._pending_single = False
             self._on_single()
+
+    def _on_accessibility_activate(self, _checked: bool = False) -> None:
+        if self._in_mouse_release or not self.isEnabled():
+            return
+        self._timer.stop()
+        self._pending_single = False
+        self._on_single()
 
     @override
     def keyPressEvent(self, event) -> None:
@@ -98,7 +107,11 @@ class _ZoomPercentButton(QToolButton):
 
     @override
     def mouseReleaseEvent(self, event) -> None:
-        super().mouseReleaseEvent(event)
+        self._in_mouse_release = True
+        try:
+            super().mouseReleaseEvent(event)
+        finally:
+            self._in_mouse_release = False
         if self._suppress_release:
             self._suppress_release = False
             return

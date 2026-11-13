@@ -6,8 +6,19 @@ from dataclasses import replace
 from typing import TYPE_CHECKING, Any, cast, override
 
 from PyQt6.QtCore import QEvent, QPointF, QRectF, Qt
-from PyQt6.QtGui import QBrush, QColor, QImage, QPainter, QPen, QPolygonF
+from PyQt6.QtGui import (
+    QBrush,
+    QColor,
+    QImage,
+    QKeySequence,
+    QPainter,
+    QPen,
+    QPolygonF,
+    QTextBlockFormat,
+    QTextCursor,
+)
 from PyQt6.QtWidgets import (
+    QApplication,
     QGraphicsItem,
     QGraphicsItemGroup,
     QGraphicsRectItem,
@@ -232,6 +243,38 @@ class NoteItem(ExportTextItem):
     @override
     def keyPressEvent(self, event) -> None:
         cursor = self.textCursor()
+        if (
+            event.matches(QKeySequence.StandardKey.Paste)
+            and self.textInteractionFlags() & Qt.TextInteractionFlag.TextEditable
+        ):
+            clipboard = QApplication.clipboard()
+            if clipboard is None:
+                super().keyPressEvent(event)
+                return
+            mime = clipboard.mimeData()
+            if mime is not None and (mime.hasText() or mime.hasHtml()):
+                document = self.document()
+                assert document is not None
+                anchor = QTextCursor(cursor)
+                anchor.setPosition(cursor.selectionStart())
+                current = anchor.blockFormat()
+                spacing = QTextBlockFormat()
+                spacing.setLineHeight(current.lineHeight(), current.lineHeightType())
+                start = cursor.selectionStart()
+                edit = QTextCursor(document)
+                edit.beginEditBlock()
+                try:
+                    super().keyPressEvent(event)
+                    pasted = QTextCursor(document)
+                    pasted.setPosition(start)
+                    pasted.setPosition(
+                        self.textCursor().position(),
+                        QTextCursor.MoveMode.KeepAnchor,
+                    )
+                    pasted.mergeBlockFormat(spacing)
+                finally:
+                    edit.endEditBlock()
+                return
         if (
             event.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter)
             and not event.modifiers() & ~Qt.KeyboardModifier.KeypadModifier

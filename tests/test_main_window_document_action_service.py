@@ -1138,7 +1138,7 @@ class MainWindowDocumentActionServiceTest(unittest.TestCase):
                         self.assertIn("The exported figure is", message)
                         self.assertIn("the maximum is 1 mm", message)
                         self.assertIn("Reduce the export width", message)
-                        self.assertIn("Limit exported height", message)
+                        self.assertIn("Maximum height", message)
                         self.assertIn("No file was written or resized", message)
                         self.assertNotIn("--max-height-mm", message)
                         self.assertNotIn(

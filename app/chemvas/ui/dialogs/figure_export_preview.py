@@ -8,7 +8,7 @@ from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QPixmap
 from PyQt6.QtWidgets import QLabel, QVBoxLayout, QWidget
 
-from chemvas.features.export import svg_viewport_size_points
+from chemvas.features.export import export_error_message, svg_viewport_size_points
 from chemvas.shell.palette import PALETTE
 from chemvas.ui.export.export_guard_service import validate_export_budget
 from chemvas.ui.export.export_vector import pdf_page_size
@@ -59,10 +59,13 @@ class FigureExportPreview(QWidget):
         min_font_check: bool,
     ) -> bool:
         self.image.clear()
+        self.image.setAccessibleDescription("")
         self.dimensions.clear()
         self.note.setText("Adjust the options to preview and export.")
         if canvas is None:
-            self.image.setText("Open a drawing to preview and export.")
+            message = "Open a drawing to preview and export."
+            self.image.setText(message)
+            self.image.setAccessibleDescription(message)
             return False
         try:
             image, plan = FigureExportService(
@@ -109,5 +112,7 @@ class FigureExportPreview(QWidget):
             )
             return True
         except ValueError as error:
-            self.image.setText(str(error))
+            message = export_error_message(error)
+            self.image.setText(message)
+            self.image.setAccessibleDescription(message)
             return False

@@ -129,6 +129,37 @@ def test_visible_limits_and_empty_selection_prevent_invalid_export(drawing):
         prompt_export_options(window)
 
 
+def test_max_height_preview_shows_dialog_message_and_accessibility(drawing):
+    window, _, _ = drawing
+
+    def drive(dialog):
+        preview = dialog.findChild(QLabel, "exportPreview")
+        export = next(
+            b for b in dialog.findChildren(QPushButton) if b.text() == "Export"
+        )
+        assert export.isEnabled()
+        assert preview.accessibleDescription() == ""
+        assert preview.accessibleName() == "Figure preview"
+
+        dialog.findChild(QDoubleSpinBox, "exportMaxHeightSpin").setValue(10)
+        dialog.findChild(QCheckBox, "exportMaxHeightCheck").setChecked(True)
+        assert not export.isEnabled()
+        message = preview.text()
+        assert "Maximum height" in message
+        assert "mm high" in message
+        assert "--max-height-mm" not in message
+        assert preview.accessibleDescription() == message
+
+        dialog.findChild(QCheckBox, "exportMaxHeightCheck").setChecked(False)
+        assert export.isEnabled()
+        assert preview.accessibleDescription() == ""
+        assert preview.pixmap() is not None
+        return QDialog.DialogCode.Rejected
+
+    with patch.object(QDialog, "exec", drive):
+        prompt_export_options(window)
+
+
 def test_blank_canvas_shows_empty_state():
     app = QApplication.instance() or QApplication([])
     window = build_main_window()

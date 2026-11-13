@@ -132,7 +132,7 @@ def export_error_message(error: Exception) -> str:
             f"The exported figure is {error.height_mm:.2f} mm high; "
             f"the maximum is {error.maximum_mm:g} mm.\n\n"
             "Reduce the export width, or raise or turn off "
-            "Limit exported height in Export Figure. "
+            "Maximum height in Export Figure. "
             "No file was written or resized."
         )
     if isinstance(error, MinimumFontSizeError):

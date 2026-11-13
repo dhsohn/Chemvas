@@ -2,15 +2,17 @@
 
 [English](CDXML_EXPORT.md)
 
-Chemvas는 파일 > 그림 내보내기(`.cdxml` 형식)와 CLI
-`render-document --output file.cdxml`로 편집 가능한 CDXML(ChemDraw XML)을
-내보냅니다.
+Chemvas는 CLI `chemvas render-document doc.cdxml --output file.cdxml`로
+엄격한 네이티브 CDXML(ChemDraw XML) 그림을 내보냅니다. 데스크톱 GUI의
+**파일 > 그림 내보내기(File > Export Figure)**는 출판용 형식(`SVG`, `PDF`,
+`PNG`, `TIFF`)만 제공하며, `.cdxml` 작업 문서는 **파일 > 저장(File > Save)**과
+**다른 이름으로 저장(File > Save As)**으로 저장합니다.
 
 ChemDraw 검증 범위는 아래에 명시한 사례로 한정되며 전체 문서의 시각적
-동등성을 뜻하지 않습니다. 데스크톱은 지원되는 단일 페이지 CDXML을 열어
-수정한 뒤 일반 저장 또는 다른 이름으로 저장할 수 있습니다.
-[지원 범위와 제한](adr/0058-desktop-cdxml-documents.md)을 참고하세요.
-`.cdxml`는 기본 문서 형식입니다.
+동등성을 뜻하지 않습니다. 데스크톱 작업 문서 저장과 CLI 네이티브 CDXML
+내보내기는 계약과 지원 범위가 서로 다릅니다([원본 형식](#원본-형식) 및
+[지원 범위와 제한](adr/0058-desktop-cdxml-documents.md) 참고).
+`.cdxml`는 기본 작업 문서 형식입니다.
 
 ## 지원
 
@@ -60,7 +62,7 @@ ChemDraw 검증 범위는 아래에 명시한 사례로 한정되며 전체 문�
 
 각 의미는 자기 필드 하나만 정확한 `str`로 받습니다(`element_identity`는 `element`, `aryl_fragment`는 `fragment`, `generic_aryl`은 없음). 불필요하거나 충돌하는 필드, 빠지거나 `str`이 아닌 값, 알 수 없는 의미를 가진 바인딩은 거부하며, 버리거나 변환하지 않습니다.
 
-바인딩은 `.cdxml` 파일에 저장되지 않습니다. CLI는 명시적 sidecar에서만 바인딩을 받고 GUI는 받지 않으므로, GUI의 모호한 `Ar`는 거부합니다. typed export plan에서 표시문자와 화학적 의미를 구분합니다. `ARY`는 불특정 aryl query이며 구체적인 고리·분자식을 뜻하지 않습니다.
+바인딩은 `.cdxml` 파일에 저장되지 않습니다. 명시적 sidecar는 CLI `render-document` 경로에서만 읽으며, 데스크톱 GUI는 라벨 바인딩 sidecar를 받지 않고 바인딩 없는 모호한 `Ar`는 엄격한 CLI 네이티브 CDXML 내보내기에서 거부합니다. typed export plan에서 표시문자와 화학적 의미를 구분합니다. `ARY`는 불특정 aryl query이며 구체적인 고리·분자식을 뜻하지 않습니다.
 
 generic aryl이 order-1 쐐기/해시의 넓은 끝에 있으면 B/E 및 native
 WedgeBegin/WedgedHashBegin 방향을 유지합니다. 좌우 반전한 O/P→Ar 대조군 8개에서
@@ -140,11 +142,14 @@ sidecar는 `.cdxml` 스키마나 GUI를 바꾸지 않습니다. 실제 그림의
 
 ## 축척
 
-하나의 균일 축척 `s = out_w_pt / source_w`가 모든 좌표, 폰트 크기, 선 너비,
-기하에 적용됩니다. `--width-mm`을 지정하지 않으면 CLI는 결합 길이 기준으로
-크기를 정합니다(고정 페이지 너비 없음). GUI 사용자 지정 너비 기본값은
-84 mm입니다. 170 mm 페이지는 `--width-mm 170`으로 지정합니다.
-수치 정밀도는 유효 숫자 12자리입니다.
+CLI 네이티브 CDXML 내보내기에서는 하나의 균일 축척 `s = out_w_pt / source_w`가
+모든 좌표, 폰트 크기, 선 너비, 기하에 적용됩니다. `--width-mm`을 지정하지
+않으면 `render-document`는 결합 길이 기준으로 크기를 정합니다(고정 페이지 너비
+없음). 1단 84 mm 폭은 `--width-mm 84`, 170 mm 페이지는 `--width-mm 170`으로
+지정합니다. 데스크톱 **파일 > 저장**과 **다른 이름으로 저장**은 **파일 > 그림 내보내기**의
+배율 조정을 거치지 않고 캔버스 좌표 또는 보존된 네이티브 좌표로 작업 문서를
+기록합니다(**그림 내보내기**의 사용자 지정 너비 기본값 84 mm는 `SVG`, `PDF`,
+`PNG`, `TIFF` 그림 출력에만 적용됨). 수치 정밀도는 유효 숫자 12자리입니다.
 
 ## 폰트 처리
 
@@ -156,18 +161,42 @@ QTextDocument paint glyph run의 글꼴과 픽셀 크기를 사용합니다. 단
 
 ## GUI 및 CLI
 
-- **GUI**: 파일 > 그림 내보내기 > CDXML 형식. 대화상자 라벨:
-  "CDXML - ChemDraw XML (not verified in ChemDraw)".
-- **CLI**: `chemvas render-document doc.cdxml --output out.cdxml`
-  (`--width-mm`, `--background`, 위 sidecar용 `--cdxml-label-bindings`도
-  사용 가능). `--min-font-pt`는 CDXML 출력에서 지원하지 않습니다.
+- **GUI 작업 문서(`파일 > 저장` / `다른 이름으로 저장`, `File > Save` / `Save As`)**:
+  현재 도면을 `.cdxml`(`ChemDraw XML (*.cdxml)`) 작업 문서로 저장합니다. **파일 > 그림 내보내기(`File > Export Figure`)**는
+  출판용 형식(`SVG`, `PDF`, `PNG`, `TIFF`)만 제공하며 더 이상 CDXML 형식이나
+  라벨 바인딩 선택기를 포함하지 않습니다([ADR 0062](adr/0062-publication-only-figure-export-dialog.md)).
+- **CLI 네이티브 CDXML 내보내기**: `chemvas render-document doc.cdxml --output out.cdxml`
+  (`--width-mm`, `--max-height-mm`, `--background`, 위 sidecar용
+  `--cdxml-label-bindings`, `--cdxml-layout-reference`도 사용 가능).
+  `--min-font-pt`는 CDXML 출력에서 지원하지 않습니다.
 
 ## 원본 형식
 
-`.cdxml` 원본 문서는 내보내기로 수정되지 않습니다. 파일 작성 전 사전 검사를
-수행하므로 오류 발생 시 기존 대상 파일이 보존됩니다. 데스크톱의 CDXML 열기·저장은
-[ADR 0058](adr/0058-desktop-cdxml-documents.md)의 범위를 지원합니다.
-`.cdxml`는 기본 문서 형식이며 CLI 그림 내보내기는 문서 왕복 저장 기능이 아닙니다.
+`.cdxml` 원본 문서는 CLI 내보내기로 수정되지 않습니다. 파일 작성 전 사전 검사를
+수행하므로 오류 발생 시 기존 대상 파일이 보존됩니다. 데스크톱은 지원되는 단일 페이지
+`.cdxml` 파일을 열어 편집한 뒤 **파일 > 저장** 또는 **다른 이름으로 저장**으로 다시
+저장합니다. `.cdxml`는 작업 문서 형식이며, CLI `render-document` 그림 내보내기는
+문서 왕복 저장 기능이 아니고 데스크톱 작업 문서 저장과 동일한 데이터나 지원 범위를
+뜻하지 않습니다:
+
+- **CLI `render-document --output out.cdxml`**는 위 [지원](#지원) 및
+  [거부](#거부-파일-작성-전-오류-발생) 표의 엄격한 네이티브 CDXML 부분집합만(명시적
+  CLI 라벨 바인딩·배치 참조 sidecar 포함) 출력하며, Chemvas 편집 스냅샷이나 래스터
+  대체 투영을 포함하지 않습니다. 미지원 객체나 바인딩 없는 모호한 라벨은 파일을 쓰기
+  전에 거부합니다.
+- **새 Chemvas 도면의 데스크톱 `파일 > 저장` / `다른 이름으로 저장`**은 지원되는
+  요소를 네이티브 CDXML 객체로 기록하고, 네이티브 내보내기 범위 밖의 그리기 스타일
+  (이미지, 오비탈, 미지원 노트·화살표·도형 스타일 등)에는 PNG 시각 투영
+  (`<embeddedobject>`)을 함께 넣으며, 무결성이 결속된 Chemvas 스냅샷 주석을 포함해
+  Chemvas에서 다시 열 때 전체 편집 상태를 복원합니다([ADR 0059](adr/0059-cdxml-only-working-documents.md)).
+- **가져온 외부 `.cdxml` 파일의 데스크톱 `파일 > 저장` / `다른 이름으로 저장`**은
+  화면에서는 Chemvas 그리기 스타일로 표시하면서 원본 네이티브 XML, 중첩 fragment,
+  반응 참조, 벡터 그래픽과 무결성 결속 Chemvas 스냅샷 주석을 유지합니다. 다른 편집기가
+  네이티브 XML을 바꾸면 이전 스냅샷 대신 변경된 네이티브 객체를 다시 가져옵니다.
+  지원하지 않는 객체는 가져오기를 거부하고, 지원하지 않는 제자리 편집(새 별명·모호한
+  `Ar` 라벨, fragment 간 결합 등)은 파일을 교체하기 전에 저장을 거부합니다([ADR 0058](adr/0058-desktop-cdxml-documents.md)).
+  독립된 화살촉 없는 레거시 호(arc)가 생략되어 열린 외부 파일은 저장되지 않은 사본으로
+  열리며 새 `.cdxml` 경로로만 저장할 수 있습니다([ADR 0070](adr/0070-partial-external-cdxml-open.md)).
 
 ## 제한 사항
 
@@ -467,13 +496,14 @@ regular/bold run 조합은 설치 없이 원문 169문자를 지원합니다. �
 구현된 GUI 기능이 아닙니다. Mac ChemDraw가 없는 환경의 roundtrip도 미검증입니다.
 
 
-## 데스크톱에서 검토한 라벨 의미 선택
+## 첨자 기하와 데스크톱 검토 라벨 의미 내보내기 이력
 
-**File → Export Figure**에서 CDXML을 선택하고 현재 저장된 그림에 해당하는
-검토된 binding JSON을 직접 고릅니다. 다음 대화상자에는 자동 재사용되지 않습니다.
-편집했다면 먼저 저장하고 그 버전의 의미를 다시 검토해야 합니다. 미저장 변경,
-이전 버전 binding, 외부 파일 변경, 불확실한 snapshot은 출력 전에 거절합니다.
-원본 그림을 고치거나 Ar 의미를 추측하지 않습니다.
+데스크톱 **파일 → 그림 내보내기(File → Export Figure)**는 더 이상 CDXML 형식이나
+검토된 라벨 바인딩 선택기를 제공하지 않으며([ADR 0062](adr/0062-publication-only-figure-export-dialog.md)),
+**파일 → 저장 / 다른 이름으로 저장(File → Save / Save As)**은 라벨 바인딩 sidecar
+없이 작업 문서를 저장합니다. 검토된 라벨 의미가 필요한 네이티브 CDXML 내보내기는
+CLI(`chemvas render-document doc.cdxml --output out.cdxml --cdxml-label-bindings labels.json`)를
+사용합니다. 원본 그림을 고치거나 `Ar` 의미를 추측하지 않습니다.
 
 굵은 평탄선은 공통 굵기의 native 무화살촉 선으로 출력합니다. HTML 태그와 CSS
 첨자는 native face 비트와 기존 굵게·색·글꼴을 유지합니다. 첨자가 있는 줄은 실제
@@ -481,10 +511,14 @@ glyph 위치를 유지하는 개별 편집 가능한 native text run으로 출�
 문단은 아닙니다. 일반 줄의 기존 출력과 미지원 서식 거절은 유지됩니다.
 [ADR 0053](adr/0053-reviewed-desktop-cdxml-and-script-geometry.md)을 참고하세요.
 
-검토 binding을 사용하는 데스크톱 CDXML은 확인한 저장 문서의 독립 snapshot 하나로
-의미 검사·preflight·출력을 수행합니다. 결합 삭제 후 저장하여 파일의 bond ID가
-압축되어도, 새 저장본에 대해 검토한 v2 documentary contact를 재열기 없이 즉시
-출력할 수 있습니다. 표시 여부·선택은 저장된 참조로 옮깁니다. 출력 범위에 닿는
-그룹은 계속 거부하며 선택 밖의 그룹은 포함하지 않습니다. 원본 바이트, sidecar ID,
-live 편집 모델과 Undo 이력을 바꾸지 않습니다.
-[ADR 0054](adr/0054-saved-cdxml-export-snapshot.md)를 참고하세요.
+역사적으로 [ADR 0062](adr/0062-publication-only-figure-export-dialog.md)가 데스크톱
+**그림 내보내기**에서 CDXML을 제거하기 전에는,
+[ADR 0053](adr/0053-reviewed-desktop-cdxml-and-script-geometry.md)과
+[ADR 0054](adr/0054-saved-cdxml-export-snapshot.md)에 따라 데스크톱 검토 CDXML
+내보내기가 미저장 변경·이전 버전 binding·외부 파일 변경·불확실한 snapshot을 출력
+전에 거절하고, 확인한 저장 문서의 독립 snapshot(`ReviewedCdxmlSnapshot`) 하나로
+의미 검사·preflight·출력을 수행했습니다. 결합 삭제 후 저장하여 파일의 bond ID가
+압축되어도 저장된 스냅샷을 기준으로 삼아 새 저장본에 대해 검토한 v2 documentary
+contact를 재열기 없이 즉시 처리하고, 표시 여부·선택은 저장된 참조로 옮기면서 출력
+범위에 닿는 그룹은 거부하고 선택 밖의 그룹, 원본 바이트, sidecar ID, live 편집
+모델과 Undo 이력은 바꾸지 않도록 설계되었습니다.

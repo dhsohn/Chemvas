@@ -23,6 +23,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Re-apply the active Color swatch to a new selection when assistive technology
   activates the already-checked preset swatch, without changing the displayed
   preset or adding an extra undo step.
+- Reset the status-bar zoom readout to 100% when activated through Qt's
+  accessible click path, without intercepting delayed single- or double-click
+  mouse behavior or changing document state or undo history.
+- Retain destination paragraph line spacing when pasting plain text or HTML
+  into a note via normal Cmd+V or Edit > Paste, preserving rich character
+  formatting and undo grouping.
 - Keep native CDXML rectangles, ovals, brackets and curves at their exact
   stroke width. Their raster projection rounded a 0.6 pt stroke to 0.5 pt.
 - Draw ChemDraw Bold lines, arrows, curves, rectangles and ovals at the
@@ -44,6 +50,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   preserving authored text anchors.
 - Preserve plain native atom labels when CDXML omits a run's font face, while
   retaining explicit formula and subscript/superscript styles.
+- Update English and Korean export, reference, and image documentation to match
+  desktop Save/Save As CDXML working documents, CLI-only native CDXML export and
+  reviewed label bindings, the 1200 DPI Figure Export ceiling, and 0–100% Image
+  Properties opacity, and align the Export Figure status tip (SVG/PDF/PNG/TIFF,
+  not CDXML) and Maximum height validation name with the dialog.
 
 ## [0.28.0] - 2026-11-04
 
