@@ -39,7 +39,18 @@ _PRE_TEXT = "A  x\nB"
 _TABLE_HTML = (
     "<table><tr><td>A</td><td>B</td></tr><tr><td>C</td><td>D</td></tr></table>"
 )
+_TABLE_SPAN_HTML = (
+    '<table border="1" cellpadding="2"><tr>'
+    '<td colspan="2" rowspan="1">AB</td></tr><tr><td>C</td><td>D</td></tr></table>'
+)
+_TABLE_NESTED_HTML = (
+    "<table><tr><td><table><tr><td>in</td></tr></table></td><td>out</td></tr></table>"
+)
+_nested_preview = QTextDocument()
+_nested_preview.setHtml(_TABLE_NESTED_HTML)
+_TABLE_NESTED_TEXT = _nested_preview.toPlainText()
 _TABLE_TEXT = "\nA\nB\nC\nD\n"
+_TABLE_SPAN_TEXT = "\nAB\nC\nD\n"
 _PLAIN_CONTROL = "A  x\nB\tC"
 
 
@@ -59,15 +70,38 @@ def _note_matching_text(canvas, text: str):
     return next(n for n in canvas.runtime_state.note_items() if n.toPlainText() == text)
 
 
+def _note_html_signature(html: str) -> tuple:
+    lowered = html.lower()
+    return (
+        "h1" in lowered,
+        "<pre" in lowered,
+        "<table" in lowered,
+        'colspan="2"' in lowered,
+        'rowspan="2"' in lowered,
+        'border="1"' in lowered,
+        'cellpadding="2"' in lowered,
+        lowered.count("<table"),
+    )
+
+
+def _live_html_signature(note) -> tuple:
+    document = note.document()
+    sanitized = sanitize_note_html(document.toHtml())
+    assert sanitized is not None
+    return _note_html_signature(sanitized)
+
+
 @pytest.mark.parametrize(
     ("html", "expected_text"),
     [
         (_HEADING_HTML, _HEADING_TEXT),
         (_PRE_HTML, _PRE_TEXT),
         (_TABLE_HTML, _TABLE_TEXT),
+        (_TABLE_SPAN_HTML, _TABLE_SPAN_TEXT),
+        (_TABLE_NESTED_HTML, _TABLE_NESTED_TEXT),
         (None, _PLAIN_CONTROL),
     ],
-    ids=["heading", "pre", "table", "plain"],
+    ids=["heading", "pre", "table", "table-span", "table-nested", "plain"],
 )
 @pytest.mark.parametrize("route", ["cmd_v", "edit_menu"])
 def test_rich_note_html_survives_commit_snapshot_and_file_roundtrip(
@@ -79,15 +113,20 @@ def test_rich_note_html_survives_commit_snapshot_and_file_roundtrip(
         else _commit_plain_note(drawing, expected_text, route=route)
     )
     assert live_text == expected_text
+    expected_signature = _live_html_signature(note) if html is not None else None
 
     session = canvas.services.canvas_document_session_service
     state = session.snapshot_state()
     record = next(n for n in state["notes"] if n["text"] == expected_text)
     assert record.get("html")
+    if expected_signature is not None:
+        assert _note_html_signature(record["html"]) == expected_signature
 
     session.restore_state(state)
     restored = _note_matching_text(canvas, expected_text)
     assert restored.toPlainText() == expected_text
+    if expected_signature is not None:
+        assert _live_html_signature(restored) == expected_signature
 
     path = tmp_path / "rich-note.cdxml"
     assert window.services.document_action_service.save_canvas_to_path(
@@ -99,6 +138,8 @@ def test_rich_note_html_survives_commit_snapshot_and_file_roundtrip(
     )
     reopened = _note_matching_text(canvas, expected_text)
     assert reopened.toPlainText() == expected_text
+    if expected_signature is not None:
+        assert _live_html_signature(reopened) == expected_signature
 
     _tool(window, "select")
     _click(canvas, reopened.sceneBoundingRect().center())
@@ -110,6 +151,52 @@ def test_rich_note_html_survives_commit_snapshot_and_file_roundtrip(
         if item is not reopened and item.toPlainText() == expected_text
     )
     assert copied.toPlainText() == expected_text
+    if expected_signature is not None:
+        assert _live_html_signature(copied) == expected_signature
+
+
+def test_heading_preserves_internal_spaces_through_commit_and_reopen(drawing, tmp_path):
+    html = "<h1>A   b</h1>"
+    window, canvas, note, _live_text = _commit_html_note(drawing, html)
+    record = note.note_state()
+    assert "white-space:pre-wrap" in record["html"]
+
+    path = tmp_path / "heading-spaces.cdxml"
+    assert window.services.document_action_service.save_canvas_to_path(
+        window, str(path)
+    )
+    payload = read_payload(path.read_text(encoding="utf-8"))
+    record = payload["state"]["notes"][-1]
+    assert "white-space:pre-wrap" in record["html"]
+    window.services.canvas_document_service.replace_canvas_with_state(
+        window, canvas, state=payload["state"], file_path=str(path)
+    )
+    reopened = canvas.runtime_state.note_items()[-1]
+    assert "white-space:pre-wrap" in sanitize_note_html(reopened.document().toHtml())
+
+
+def test_oversized_table_note_save_and_reopen_completes(drawing, tmp_path):
+    wide = "".join(f"<td>{i}</td>" for i in range(101))
+    narrow = "".join("<tr><td>x</td></tr>" for _ in range(99))
+    html = f"<table><tr>{wide}</tr>{narrow}</table>"
+    window, canvas, note, _live_text = _commit_html_note(drawing, html)
+    record = note.note_state()
+    assert "<table" not in record["html"].lower()
+
+    path = tmp_path / "oversized-table.cdxml"
+    assert window.services.document_action_service.save_canvas_to_path(
+        window, str(path)
+    )
+    payload = read_payload(path.read_text(encoding="utf-8"))
+    record = payload["state"]["notes"][-1]
+    assert "<table" not in record.get("html", "").lower()
+    window.services.canvas_document_service.replace_canvas_with_state(
+        window, canvas, state=payload["state"], file_path=str(path)
+    )
+    reopened = canvas.runtime_state.note_items()[-1]
+    plain = reopened.toPlainText()
+    assert "0" in plain and "x" in plain
+    assert not reopened.document().rootFrame().childFrames()
 
 
 def _commit_plain_note(drawing, plain: str, *, route: str):

@@ -167,7 +167,9 @@ Qt 변환이나 데이터 역할만 바꾸는 것은 문서 편집이 아닙니�
 노트 기록은 평문·정제한 HTML·위치·회전을 소유합니다. Qt 편집기는 커서·포커스·텍스트
 Undo를 담당하고 입력과 서식 변경 결과를 기록에 반영합니다. 정제한 노트 HTML은 외부
 자원과 이벤트 속성을 제거하면서 허용된 인라인·문단·목록 서식과 제목(`h1`–`h6`)·서식
-유지 블록(`pre`)·표(`table`, `tr`, `td`, `th`) 구조를 보존합니다. 표식 기록은 종류·텍스트·
+유지 블록(`pre`)·한도 내 표(`table`, `tr`, `td`, `th`) 구조를 보존합니다. 표 격자
+슬롯 한도를 넘는 노트는 표 레이아웃 없이 셀 텍스트와 안전한 인라인 서식만 유지합니다
+([ADR 0071](adr/0071-bounded-note-table-grid-preflight.md)). 표식 기록은 종류·텍스트·
 소속 원자·오프셋·중심·색상을 소유하며 Qt 메타데이터는 이 기록에서 읽습니다. 저장,
 원자에 붙은 표식 복사, 전하·라디칼 계산은 표시 객체가 없어도 기록을 읽습니다.
 복구 중 위치·글꼴·텍스트를 차례로 되돌릴 때 생기는 중간 신호가 결과를 바꾸지 않도록
@@ -400,3 +402,4 @@ ADR을 언제 쓰는지, 작성 규칙과 템플릿은 [ADR 안내](adr/README.m
 - [ADR 0067: Coupled native CDXML collections](adr/0067-coupled-native-cdxml-collections.md)
 - [ADR 0068: Retire the browser adapter](adr/0068-retire-browser-adapter.md)
 - [ADR 0069: Plain filled native CDXML shapes](adr/0069-plain-filled-native-cdxml-shapes.md)
+- [ADR 0071: Bounded note table grid preflight](adr/0071-bounded-note-table-grid-preflight.md)

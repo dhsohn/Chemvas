@@ -182,6 +182,7 @@ def test_native_pixel_size_extension_still_rejects_invalid_values(size):
         "<pre>A  x\nB</pre>",
         "<table><tr><td>A</td><td>B</td></tr><tr><td>C</td><td>D</td></tr></table>",
         '<table><tr><td colspan="2">AB</td></tr><tr><td>C</td><td>D</td></tr></table>',
+        '<table><tr><td rowspan="2">A</td><td>B</td></tr><tr><td>C</td></tr></table>',
         '<h2 style="margin-left:0px">A  y</h2><h2>B</h2>',
     ],
 )
@@ -218,3 +219,145 @@ def test_sanitize_note_html_drops_unsafe_heading_and_pre_styles():
     sanitized_pre = sanitize_note_html('<pre style="white-space:normal">  A</pre>')
     assert sanitized_pre == "<pre>  A</pre>"
     assert "white-space" not in sanitized_pre
+
+
+def _nested_table_html(*, wide: int, extra_rows: int) -> str:
+    wide_row = "".join(f"<td>c{c}</td>" for c in range(wide))
+    narrow_rows = "".join("<tr><td>x</td></tr>" for _ in range(extra_rows))
+    return f"<table><tr>{wide_row}</tr>{narrow_rows}</table>"
+
+
+def test_sanitize_note_html_keeps_table_at_exact_grid_budget() -> None:
+    cols = 100
+    rows = 100
+    html = (
+        "<table>"
+        + "".join(
+            "<tr>" + "".join("<td>x</td>" for _ in range(cols)) + "</tr>"
+            for _ in range(rows)
+        )
+        + "</table>"
+    )
+    sanitized = sanitize_note_html(html)
+    assert sanitized is not None
+    assert "<table" in sanitized
+    assert sanitized.count("<td>") == cols * rows
+
+
+def test_sanitize_note_html_keeps_table_below_grid_budget() -> None:
+    cols = 100
+    rows = 99
+    html = (
+        "<table>"
+        + "".join(
+            "<tr>" + "".join("<td>x</td>" for _ in range(cols)) + "</tr>"
+            for _ in range(rows)
+        )
+        + "</table>"
+    )
+    sanitized = sanitize_note_html(html)
+    assert sanitized is not None
+    assert "<table" in sanitized
+    assert sanitized.count("<tr>") == rows
+
+
+def test_sanitize_note_html_flattens_oversized_ragged_table_but_keeps_text() -> None:
+    html = _nested_table_html(wide=101, extra_rows=99)
+    sanitized = sanitize_note_html(html)
+    assert sanitized is not None
+    assert "<table" not in sanitized
+    assert "c0" in sanitized
+    assert "x" in sanitized
+    assert sanitize_note_html(sanitized) == sanitized
+
+
+def test_sanitize_note_html_flattens_oversized_colspan_grid() -> None:
+    html = (
+        "<table>"
+        + "".join('<tr><td colspan="100">x</td></tr>' for _ in range(101))
+        + "</table>"
+    )
+    sanitized = sanitize_note_html(html)
+    assert sanitized is not None
+    assert "<table" not in sanitized
+    assert "x" in sanitized
+
+
+def test_sanitize_note_html_nested_tables_aggregate_grid_budget() -> None:
+    inner_rows = "".join(
+        "<tr>" + "".join("<td>i</td>" for _ in range(100)) + "</tr>" for _ in range(100)
+    )
+    inner = f"<table>{inner_rows}</table>"
+    html = f"<table><tr><td>{inner}</td></tr><tr><td>o</td></tr></table>"
+    sanitized = sanitize_note_html(html)
+    assert sanitized is not None
+    assert "<table" not in sanitized
+    assert "i" in sanitized
+    assert "o" in sanitized
+
+
+def test_sanitize_note_html_table_fallback_retains_inline_formatting() -> None:
+    html = _nested_table_html(wide=101, extra_rows=99).replace(
+        "<td>c0</td>", "<td><b>c0</b></td>", 1
+    )
+    sanitized = sanitize_note_html(html)
+    assert sanitized is not None
+    assert "<table" not in sanitized
+    assert "<b>c0</b>" in sanitized
+
+
+def test_sanitize_note_html_flattens_unclosed_oversized_fragment() -> None:
+    wide = "".join("<td>x</td>" for _ in range(101))
+    narrow = "".join("<tr><td>y</td></tr>" for _ in range(99))
+    html = f"<table><tr>{wide}</tr>{narrow}"
+    sanitized = sanitize_note_html(html)
+    assert sanitized is not None
+    assert "<table" not in sanitized
+    assert "x" in sanitized
+    assert "y" in sanitized
+
+
+def test_sanitize_note_html_scanner_uses_first_duplicate_span_attr() -> None:
+    html = '<table><tr><td colspan="2" colspan="9999">x</td></tr></table>'
+    sanitized = sanitize_note_html(html)
+    assert sanitized is not None
+    assert 'colspan="2"' in sanitized
+    assert "9999" not in sanitized
+
+
+def test_sanitize_note_html_rejects_non_ascii_colspan_digits() -> None:
+    html = '<table><tr><td colspan="٢">x</td></tr></table>'
+    sanitized = sanitize_note_html(html)
+    assert sanitized is not None
+    assert "colspan" not in sanitized
+    assert "<table" in sanitized
+
+
+def test_sanitize_note_html_preserves_rowspan_in_bounded_table() -> None:
+    html = '<table><tr><td rowspan="2">A</td><td>B</td></tr><tr><td>C</td></tr></table>'
+    sanitized = sanitize_note_html(html)
+    assert sanitized is not None
+    assert 'rowspan="2"' in sanitized
+
+
+def test_sanitize_note_html_orphan_table_cells_do_not_expand_budget() -> None:
+    html = "<td>x</td><table><tr><td>y</td></tr></table>"
+    sanitized = sanitize_note_html(html)
+    assert sanitized is not None
+    assert "<table" in sanitized
+
+
+def test_heading_whitespace_behavior_after_sanitize_roundtrip(qt_application) -> None:
+    html = '<h1 style="color:red">A   b</h1>'
+    sanitized = sanitize_note_html(html)
+    assert sanitized is not None
+    assert "white-space:pre-wrap" in sanitized
+    document = QTextDocument()
+    document.setHtml(sanitized)
+    assert document.toPlainText() == "A   b"
+    roundtrip = sanitize_note_html(document.toHtml())
+    assert roundtrip is not None
+    assert "white-space:pre-wrap" in roundtrip
+    restored = QTextDocument()
+    restored.setHtml(roundtrip)
+    assert restored.toPlainText() == "A   b"

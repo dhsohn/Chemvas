@@ -31,10 +31,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   preserving rich character formatting and single-step undo with caret
   restoration without recording an undo step for a no-op paste.
 - Preserve allowlisted note headings (`h1`–`h6`), preformatted blocks (`pre`),
-  and tables (`table`, `tr`, `td`, `th`) with sanitized styles, validated
-  integer table/cell attributes, and repeated spaces across working-document
-  save, restore, and copy, while stripping external-resource and active
-  attributes and continuing to refuse strict native CDXML table export.
+  and bounded tables (`table`, `tr`, `td`, `th`) with sanitized styles,
+  validated integer table/cell attributes, and repeated spaces across
+  working-document save, restore, and copy, while stripping external-resource
+  and active attributes, flattening oversized table layouts to cell text while
+  keeping safe inline formatting, and continuing to refuse strict native CDXML
+  table export.
 - Keep native CDXML rectangles, ovals, brackets and curves at their exact
   stroke width. Their raster projection rounded a 0.6 pt stroke to 0.5 pt.
 - Draw ChemDraw Bold lines, arrows, curves, rectangles and ovals at the

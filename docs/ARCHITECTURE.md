@@ -185,9 +185,12 @@ the saved group format.
 Notes retain plain text, sanitized HTML, position and rotation in document records.
 Native editor changes publish those values while Qt retains cursor, focus and
 text Undo. Sanitized note HTML preserves allowlisted heading (`h1`–`h6`),
-preformatted (`pre`) and table (`table`, `tr`, `td`, `th`) structure alongside
-inline, paragraph and list formatting while stripping external-resource and
-event attributes. Marks retain kind, text, atom binding, offsets, center and color;
+preformatted (`pre`) and bounded table (`table`, `tr`, `td`, `th`) structure
+alongside inline, paragraph and list formatting while stripping external-resource
+and event attributes; notes that exceed the table grid slot budget keep cell text
+and safe inline formatting without table layout
+([ADR 0071](adr/0071-bounded-note-table-grid-preflight.md)). Marks retain kind,
+text, atom binding, offsets, center and color;
 metadata roles are derived from these records. Save, atom-bound mark copying and
 electronic-state reconciliation read records even when views are absent. Failed
 native frame restoration reinstates the captured record after position, font and
@@ -427,3 +430,4 @@ Qt scene contract rather than alternate test-only scene representations.
 - [ADR 0067: Coupled native CDXML collections](adr/0067-coupled-native-cdxml-collections.md)
 - [ADR 0068: Retire the browser adapter](adr/0068-retire-browser-adapter.md)
 - [ADR 0069: Plain filled native CDXML shapes](adr/0069-plain-filled-native-cdxml-shapes.md)
+- [ADR 0071: Bounded note table grid preflight](adr/0071-bounded-note-table-grid-preflight.md)
