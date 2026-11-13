@@ -387,6 +387,48 @@ def test_cell_overlapping_rowspan_uses_qt_column_skip() -> None:
     _assert_flattened(f"<table>{first}{rest}</table>", "a", "b", "c")
 
 
+def _nested_paragraph_ragged_table_html() -> str:
+    wide = "".join(f"<td>c{c}</td>" for c in range(101))
+    narrow = "".join("<tr><td>x</td></tr>" for _ in range(99))
+    return (
+        f"<table><tr>{wide}<td><p>"
+        f"<table><tr><p>x</p></tr>{narrow}</table>"
+        f"</p></td></tr></table>"
+    )
+
+
+def test_nested_paragraph_in_table_markup_flattens_and_keeps_cell_text() -> None:
+    _assert_flattened(_nested_paragraph_ragged_table_html(), "c0", "x")
+
+
+def _fifty_by_hundred_table(*, close: bool = True) -> str:
+    body = "".join(
+        "<tr>" + "".join("<td>x</td>" for _ in range(100)) + "</tr>" for _ in range(50)
+    )
+    if close:
+        return f"<table>{body}</table>"
+    return f"<table>{body}"
+
+
+@pytest.mark.parametrize("close_second", [True, False])
+def test_sibling_tables_at_exact_aggregate_budget_preserve_both(
+    close_second: bool,
+) -> None:
+    html = _fifty_by_hundred_table() + _fifty_by_hundred_table(close=close_second)
+    sanitized = sanitize_note_html(html)
+    assert sanitized is not None
+    assert sanitized.count("<table") == 2
+    assert sanitized.count("<td>") == 10_000
+    assert "x" in sanitized
+    assert sanitize_note_html(sanitized) == sanitized
+
+
+def test_sibling_table_one_slot_over_aggregate_budget_flattens() -> None:
+    half = _fifty_by_hundred_table()
+    over = '<table><tr><td colspan="5001">z</td></tr></table>'
+    _assert_flattened(half + over, "x", "z")
+
+
 def test_heading_whitespace_behavior_after_sanitize_roundtrip(qt_application) -> None:
     html = '<h1 style="white-space:pre-wrap">A   b</h1>'
     sanitized = sanitize_note_html(html)
