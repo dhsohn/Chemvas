@@ -26,16 +26,17 @@ missing charge, lost group or changed image is a failure even if the file opens.
 | File | Expected original | Edit to exercise in the GUI |
 | --- | --- | --- |
 | [01-basic.cdxml](01-basic.cdxml) | Two benzene-containing structures, 16 atoms / 16 bonds, one arrow. MnO₂ above and `oxidation` below. | Change the below label to `oxidation check`; move the arrow and verify both labels follow. |
-| [02-reactants.cdxml](02-reactants.cdxml) | Three separate benzene structures, 18 atoms / 18 bonds. Captions `1`, `2`, `3` under their own structures, plus sign between the first two, one arrow to the third. | Move a structure and its caption together. Exercise Arrange Scheme with the plus connector; each caption stays with its own structure. |
+| [02-reactants.cdxml](02-reactants.cdxml) | Three separate benzene structures, 18 atoms / 18 bonds. Captions `1`, `2`, `3` under their own structures, plus sign between the first two, one arrow to the third. | Group each structure with its caption (`Ctrl+G`), move a structure and its caption together, and align or distribute the grouped units via **Edit ▸ Align** / **Edit ▸ Distribute** so each caption stays with its own structure. |
 | [03-notation.cdxml](03-notation.cdxml) | 7 atoms / 4 bonds; one solid wedge to F and one hashed bond to Cl; separate Na⁺ and Cl⁻. Equilibrium arrow with k₁ and k₋₁; note H₂O / ΔG‡ with subscript 2 and superscript ‡. | Move the stereochemical fragment; format the note and arrow labels, then undo/redo. Charge signs and wedge/hash endpoints must remain correct. |
 | [04-mixed.cdxml](04-mixed.cdxml) | 3 atoms / 2 bonds. One group containing the structure and the two-line `Group A` / `한글 α + H₂O` note. One embedded 120×60 image, blue square at left and orange circle at right; separate dashed rounded rectangle. | Move the group; structure and note move together, image and frame do not. Resize the image while keeping its proportions; undo/redo. |
 | [05-native.cdxml](05-native.cdxml) | 3 atoms / 2 bonds, one double bond to O, two notes and one arrow. `Native sample` is bold blue; `native XML` is black. Native fragment line width and double-bond spacing are retained. | Change `Native sample` to `Native edited`; save a copy and reopen. The text remains editable and blue; native structure styling remains. |
 
-For the Arrange Scheme check on `02`, the blocks use atom IDs 0–5, 6–11 and
-12–17 with captions 0, 1 and 2. The connectors are `[["notes", 3], ["arrows", 0]]`.
-These are zero-based indices in the original. Follow the
-[layout request format](../../docs/SCHEME_LAYOUT.md); inspect a newly saved file
-before building a CLI request so its `source_sha256` matches.
+Separately from the GUI edit, for CLI `layout-document` corroboration on `02`,
+the blocks use atom IDs 0–5, 6–11 and 12–17 with captions 0, 1 and 2. The
+connectors are `[["notes", 3], ["arrows", 0]]`. These are zero-based indices in
+the original. Follow the [layout request format](../../docs/SCHEME_LAYOUT.md);
+inspect a newly saved file before building a CLI request so its `source_sha256`
+matches.
 
 ## Same manual pass on every platform
 
