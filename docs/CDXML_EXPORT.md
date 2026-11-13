@@ -264,7 +264,7 @@ accept the same subset as CLI native export:
 - **Desktop `File > Save` / `Save As` on new Chemvas drawings** writes native
   CDXML objects where supported, embeds PNG visual projections
   (`<embeddedobject>`) for drawing styles outside the native export subset (such
-  as images, orbitals, groups, or unsupported note/arrow/shape styles), and
+  as images, orbitals, or unsupported note/arrow/shape styles), and
   includes an integrity-bound Chemvas snapshot comment so reopening in Chemvas
   restores full editing state ([ADR 0059](adr/0059-cdxml-only-working-documents.md)).
 - **Desktop `File > Save` / `Save As` on imported external `.cdxml` files**

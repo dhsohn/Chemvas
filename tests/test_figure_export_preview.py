@@ -148,10 +148,12 @@ def test_max_height_preview_shows_dialog_message_and_accessibility(drawing):
         assert "Maximum height" in message
         assert "mm high" in message
         assert "--max-height-mm" not in message
+        assert preview.accessibleName() == message
         assert preview.accessibleDescription() == message
 
         dialog.findChild(QCheckBox, "exportMaxHeightCheck").setChecked(False)
         assert export.isEnabled()
+        assert preview.accessibleName() == "Figure preview"
         assert preview.accessibleDescription() == ""
         assert preview.pixmap() is not None
         return QDialog.DialogCode.Rejected

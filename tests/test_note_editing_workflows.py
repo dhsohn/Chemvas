@@ -6,8 +6,18 @@ from tests.document_file_helpers import read_payload
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 import pytest
-from PyQt6.QtCore import QMimeData, QPointF, QRectF, Qt
-from PyQt6.QtGui import QColor, QFont, QImage, QKeySequence, QPainter, QTextCursor
+from PyQt6.QtCore import QMimeData, QPoint, QPointF, QRectF, Qt
+from PyQt6.QtGui import (
+    QColor,
+    QDragEnterEvent,
+    QDragMoveEvent,
+    QDropEvent,
+    QFont,
+    QImage,
+    QKeySequence,
+    QPainter,
+    QTextCursor,
+)
 from PyQt6.QtTest import QTest
 from PyQt6.QtWidgets import QApplication, QToolButton
 
@@ -70,6 +80,34 @@ def _paste_into_note(window, canvas, route: str) -> None:
         paste_selection_for_window(window)
     else:
         QTest.keySequence(canvas, QKeySequence(QKeySequence.StandardKey.Paste))
+    QApplication.processEvents()
+
+
+def _drop_text_through_viewport(
+    canvas, scene_pos: QPointF, *, plain: str | None = None, html: str | None = None
+) -> None:
+    mime = QMimeData()
+    if html is not None:
+        mime.setHtml(html)
+    else:
+        assert plain is not None
+        mime.setText(plain)
+    viewport = canvas.viewport()
+    view_pos = canvas.mapFromScene(scene_pos)
+    pos = QPoint(int(view_pos.x()), int(view_pos.y()))
+    drop_pos = QPointF(view_pos)
+    actions = Qt.DropAction.CopyAction
+    button = Qt.MouseButton.LeftButton
+    modifiers = Qt.KeyboardModifier.NoModifier
+    QApplication.sendEvent(
+        viewport, QDragEnterEvent(pos, actions, mime, button, modifiers)
+    )
+    QApplication.sendEvent(
+        viewport, QDragMoveEvent(pos, actions, mime, button, modifiers)
+    )
+    QApplication.sendEvent(
+        viewport, QDropEvent(drop_pos, actions, mime, button, modifiers)
+    )
     QApplication.processEvents()
 
 
@@ -202,10 +240,163 @@ def test_paste_with_empty_clipboard_does_not_touch_note(drawing):
     _click(canvas, QPointF(-80, 35))
     note = canvas.runtime_state.note_items()[-1]
     before_heights = _note_paragraph_heights(note)
+    document = note.document()
+    assert document is not None
     QApplication.clipboard().clear()
     paste_selection_for_window(window)
     assert note.toPlainText() == ""
     assert _note_paragraph_heights(note) == before_heights
+    assert not document.isUndoAvailable()
+
+
+@pytest.mark.parametrize("html", [False, True])
+def test_dropped_multiline_note_keeps_document_line_spacing(drawing, html):
+    window, canvas = drawing
+    canvas.services.style_controller.set_note_appearance(_NOTE_PASTE_APPEARANCE)
+    _tool(window, "note")
+    _click(canvas, QPointF(-80, 35))
+    note = canvas.runtime_state.note_items()[-1]
+    drop_point = note.sceneBoundingRect().center()
+    if html:
+        payload = (
+            '<p style="margin:0">Recovery <b>probe</b> 2026-11-14</p>'
+            '<p style="margin:0">Only synthetic test content</p>'
+        )
+        _drop_text_through_viewport(canvas, drop_point, html=payload)
+    else:
+        _drop_text_through_viewport(canvas, drop_point, plain=_NOTE_PASTE_TEXT)
+    assert note.toPlainText() == _NOTE_PASTE_TEXT
+    heights = _note_paragraph_heights(note)
+    assert heights == [_NOTE_PASTE_LINE_HEIGHT] * len(heights)
+    live_gap = _note_paragraph_gap(note)
+    live_height = note.sceneBoundingRect().height()
+    if html:
+        assert ("probe", QFont.Weight.Bold) in _note_bold_runs(note)
+    _commit_note_by_defocus(window, canvas)
+    session = canvas.services.canvas_document_session_service
+    state = session.snapshot_state()
+    record = next(n for n in state["notes"] if n["text"] == _NOTE_PASTE_TEXT)
+    assert record["html"].count("line-height:150%") == len(heights)
+    session.restore_state(state)
+    restored = next(
+        n
+        for n in canvas.runtime_state.note_items()
+        if n.toPlainText() == _NOTE_PASTE_TEXT
+    )
+    assert _note_paragraph_heights(restored) == heights
+    assert _note_paragraph_gap(restored) == pytest.approx(live_gap)
+    assert restored.sceneBoundingRect().height() == pytest.approx(live_height)
+    if html:
+        assert ("probe", QFont.Weight.Bold) in _note_bold_runs(restored)
+
+
+def test_drop_into_note_middle_keeps_destination_line_spacing(drawing):
+    window, canvas = drawing
+    controller = canvas.services.note_controller
+    note = controller.create_text_note(QPointF(0, 0), "keep\nreplace me\nkeep")
+    canvas.services.style_controller.set_note_appearance(_NOTE_PASTE_APPEARANCE)
+    controller.begin_note_edit(note)
+    block = note.document().findBlockByNumber(1)
+    layout = block.layout()
+    line = layout.lineAt(0)
+    drop_point = note.mapToScene(layout.position() + QPointF(2, line.height() / 2))
+    view_point = canvas.mapFromScene(drop_point)
+    QTest.mouseClick(canvas.viewport(), Qt.MouseButton.LeftButton, pos=view_point)
+    _drop_text_through_viewport(canvas, drop_point, plain="new one\nnew two")
+    assert note.toPlainText() == "keep\nnew one\nnew tworeplace me\nkeep"
+    heights = _note_paragraph_heights(note)
+    assert heights == [_NOTE_PASTE_LINE_HEIGHT] * len(heights)
+
+
+def test_paste_undo_restores_caret_before_insertion(drawing):
+    window, canvas = drawing
+    controller = canvas.services.note_controller
+    note = controller.create_text_note(QPointF(0, 0), "abc")
+    canvas.services.style_controller.set_note_appearance(_NOTE_PASTE_APPEARANCE)
+    controller.begin_note_edit(note)
+    caret_before = len("abc")
+    cursor = note.textCursor()
+    cursor.setPosition(caret_before)
+    note.setTextCursor(cursor)
+    before_html = note.toHtml()
+    _set_note_clipboard(plain="XYZ")
+    paste_selection_for_window(window)
+    assert note.toPlainText() == "abcXYZ"
+    document = note.document()
+    assert document is not None
+    _key(canvas, Qt.Key.Key_Z, Qt.KeyboardModifier.ControlModifier)
+    assert note.toPlainText() == "abc"
+    assert note.toHtml() == before_html
+    assert note.textCursor().position() == caret_before
+    assert not note.textCursor().hasSelection()
+
+
+def test_paste_undo_restores_caret_after_selection_replace(drawing):
+    window, canvas = drawing
+    controller = canvas.services.note_controller
+    note = controller.create_text_note(QPointF(0, 0), "keep\npick me\nkeep")
+    canvas.services.style_controller.set_note_appearance(_NOTE_PASTE_APPEARANCE)
+    controller.begin_note_edit(note)
+    block = note.document().findBlockByNumber(1)
+    cursor = note.textCursor()
+    cursor.setPosition(block.position())
+    cursor.movePosition(
+        QTextCursor.MoveOperation.EndOfBlock, QTextCursor.MoveMode.KeepAnchor
+    )
+    caret_before = cursor.position()
+    note.setTextCursor(cursor)
+    _set_note_clipboard(plain="new")
+    paste_selection_for_window(window)
+    _key(canvas, Qt.Key.Key_Z, Qt.KeyboardModifier.ControlModifier)
+    assert note.toPlainText() == "keep\npick me\nkeep"
+    assert note.textCursor().position() == caret_before
+
+
+def test_empty_html_paste_does_not_add_undo_entry(drawing):
+    window, canvas = drawing
+    _tool(window, "note")
+    _click(canvas, QPointF(-80, 35))
+    note = canvas.runtime_state.note_items()[-1]
+    document = note.document()
+    assert document is not None
+    _set_note_clipboard(html="")
+    paste_selection_for_window(window)
+    assert note.toPlainText() == ""
+    assert not document.isUndoAvailable()
+
+
+def test_image_only_clipboard_paste_is_no_op_without_undo(drawing):
+    window, canvas = drawing
+    _tool(window, "note")
+    _click(canvas, QPointF(-80, 35))
+    note = canvas.runtime_state.note_items()[-1]
+    document = note.document()
+    assert document is not None
+    mime = QMimeData()
+    mime.setImageData(QImage(4, 4, QImage.Format.Format_ARGB32))
+    QApplication.clipboard().setMimeData(mime)
+    paste_selection_for_window(window)
+    assert note.toPlainText() == ""
+    assert not document.isUndoAvailable()
+
+
+def test_paste_undo_redo_caret_lands_after_pasted_text(drawing):
+    """After redo, Qt leaves the caret just after the pasted run (known limit)."""
+    window, canvas = drawing
+    canvas.services.style_controller.set_note_appearance(_NOTE_PASTE_APPEARANCE)
+    _tool(window, "note")
+    _click(canvas, QPointF(-80, 35))
+    note = canvas.runtime_state.note_items()[-1]
+    QTest.keyClicks(canvas, "ab")
+    caret_before = note.textCursor().position()
+    _set_note_clipboard(plain="XY")
+    paste_selection_for_window(window)
+    assert note.toPlainText() == "abXY"
+    pasted_end = caret_before + len("XY")
+    _key(canvas, Qt.Key.Key_Z, Qt.KeyboardModifier.ControlModifier)
+    assert note.textCursor().position() == caret_before
+    _redo(canvas)
+    assert note.textCursor().position() == pasted_end
 
 
 @pytest.mark.parametrize(

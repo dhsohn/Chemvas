@@ -18,7 +18,6 @@ from PyQt6.QtGui import (
     QTextCursor,
 )
 from PyQt6.QtWidgets import (
-    QApplication,
     QGraphicsItem,
     QGraphicsItemGroup,
     QGraphicsRectItem,
@@ -240,6 +239,41 @@ class NoteItem(ExportTextItem):
             return True
         return super().sceneEvent(event)
 
+    def _keep_line_height(self, insert: Callable[[], None]) -> None:
+        document = self.document()
+        assert document is not None
+        current = self.textCursor().blockFormat()
+        spacing = QTextBlockFormat()
+        spacing.setLineHeight(current.lineHeight(), current.lineHeightType())
+        changes: list[tuple[int, int]] = []
+
+        def record(position: int, _removed: int, added: int) -> None:
+            changes.append((position, position + added))
+
+        document.contentsChange.connect(record)
+        try:
+            insert()
+        finally:
+            document.contentsChange.disconnect(record)
+        if not changes:
+            return
+        caret = QTextCursor(self.textCursor())
+        edit = QTextCursor(document)
+        edit.joinPreviousEditBlock()
+        try:
+            edit.setPosition(min(first for first, _ in changes))
+            edit.setPosition(
+                min(
+                    max(last for _, last in changes),
+                    document.characterCount() - 1,
+                ),
+                QTextCursor.MoveMode.KeepAnchor,
+            )
+            edit.mergeBlockFormat(spacing)
+        finally:
+            edit.endEditBlock()
+        self.setTextCursor(caret)
+
     @override
     def keyPressEvent(self, event) -> None:
         cursor = self.textCursor()
@@ -247,34 +281,12 @@ class NoteItem(ExportTextItem):
             event.matches(QKeySequence.StandardKey.Paste)
             and self.textInteractionFlags() & Qt.TextInteractionFlag.TextEditable
         ):
-            clipboard = QApplication.clipboard()
-            if clipboard is None:
-                super().keyPressEvent(event)
-                return
-            mime = clipboard.mimeData()
-            if mime is not None and (mime.hasText() or mime.hasHtml()):
-                document = self.document()
-                assert document is not None
-                anchor = QTextCursor(cursor)
-                anchor.setPosition(cursor.selectionStart())
-                current = anchor.blockFormat()
-                spacing = QTextBlockFormat()
-                spacing.setLineHeight(current.lineHeight(), current.lineHeightType())
-                start = cursor.selectionStart()
-                edit = QTextCursor(document)
-                edit.beginEditBlock()
-                try:
-                    super().keyPressEvent(event)
-                    pasted = QTextCursor(document)
-                    pasted.setPosition(start)
-                    pasted.setPosition(
-                        self.textCursor().position(),
-                        QTextCursor.MoveMode.KeepAnchor,
-                    )
-                    pasted.mergeBlockFormat(spacing)
-                finally:
-                    edit.endEditBlock()
-                return
+
+            def paste() -> None:
+                super(NoteItem, self).keyPressEvent(event)
+
+            self._keep_line_height(paste)
+            return
         if (
             event.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter)
             and not event.modifiers() & ~Qt.KeyboardModifier.KeypadModifier
@@ -290,6 +302,17 @@ class NoteItem(ExportTextItem):
             event.accept()
             return
         super().keyPressEvent(event)
+
+    @override
+    def dropEvent(self, event) -> None:
+        if self.textInteractionFlags() & Qt.TextInteractionFlag.TextEditable:
+
+            def drop() -> None:
+                super(NoteItem, self).dropEvent(event)
+
+            self._keep_line_height(drop)
+        else:
+            super().dropEvent(event)
 
     def committed_text(self) -> str:
         return self._last_text

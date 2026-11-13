@@ -59,12 +59,14 @@ class FigureExportPreview(QWidget):
         min_font_check: bool,
     ) -> bool:
         self.image.clear()
+        self.image.setAccessibleName("Figure preview")
         self.image.setAccessibleDescription("")
         self.dimensions.clear()
         self.note.setText("Adjust the options to preview and export.")
         if canvas is None:
             message = "Open a drawing to preview and export."
             self.image.setText(message)
+            self.image.setAccessibleName(message)
             self.image.setAccessibleDescription(message)
             return False
         try:
@@ -114,5 +116,6 @@ class FigureExportPreview(QWidget):
         except ValueError as error:
             message = export_error_message(error)
             self.image.setText(message)
+            self.image.setAccessibleName(message)
             self.image.setAccessibleDescription(message)
             return False
