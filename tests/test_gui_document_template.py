@@ -10,7 +10,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 from PyQt6.QtCore import QEvent, QEventLoop, QPointF, Qt
 from PyQt6.QtGui import QMouseEvent
 from PyQt6.QtTest import QTest
-from PyQt6.QtWidgets import QApplication, QMessageBox
+from PyQt6.QtWidgets import QApplication, QMessageBox, QToolButton
 
 from chemvas.bootstrap.main_window import build_main_window
 from chemvas.ui.canvas.canvas_mark_registry import mark_registry_for
@@ -1094,6 +1094,78 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
             bond_count_before,
         )
         self.assertTrue(all(item.scene() is None for item in preview_items))
+
+    def test_escape_cancels_ring_template_and_syncs_select_ui(self) -> None:
+        canvas = active_canvas_for_window(self.window)
+        self.window.ui_references.tool_actions["benzene"].trigger()
+        benzene_button = next(
+            widget
+            for widget in self.window.findChildren(QToolButton)
+            if widget.toolTip() == "Benzene"
+        )
+        self._hover_scene_point(QPointF(25.0, 10.0))
+
+        self.assertTrue(self.window.ui_references.tool_actions["benzene"].isChecked())
+        self.assertTrue(benzene_button.isChecked())
+        self.assertEqual(
+            self.window.statusBar().currentMessage(),
+            "Ring: click to place template",
+        )
+        self.assertEqual(
+            self.window.services.status_service.status_context_texts()["tool"],
+            "Tool: Ring",
+        )
+
+        self._press_key(Qt.Key.Key_Escape)
+
+        self.assertFalse(canvas.runtime_state.insert_state.template_active)
+        self.assertEqual(canvas.services.tool_controller.active.name, "select")
+        self.assertTrue(self.window.ui_references.tool_actions["select"].isChecked())
+        self.assertFalse(self.window.ui_references.tool_actions["benzene"].isChecked())
+        self.assertFalse(benzene_button.isChecked())
+        self.assertEqual(
+            self.window.statusBar().currentMessage(),
+            "Select: double-click arrows/lines for labels",
+        )
+        self.assertEqual(
+            self.window.services.status_service.status_context_texts()["tool"],
+            "Tool: Select",
+        )
+
+        atom_count_before = len(canvas.model.atoms)
+        self.window.ui_references.tool_actions["benzene"].trigger()
+        self.assertTrue(canvas.runtime_state.insert_state.template_active)
+        self._click_scene_point(QPointF(50.0, 10.0))
+        self.assertGreater(len(canvas.model.atoms), atom_count_before)
+
+    def test_escape_cancelled_template_undo_redo_and_reinsert_remain_usable(
+        self,
+    ) -> None:
+        canvas = active_canvas_for_window(self.window)
+        atom_before = len(canvas.model.atoms)
+        history = canvas.runtime_state.history_service
+
+        self.window.ui_references.tool_actions["benzene"].trigger()
+        self._click_scene_point(QPointF(10.0, 0.0))
+        after_first_place = len(canvas.model.atoms)
+        self.assertGreater(after_first_place, atom_before)
+
+        self.window.ui_references.tool_actions["benzene"].trigger()
+        self._hover_scene_point(QPointF(30.0, 0.0))
+        self._press_key(Qt.Key.Key_Escape)
+
+        self.assertEqual(len(canvas.model.atoms), after_first_place)
+        self.assertEqual(canvas.services.tool_controller.active.name, "select")
+
+        history.undo()
+        self.assertEqual(len(canvas.model.atoms), atom_before)
+        history.redo()
+        self.assertEqual(len(canvas.model.atoms), after_first_place)
+
+        self.window.ui_references.tool_actions["benzene"].trigger()
+        self.assertTrue(canvas.runtime_state.insert_state.template_active)
+        self._click_scene_point(QPointF(50.0, 0.0))
+        self.assertGreater(len(canvas.model.atoms), after_first_place)
 
     def test_build_mol_export_payload_ignores_scene_only_items_in_mixed_selection(
         self,
