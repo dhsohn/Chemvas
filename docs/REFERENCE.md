@@ -35,7 +35,7 @@ chemvas --version     # package version without starting Qt
 
 - **Rings & templates**
   - **Quick Insertion**: Benzene, cycloalkanes (3- to 8-membered), and chair conformations.
-  - **Ring Fusion**: Drag from an existing bond or press `a` (benzene) / `4`–`8` over a bond to fuse a ring.
+  - **Ring Fusion**: Drag from an existing bond or press `a` (benzene), `4`–`8` (4- to 8-membered regular ring), `9` (chair), or `0` (mirrored chair) over a bond to fuse a ring.
   - **Ring Fill**: Select a completed ring cycle and open the Ring Fill palette to apply colored fills.
 
 - **Arrows**
@@ -138,11 +138,11 @@ Export publication-grade figures in plain SVG, PDF, PNG, or TIFF formats:
 
 ## Keyboard shortcuts
 
-Select tools from the canvas or edit hovered atoms/bonds with the shortcuts below.
+Select tools from the canvas or edit hovered atoms/bonds with the shortcuts below. Move the pointer over blank canvas to use a tool shortcut without editing an atom or bond.
 
 - **Canvas & Tools**: Select `Space`, Bond `X`, Atom `A`, Text `T`, Arrow `E`, Benzene `J`, Brackets `Shift+T`, Orbitals `Shift+G`, Charge/Radical `Shift+E`, Perspective `Alt+D`
-- **Atom Editing (hover over atom)**: Change element via [Atom-label hotkey map](#atom-label-hotkey-map), charge `+`/`-`, edit label `Enter`, sprout chains `0`–`9` (`9` = gem-dimethyl)
-- **Bond Editing (hover over bond)**: Single `1`, Double `2`, Triple `3`, Bold `b`, Wedge `w`, Hash `h`, Dotted `d`, Bold double `Shift+B`, Dotted double `Shift+D`, double-bond alignment `l`/`c`/`r`, Benzene fusion `a`, Ring fusion `4`–`8`
+- **Atom Editing (hover over atom)**: Change element via [Atom-label hotkey map](#atom-label-hotkey-map), charge `+`/`-`, edit label `Enter`, sprout bonds/groups/rings via [Atom structure-sprouting hotkeys](#atom-structure-sprouting-hotkeys) (`0`–`9`, `a`, `u`, `v`, `z`)
+- **Bond Editing (hover over bond)**: Single `1`, Double `2`, Triple `3`, Bold `b`, Wedge `w`, Hash `h`, Dotted `d`, Bold double `Shift+B`, Dotted double `Shift+D`, double-bond alignment `l`/`c`/`r`, Benzene fusion `a`, Ring fusion `4`–`8`, Chair fusion `9`, Mirrored chair fusion `0`
 - **Transformations**: Flip Horizontal `Ctrl+Shift+H`, Flip Vertical `Ctrl+Shift+V`, Rotate `Alt+Up/Down` (15°) / `Alt+Left/Right` (1°), Nudge `Shift+Arrows` (10 pt)
 - **Alignment**: **Edit ▸ Align** (Left, Center, Right, Top, Middle, Bottom) and **Edit ▸ Distribute** (Horizontally, Vertically)
 - **General**: Save `Ctrl+S`, Open `Ctrl+O`, Select All `Ctrl+A`, Group `Ctrl+G`, Ungroup `Ctrl+Shift+G`, Undo `Ctrl+Z`, Redo (use shortcut displayed by Edit ▸ Redo, e.g. `Ctrl+Shift+Z` on Linux), Delete `Delete`/`Backspace`
@@ -173,7 +173,27 @@ Hover over an atom and press a key to quickly replace its element or group:
 | `w` | `N` | — |
 | `x` | `X` | — |
 | `y` | — | `Boc` |
-| `z` | — (sprout) | `N3` |
+| `z` | — (sprout triple bond) | `N3` |
+
+### Atom structure-sprouting hotkeys
+
+Hover over an atom and press a key to sprout a bond, group, or ring from that atom:
+
+| Key | Action |
+| --- | --- |
+| `0` | Sprout a single bond with direction snapped to 60-degree steps |
+| `1` | Sprout a single bond using default growth direction |
+| `2` | Sprout an acetyl group |
+| `3`, `a` | Sprout an attached benzene ring |
+| `4` | Sprout a wedge bond |
+| `5` | Sprout a hashed bond |
+| `8` | Sprout a double bond |
+| `z` | Sprout a triple bond |
+| `v` | Sprout a 3-membered ring |
+| `u` | Sprout a 4-membered ring |
+| `7` | Sprout a five-membered ring |
+| `6` | Sprout a six-membered ring |
+| `9` | Sprout gem-dimethyl |
 
 ### Shortcut compatibility
 
