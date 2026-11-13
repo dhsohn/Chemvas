@@ -17,6 +17,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Escape while placing a ring template cancels the preview and returns to
   Select, keeping the toolbar, status bar, and context options in sync.
+- Apply toolbar and context-bar tool choices when assistive technology
+  activates a checkable button through Qt's accessibility toggle path, not only
+  through mouse click or keyboard shortcuts.
 - Keep native CDXML rectangles, ovals, brackets and curves at their exact
   stroke width. Their raster projection rounded a 0.6 pt stroke to 0.5 pt.
 - Draw ChemDraw Bold lines, arrows, curves, rectangles and ovals at the
