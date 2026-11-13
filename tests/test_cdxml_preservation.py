@@ -386,6 +386,27 @@ def test_embedded_png_display_and_native_metafile_survive_move():
     assert node.find("annotation").get("Content") == "diagram"
 
 
+def test_image_move_transforms_only_direct_superseded_graphics():
+    root = ET.fromstring(embedded_native())
+    page = root.find("page")
+    for identity, target in (("32", "31"), ("31", "30")):
+        ET.SubElement(
+            page,
+            "graphic",
+            id=identity,
+            GraphicType="Line",
+            BoundingBox="30 20 10 20",
+            SupersededBy=target,
+        )
+    state = parse_cdxml_document(ET.tostring(root)).state
+    index = state["cdxml_source"]["items"]["images"].index("30")
+    state["images"][index]["x"] += 5
+
+    saved = native(state)
+    assert saved.find(".//graphic[@id='31']").get("BoundingBox") == "35 20 15 20"
+    assert saved.find(".//graphic[@id='32']").get("BoundingBox") == "30 20 10 20"
+
+
 def test_invalid_embedded_png_is_refused_without_metafile_execution():
     raw = embedded_native()
     root = ET.fromstring(raw)
