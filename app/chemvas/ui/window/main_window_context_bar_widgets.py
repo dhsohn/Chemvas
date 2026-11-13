@@ -499,8 +499,17 @@ def bond_length_input(
     return container, spin
 
 
+class ColorSwatchButton(ActionToolButton):
+    """Color-palette swatch with separate choose-preset and apply-selection paths.
+
+    The palette keeps its button group non-exclusive so assistive-technology
+    ``toggle()`` reaches ``checkStateSet`` when re-activating the displayed
+    preset; callers resync the single checked swatch from the chosen preset.
+    """
+
+
 def color_swatch_button(label: str, hex_value: str, tooltip_prefix: str) -> QToolButton:
-    button = ActionToolButton()
+    button = ColorSwatchButton()
     button.setObjectName(
         f"{tooltip_prefix.lower().replace(' ', '_')}_swatch_{label.lower()}"
     )
@@ -525,6 +534,7 @@ def color_swatch_button(label: str, hex_value: str, tooltip_prefix: str) -> QToo
 
 __all__ = [
     "BondLengthSpinBox",
+    "ColorSwatchButton",
     "action_button",
     "atom_symbol_input",
     "bond_length_input",
