@@ -26,9 +26,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Reset the status-bar zoom readout to 100% when activated through Qt's
   accessible click path, without intercepting delayed single- or double-click
   mouse behavior or changing document state or undo history.
-- Retain destination paragraph line spacing when pasting plain text or HTML
-  into a note via normal Cmd+V or Edit > Paste, preserving rich character
-  formatting and undo grouping.
+- Retain destination paragraph line spacing when pasting or dropping plain
+  text or HTML into a note via Cmd+V/Ctrl+V, Edit > Paste, or drag-and-drop,
+  preserving rich character formatting and single-step undo with caret
+  restoration without recording an undo step for a no-op paste.
+- Preserve allowlisted note headings (`h1`–`h6`), preformatted blocks (`pre`),
+  and tables (`table`, `tr`, `td`, `th`) with sanitized styles, validated
+  integer table/cell attributes, and repeated spaces across working-document
+  save, restore, and copy, while stripping external-resource and active
+  attributes and continuing to refuse strict native CDXML table export.
 - Keep native CDXML rectangles, ovals, brackets and curves at their exact
   stroke width. Their raster projection rounded a 0.6 pt stroke to 0.5 pt.
 - Draw ChemDraw Bold lines, arrows, curves, rectangles and ovals at the
@@ -53,8 +59,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Update English and Korean export, reference, and image documentation to match
   desktop Save/Save As CDXML working documents, CLI-only native CDXML export and
   reviewed label bindings, the 1200 DPI Figure Export ceiling, and 0–100% Image
-  Properties opacity, and align the Export Figure status tip (SVG/PDF/PNG/TIFF,
-  not CDXML) and Maximum height validation name with the dialog.
+  Properties opacity, align the Export Figure status tip (SVG/PDF/PNG/TIFF, not
+  CDXML), and show dialog-oriented Export Figure preview errors with native
+  accessibility name and description exposure that clears when settings are
+  valid.
 
 ## [0.28.0] - 2026-11-04
 

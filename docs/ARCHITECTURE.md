@@ -184,7 +184,10 @@ the saved group format.
 
 Notes retain plain text, sanitized HTML, position and rotation in document records.
 Native editor changes publish those values while Qt retains cursor, focus and
-text Undo. Marks retain kind, text, atom binding, offsets, center and color;
+text Undo. Sanitized note HTML preserves allowlisted heading (`h1`–`h6`),
+preformatted (`pre`) and table (`table`, `tr`, `td`, `th`) structure alongside
+inline, paragraph and list formatting while stripping external-resource and
+event attributes. Marks retain kind, text, atom binding, offsets, center and color;
 metadata roles are derived from these records. Save, atom-bound mark copying and
 electronic-state reconciliation read records even when views are absent. Failed
 native frame restoration reinstates the captured record after position, font and
