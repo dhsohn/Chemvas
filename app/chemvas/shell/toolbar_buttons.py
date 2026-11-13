@@ -23,39 +23,43 @@ def _chevron_icon(direction: str) -> QIcon:
 
 
 class ActionToolButton(QToolButton):
-    """QToolButton whose default QAction triggers when accessibility checks it.
+    """Apply Qt's accessibility toggle like a click.
 
-    Qt's accessibility toggle calls ``toggle()``/``setChecked()`` and syncs through
-    ``checkStateSet`` without emitting ``QAction::triggered``. A mouse click uses
-    ``nextCheckState()`` which does trigger the action.
+    ``QAccessibleButton`` toggles a checkable button with the non-virtual
+    ``toggle()``, which only calls ``setChecked()``. Every click path (mouse,
+    Space, ``click()``) and a button group's exclusivity go through
+    ``nextCheckState()`` instead.
     """
+
+    _in_next_check_state = False
+
+    @override
+    def nextCheckState(self) -> None:
+        self._in_next_check_state = True
+        try:
+            super().nextCheckState()
+        finally:
+            self._in_next_check_state = False
 
     @override
     def checkStateSet(self) -> None:
         action = self.defaultAction()
         if (
-            self.isChecked()
-            and action is not None
-            and action.isCheckable()
-            and not action.isChecked()
+            self._in_next_check_state
+            or self.signalsBlocked()
+            or not self.isEnabled()
+            or (action is not None and action.isChecked() == self.isChecked())
         ):
-            action.trigger()
+            super().checkStateSet()
             return
-        super().checkStateSet()
-
-
-class CheckableOptionToolButton(ActionToolButton):
-    """Checkable toolbar option without a default QAction (context bar)."""
-
-    @override
-    def toggle(self) -> None:
-        if self.signalsBlocked():
-            super().toggle()
+        if action is None:
+            super().checkStateSet()
+            self.clicked.emit(self.isChecked())
             return
-        if not self.isChecked():
-            self.click()
-            return
-        super().toggle()
+        action.trigger()
+        if self.isChecked() != action.isChecked():
+            # The active action of an exclusive group stays checked.
+            self.setChecked(action.isChecked())
 
 
 class ArrowButton(QToolButton):
@@ -116,7 +120,6 @@ class CornerMenuToolButton(CornerMenuButton):
 __all__ = [
     "ActionToolButton",
     "ArrowButton",
-    "CheckableOptionToolButton",
     "CornerMenuButton",
     "CornerMenuToolButton",
 ]

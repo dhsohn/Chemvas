@@ -1,11 +1,25 @@
 from unittest.mock import patch
 
 import pytest
-from PyQt6.QtCore import QCoreApplication, QEvent
+from PyQt6.QtCore import QCoreApplication, QEvent, QMetaObject, QPointF, Qt
+from PyQt6.QtGui import QTextCursor
 from PyQt6.QtWidgets import QToolButton
 
 from chemvas.bootstrap.main_window import build_main_window
 from chemvas.ui.window.main_window_ports import active_canvas_for_window
+from tests.gui_workflow_support import _tool
+from tests.gui_workflow_support import app as app
+from tests.gui_workflow_support import drawing as drawing
+
+
+def cpp_toggle(button: QToolButton) -> None:
+    QMetaObject.invokeMethod(button, "toggle", Qt.ConnectionType.DirectConnection)
+
+
+def _tool_button_by_tip(window, tip: str) -> QToolButton:
+    return next(
+        button for button in window.findChildren(QToolButton) if button.toolTip() == tip
+    )
 
 
 @pytest.fixture
@@ -70,18 +84,42 @@ def test_top_toolbar_accessibility_toggle_selects_tool_and_publishes_once(window
             wraps=services.context_bar_service.refresh_window,
         ) as refresh,
     ):
-        ring_button.toggle()
+        cpp_toggle(ring_button)
 
     assert canvas.services.tool_controller.active.name == "benzene"
     assert services.status_service.status_context_texts()["tool"] == "Tool: Ring"
     assert window.ui_references.tool_actions["benzene"].isChecked()
     assert not bond_action.isChecked()
-    for ring_template_button in window.findChildren(QToolButton):
-        if ring_template_button.toolTip() == "Benzene":
-            assert ring_template_button.isChecked()
-            break
-    else:
-        raise AssertionError("benzene ring template button not found")
+    benzene_template = _tool_button_by_tip(window, "Benzene")
+    assert benzene_template.isChecked()
+    emit.assert_called_once_with()
+    refresh.assert_called_once_with(window)
+
+
+def test_top_toolbar_cpp_toggle_active_tool_stays_checked_and_publishes_once(window):
+    services = window.services
+    controller = active_canvas_for_window(window).services.tool_mode_controller
+    window.ui_references.tool_actions["benzene"].trigger()
+    ring_button = window.findChild(QToolButton, "toolButton_benzene")
+    assert ring_button is not None
+    group = window.ui_references.tool_actions["benzene"].actionGroup()
+    assert group is not None
+
+    with (
+        patch.object(
+            controller, "_emit_tool_changed", wraps=controller._emit_tool_changed
+        ) as emit,
+        patch.object(
+            services.context_bar_service,
+            "refresh_window",
+            wraps=services.context_bar_service.refresh_window,
+        ) as refresh,
+    ):
+        cpp_toggle(ring_button)
+
+    assert ring_button.isChecked()
+    assert window.ui_references.tool_actions["benzene"].isChecked()
+    assert group.checkedAction() is window.ui_references.tool_actions["benzene"]
     emit.assert_called_once_with()
     refresh.assert_called_once_with(window)
 
@@ -104,7 +142,7 @@ def test_top_toolbar_toggle_and_click_each_publish_one_complete_update(window):
             wraps=services.context_bar_service.refresh_window,
         ) as refresh,
     ):
-        ring_button.toggle()
+        cpp_toggle(ring_button)
         emit.assert_called_once_with()
         refresh.assert_called_once_with(window)
 
@@ -132,16 +170,8 @@ def test_context_ring_template_accessibility_toggle_applies_choice(window):
     insert_controller = active_canvas_for_window(window).services.insert_controller
     window.ui_references.tool_actions["benzene"].trigger()
 
-    benzene = next(
-        button
-        for button in window.findChildren(QToolButton)
-        if button.toolTip() == "Benzene"
-    )
-    cyclopropane = next(
-        button
-        for button in window.findChildren(QToolButton)
-        if button.toolTip() == "Cyclopropane"
-    )
+    benzene = _tool_button_by_tip(window, "Benzene")
+    cyclopropane = _tool_button_by_tip(window, "Cyclopropane")
     assert benzene.isChecked()
 
     with patch.object(
@@ -149,7 +179,7 @@ def test_context_ring_template_accessibility_toggle_applies_choice(window):
         "begin_ring_template_insert",
         wraps=insert_controller.begin_ring_template_insert,
     ) as begin_insert:
-        cyclopropane.toggle()
+        cpp_toggle(cyclopropane)
 
     begin_insert.assert_called_once_with(3, style="regular")
     assert cyclopropane.isChecked()
@@ -157,6 +187,18 @@ def test_context_ring_template_accessibility_toggle_applies_choice(window):
     insert_state = active_canvas_for_window(window).runtime_state.insert_state
     assert insert_state.template_ring_size == 3
     assert insert_state.template_ring_style == "regular"
+
+
+def test_context_wedge_accessibility_toggle_applies_bond_style(window):
+    window.ui_references.tool_actions["bond"].trigger()
+    wedge = _tool_button_by_tip(window, "Wedge bond (W)")
+    assert not wedge.isChecked()
+
+    cpp_toggle(wedge)
+
+    settings = active_canvas_for_window(window).runtime_state.tool_settings_state
+    assert settings.active_bond_style == "wedge"
+    assert wedge.isChecked()
 
 
 def test_select_context_perspective_accessibility_toggle_activates_tool(window):
@@ -177,12 +219,57 @@ def test_select_context_perspective_accessibility_toggle_activates_tool(window):
             wraps=services.context_bar_service.refresh_window,
         ) as refresh,
     ):
-        perspective_button.toggle()
+        cpp_toggle(perspective_button)
 
     assert canvas.services.tool_controller.active.name == "perspective"
     assert services.status_service.status_context_texts()["tool"] == "Tool: Perspective"
     emit.assert_called_once_with()
     refresh.assert_called_once_with(window)
+
+
+def test_text_corner_menu_cpp_toggle_selects_tool_once(window):
+    services = window.services
+    canvas = active_canvas_for_window(window)
+    controller = canvas.services.tool_mode_controller
+    window.ui_references.tool_actions["select"].trigger()
+    note_button = window.findChild(QToolButton, "toolButton_note")
+    assert note_button is not None
+
+    with (
+        patch.object(
+            controller, "_emit_tool_changed", wraps=controller._emit_tool_changed
+        ) as emit,
+        patch.object(
+            services.context_bar_service,
+            "refresh_window",
+            wraps=services.context_bar_service.refresh_window,
+        ) as refresh,
+    ):
+        cpp_toggle(note_button)
+
+    assert canvas.services.tool_controller.active.name == "note"
+    emit.assert_called_once_with()
+    refresh.assert_called_once_with(window)
+
+
+def test_context_bold_cpp_toggle_applies_and_unchecks(drawing):
+    window, canvas = drawing
+    _tool(window, "note")
+    controller = canvas.services.note_controller
+    note = controller.create_text_note(QPointF(-70, -20), "Caption")
+    controller.begin_note_edit(note)
+    cursor = note.textCursor()
+    cursor.select(QTextCursor.SelectionType.Document)
+    note.setTextCursor(cursor)
+    bold = _tool_button_by_tip(window, "Bold the selected text")
+
+    cpp_toggle(bold)
+    assert "font-weight:700" in note.toHtml()
+    assert bold.isChecked()
+
+    cpp_toggle(bold)
+    assert "font-weight:700" not in note.toHtml()
+    assert not bold.isChecked()
 
 
 def test_ring_fill_override_is_cleared_by_direct_canvas_tool_change(window):
