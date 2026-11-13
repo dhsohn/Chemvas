@@ -1,8 +1,34 @@
 from __future__ import annotations
 
+import os
+
+os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+
 import pytest
+from PyQt6.QtGui import QTextDocument
+from PyQt6.QtWidgets import QApplication
 
 from chemvas.features.annotations import MAX_NOTE_HTML_CHARS, sanitize_note_html
+
+
+@pytest.fixture(scope="module")
+def qt_application():
+    application = QApplication.instance() or QApplication([])
+    application.setQuitOnLastWindowClosed(False)
+    return application
+
+
+def _plain_text_after_sanitize_roundtrip(html: str) -> str:
+    source = QTextDocument()
+    source.setHtml(html)
+    expected = source.toPlainText()
+    sanitized = sanitize_note_html(source.toHtml())
+    assert sanitized is not None
+    restored = QTextDocument()
+    restored.setHtml(sanitized)
+    assert restored.toPlainText() == expected
+    assert sanitize_note_html(sanitized) == sanitized
+    return expected
 
 
 def test_sanitize_note_html_preserves_safe_qt_text_styles_and_drops_css_resources() -> (
@@ -146,3 +172,49 @@ def test_fractional_native_pixel_sizes_survive_repeated_sanitizing(size):
 def test_native_pixel_size_extension_still_rejects_invalid_values(size):
     html = f'<span style="font-size:{size};color:#123456">size</span>'
     assert sanitize_note_html(html) == '<span style="color:#123456">size</span>'
+
+
+@pytest.mark.parametrize(
+    "html",
+    [
+        "<h1>A</h1><h1>B</h1>",
+        "<pre>A  x</pre><pre>B</pre>",
+        "<pre>A  x\nB</pre>",
+        "<table><tr><td>A</td><td>B</td></tr><tr><td>C</td><td>D</td></tr></table>",
+        '<table><tr><td colspan="2">AB</td></tr><tr><td>C</td><td>D</td></tr></table>',
+        '<h2 style="margin-left:0px">A  y</h2><h2>B</h2>',
+    ],
+)
+def test_sanitize_note_html_roundtrip_matches_qt_plain_text(qt_application, html):
+    _plain_text_after_sanitize_roundtrip(html)
+
+
+def test_sanitize_note_html_strips_hostile_table_attributes():
+    html = (
+        '<table border="1" cellpadding="3" onclick="x" background="file:///tmp/x">'
+        '<tr style="url(file:///x)">'
+        '<td background="file:///tmp/x" onclick="x" colspan="2 onmouseover" rowspan="99999">x</td>'
+        "</tr></table>"
+    )
+    sanitized = sanitize_note_html(html)
+    assert sanitized is not None
+    assert "onclick" not in sanitized
+    assert "background" not in sanitized
+    assert "url(" not in sanitized
+    assert "colspan" not in sanitized
+    assert "rowspan" not in sanitized
+    assert sanitized.startswith("<table")
+    assert "<tr>" in sanitized
+    assert "<td>" in sanitized
+
+
+def test_sanitize_note_html_drops_unsafe_heading_and_pre_styles():
+    sanitized = sanitize_note_html('<h1 style="url(file:///x); color:red">T</h1>')
+    assert sanitized is not None
+    assert "url(" not in sanitized
+    assert "color:red" in sanitized
+    assert "white-space:pre-wrap" in sanitized
+
+    sanitized_pre = sanitize_note_html('<pre style="white-space:normal">  A</pre>')
+    assert sanitized_pre == "<pre>  A</pre>"
+    assert "white-space" not in sanitized_pre

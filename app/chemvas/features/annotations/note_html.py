@@ -13,16 +13,27 @@ SAFE_NOTE_HTML_TAGS = frozenset(
         "div",
         "em",
         "font",
+        "h1",
+        "h2",
+        "h3",
+        "h4",
+        "h5",
+        "h6",
         "i",
         "li",
         "ol",
         "p",
+        "pre",
         "s",
         "span",
         "strike",
         "strong",
         "sub",
         "sup",
+        "table",
+        "td",
+        "th",
+        "tr",
         "u",
         "ul",
     )
@@ -45,6 +56,7 @@ SKIP_NOTE_HTML_CONTENT_TAGS = frozenset(
 SAFE_NOTE_HTML_ATTRS_BY_TAG = {
     tag: frozenset(("style",)) for tag in SAFE_NOTE_HTML_TAGS - VOID_NOTE_HTML_TAGS
 }
+_HEADING_NOTE_HTML_TAGS = frozenset(f"h{n}" for n in range(1, 7))
 SAFE_NOTE_HTML_ATTRS_BY_TAG.update(
     {
         "blockquote": frozenset(("align", "style")),
@@ -53,7 +65,11 @@ SAFE_NOTE_HTML_ATTRS_BY_TAG.update(
         "li": frozenset(("align", "style", "type", "value")),
         "ol": frozenset(("start", "style", "type")),
         "p": frozenset(("align", "style")),
+        "table": frozenset(("border", "cellpadding", "cellspacing", "style")),
+        "td": frozenset(("colspan", "rowspan", "style")),
+        "th": frozenset(("colspan", "rowspan", "style")),
         "ul": frozenset(("style", "type")),
+        **{tag: frozenset(("align", "style")) for tag in _HEADING_NOTE_HTML_TAGS},
     }
 )
 SAFE_NOTE_ALIGN_VALUES = frozenset(("center", "justify", "left", "right"))
@@ -237,14 +253,22 @@ class _NoteHtmlSanitizer(HTMLParser):
                 value = _sanitized_list_type_value(tag, value)
                 if value is None:
                     continue
-            elif name in {"start", "value"}:
+            elif name in {
+                "border",
+                "cellpadding",
+                "cellspacing",
+                "colspan",
+                "rowspan",
+                "start",
+                "value",
+            }:
                 value = _sanitized_integer_attr_value(value)
                 if value is None:
                     continue
             if not _is_safe_attr_value(value):
                 continue
             parts.append(f' {name}="{escape(value, quote=True)}"')
-        if tag in {"p", "li"}:
+        if tag in {"p", "li"} | _HEADING_NOTE_HTML_TAGS:
             # Qt exports this rule in a head stylesheet, which is deliberately
             # removed above. Keep its paragraph whitespace policy as a fixed
             # inline rule, without accepting arbitrary stylesheets or CSS.
