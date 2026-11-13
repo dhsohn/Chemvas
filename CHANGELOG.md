@@ -20,6 +20,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Apply toolbar and context-bar tool choices when assistive technology
   activates a checkable button through Qt's accessibility toggle path, not only
   through mouse click or keyboard shortcuts.
+- Re-apply the active Color swatch to a new selection when assistive technology
+  activates the already-checked preset swatch, without changing the displayed
+  preset or adding an extra undo step.
 - Keep native CDXML rectangles, ovals, brackets and curves at their exact
   stroke width. Their raster projection rounded a 0.6 pt stroke to 0.5 pt.
 - Draw ChemDraw Bold lines, arrows, curves, rectangles and ovals at the

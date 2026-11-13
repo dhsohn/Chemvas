@@ -1,9 +1,10 @@
 """Actual Color controls preserve intent and independent annotation colors."""
 
 from types import SimpleNamespace
+from unittest import mock
 
 import pytest
-from PyQt6.QtCore import QPointF, Qt
+from PyQt6.QtCore import QMetaObject, QPointF, Qt
 from PyQt6.QtGui import QColor, QImage
 from PyQt6.QtTest import QTest
 from PyQt6.QtWidgets import QColorDialog, QGraphicsTextItem, QToolButton
@@ -376,3 +377,90 @@ def test_custom_palette_color_cancel_apply_undo_and_save(
         == after
     )
     assert initial_colors == ["#000000", "#000000"]
+
+
+def _cpp_toggle(button: QToolButton) -> None:
+    QMetaObject.invokeMethod(button, "toggle", Qt.ConnectionType.DirectConnection)
+
+
+def _swatches(window):
+    return [
+        b
+        for b in window.findChildren(QToolButton)
+        if b.objectName().startswith("color_swatch_")
+    ]
+
+
+def test_reflect_color_state_is_side_effect_free(drawing):
+    window, canvas = drawing
+    atoms = canvas.services.canvas_atom_mutation_service
+    atom_id = atoms.add_atom("C", 0, 0)
+    visible_atom_item_for(canvas, atom_id).setSelected(True)
+    _color_mode(window)
+    red = window.findChild(QToolButton, "color_swatch_red")
+    QTest.mouseClick(red, Qt.MouseButton.LeftButton)
+    QTest.qWait(10)
+    before = canvas.services.canvas_document_session_service.snapshot_state()
+    stacks = canvas.services.history_service.capture_stack_snapshot()
+    window.ui_references.tool_actions["select"].trigger()
+    _color_mode(window)
+    assert red.isChecked()
+    assert canvas.services.canvas_document_session_service.snapshot_state() == before
+    canvas.services.history_service.verify_stack_snapshot(stacks)
+
+
+def test_checked_color_swatch_toggle_applies_once_to_reflected_preset(drawing):
+    window, canvas = drawing
+    red_hex = "#d84a3a"
+    atoms = canvas.services.canvas_atom_mutation_service
+    first_id = atoms.add_atom("C", 0, 0)
+    second_id = atoms.add_atom("C", 80, 0)
+    first_item = visible_atom_item_for(canvas, first_id)
+    second_item = visible_atom_item_for(canvas, second_id)
+
+    _color_mode(window)
+    red = window.findChild(QToolButton, "color_swatch_red")
+    QTest.mouseClick(red, Qt.MouseButton.LeftButton)
+    QTest.qWait(10)
+    first_item.setSelected(True)
+    _cpp_toggle(red)
+    QTest.qWait(10)
+    assert canvas.model.atoms[first_id].color == red_hex
+    first_only = canvas.services.canvas_document_session_service.snapshot_state()
+
+    first_item.setSelected(False)
+    second_item.setSelected(True)
+    window.ui_references.tool_actions["select"].trigger()
+    _color_mode(window)
+    assert red.isChecked()
+    blue = window.findChild(QToolButton, "color_swatch_blue")
+    assert not blue.isChecked()
+
+    routing = window.services.tool_routing_service
+    with mock.patch.object(
+        routing, "apply_color_preset", wraps=routing.apply_color_preset
+    ) as apply_preset:
+        _cpp_toggle(red)
+        QTest.qWait(10)
+        apply_preset.assert_called_once_with(window, red_hex)
+
+    assert canvas.model.atoms[second_id].color == red_hex
+    assert canvas.model.atoms[first_id].color == red_hex
+    assert red.isChecked()
+    assert not blue.isChecked()
+    assert sum(1 for b in _swatches(window) if b.isChecked()) == 1
+
+    history = canvas.services.history_service
+    history.undo()
+    assert (
+        canvas.services.canvas_document_session_service.snapshot_state() == first_only
+    )
+    history.redo()
+    assert (
+        canvas.model.atoms[second_id].color == red_hex
+        and canvas.model.atoms[first_id].color == red_hex
+    )
+
+    QTest.mouseClick(blue, Qt.MouseButton.LeftButton)
+    QTest.qWait(10)
+    assert [b for b in _swatches(window) if b.isChecked()] == [blue]
