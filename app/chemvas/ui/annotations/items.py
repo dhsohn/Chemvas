@@ -258,20 +258,34 @@ class NoteItem(ExportTextItem):
         if not changes:
             return
         caret = QTextCursor(self.textCursor())
-        edit = QTextCursor(document)
-        edit.joinPreviousEditBlock()
+        wanted = (current.lineHeight(), current.lineHeightType())
+        block = document.findBlock(min(start for start, _ in changes))
+        end = document.findBlock(
+            min(max(stop for _, stop in changes), document.characterCount() - 1)
+        )
+        # Each block-format command becomes Qt's redo caret target at that
+        # paragraph's end, so only touch paragraphs that lost the spacing.
+        edit: QTextCursor | None = None
         try:
-            edit.setPosition(min(first for first, _ in changes))
-            edit.setPosition(
-                min(
-                    max(last for _, last in changes),
-                    document.characterCount() - 1,
-                ),
-                QTextCursor.MoveMode.KeepAnchor,
-            )
-            edit.mergeBlockFormat(spacing)
+            while block.isValid() and block.position() <= end.position():
+                fmt = block.blockFormat()
+                if (fmt.lineHeight(), fmt.lineHeightType()) != wanted:
+                    if edit is None:
+                        edit = QTextCursor(document)
+                        edit.joinPreviousEditBlock()
+                    edit.setPosition(block.position())
+                    edit.mergeBlockFormat(spacing)
+                block = block.next()
+            if edit is not None:
+                # Qt still leaves redo on the last formatting op when several
+                # blocks change; a no-op insert/delete in the same undo group
+                # re-anchors the caret after the pasted text without altering it.
+                edit.setPosition(caret.position())
+                edit.insertText(" ")
+                edit.deletePreviousChar()
         finally:
-            edit.endEditBlock()
+            if edit is not None:
+                edit.endEditBlock()
         self.setTextCursor(caret)
 
     @override

@@ -380,23 +380,141 @@ def test_image_only_clipboard_paste_is_no_op_without_undo(drawing):
     assert not document.isUndoAvailable()
 
 
-def test_paste_undo_redo_caret_lands_after_pasted_text(drawing):
-    """After redo, Qt leaves the caret just after the pasted run (known limit)."""
+@pytest.mark.parametrize(
+    "payload,expected_text",
+    [
+        ("XY", "abcXYdef\nghi"),
+        ("X\nY", "abcX\nYdef\nghi"),
+    ],
+    ids=["plain-inline", "plain-multiline"],
+)
+def test_midparagraph_paste_undo_redo_caret_and_typing(drawing, payload, expected_text):
     window, canvas = drawing
+    controller = canvas.services.note_controller
+    note = controller.create_text_note(QPointF(0, 0), "abcdef\nghi")
     canvas.services.style_controller.set_note_appearance(_NOTE_PASTE_APPEARANCE)
-    _tool(window, "note")
-    _click(canvas, QPointF(-80, 35))
-    note = canvas.runtime_state.note_items()[-1]
-    QTest.keyClicks(canvas, "ab")
-    caret_before = note.textCursor().position()
-    _set_note_clipboard(plain="XY")
+    controller.begin_note_edit(note)
+    caret_before = 3
+    cursor = note.textCursor()
+    cursor.setPosition(caret_before)
+    note.setTextCursor(cursor)
+    _set_note_clipboard(plain=payload)
     paste_selection_for_window(window)
-    assert note.toPlainText() == "abXY"
-    pasted_end = caret_before + len("XY")
+    assert note.toPlainText() == expected_text
+    pasted_end = caret_before + len(payload)
+    assert note.textCursor().position() == pasted_end
+    assert (
+        _note_paragraph_heights(note)
+        == [_NOTE_PASTE_LINE_HEIGHT] * note.document().blockCount()
+    )
     _key(canvas, Qt.Key.Key_Z, Qt.KeyboardModifier.ControlModifier)
+    assert note.toPlainText() == "abcdef\nghi"
+    assert note.textCursor().position() == caret_before
+    _redo(canvas)
+    assert note.toPlainText() == expected_text
+    assert note.textCursor().position() == pasted_end
+    QTest.keyClicks(canvas, "!")
+    assert (
+        note.toPlainText()
+        == expected_text[:pasted_end] + "!" + expected_text[pasted_end:]
+    )
+
+
+def test_midparagraph_html_paste_undo_redo_keeps_spacing_and_rich_text(drawing):
+    window, canvas = drawing
+    controller = canvas.services.note_controller
+    note = controller.create_text_note(QPointF(0, 0), "abcdef\nghi")
+    canvas.services.style_controller.set_note_appearance(_NOTE_PASTE_APPEARANCE)
+    controller.begin_note_edit(note)
+    caret_before = 3
+    cursor = note.textCursor()
+    cursor.setPosition(caret_before)
+    note.setTextCursor(cursor)
+    _set_note_clipboard(html='<p style="margin:0;line-height:300%"><b>XY</b></p>')
+    paste_selection_for_window(window)
+    assert "XY" in note.toPlainText()
+    pasted_end = caret_before + len("XY")
+    assert note.textCursor().position() == pasted_end
+    assert (
+        _note_paragraph_heights(note)
+        == [_NOTE_PASTE_LINE_HEIGHT] * note.document().blockCount()
+    )
+    assert ("XY", QFont.Weight.Bold) in _note_bold_runs(note)
+    _key(canvas, Qt.Key.Key_Z, Qt.KeyboardModifier.ControlModifier)
+    assert note.toPlainText() == "abcdef\nghi"
     assert note.textCursor().position() == caret_before
     _redo(canvas)
     assert note.textCursor().position() == pasted_end
+    assert (
+        _note_paragraph_heights(note)
+        == [_NOTE_PASTE_LINE_HEIGHT] * note.document().blockCount()
+    )
+    assert ("XY", QFont.Weight.Bold) in _note_bold_runs(note)
+
+
+def test_midparagraph_paste_undo_redo_caret_after_selection_replace(drawing):
+    window, canvas = drawing
+    controller = canvas.services.note_controller
+    note = controller.create_text_note(QPointF(0, 0), "keep\npick me\nkeep")
+    canvas.services.style_controller.set_note_appearance(_NOTE_PASTE_APPEARANCE)
+    controller.begin_note_edit(note)
+    block = note.document().findBlockByNumber(1)
+    cursor = note.textCursor()
+    cursor.setPosition(block.position())
+    cursor.movePosition(
+        QTextCursor.MoveOperation.EndOfBlock, QTextCursor.MoveMode.KeepAnchor
+    )
+    selection_end = cursor.position()
+    note.setTextCursor(cursor)
+    _set_note_clipboard(plain="new")
+    paste_selection_for_window(window)
+    pasted_end = block.position() + len("new")
+    assert note.toPlainText() == "keep\nnew\nkeep"
+    assert note.textCursor().position() == pasted_end
+    _key(canvas, Qt.Key.Key_Z, Qt.KeyboardModifier.ControlModifier)
+    assert note.textCursor().position() == selection_end
+    _redo(canvas)
+    assert note.textCursor().position() == pasted_end
+    QTest.keyClicks(canvas, "!")
+    assert note.toPlainText() == "keep\nnew!\nkeep"
+
+
+def test_midparagraph_drop_undo_redo_caret_and_persisted_snapshot(drawing):
+    window, canvas = drawing
+    controller = canvas.services.note_controller
+    note = controller.create_text_note(QPointF(0, 0), "keep\nreplace me\nkeep")
+    canvas.services.style_controller.set_note_appearance(_NOTE_PASTE_APPEARANCE)
+    controller.begin_note_edit(note)
+    block = note.document().findBlockByNumber(1)
+    layout = block.layout()
+    line = layout.lineAt(0)
+    caret_before = block.position()
+    cursor = note.textCursor()
+    cursor.setPosition(caret_before)
+    note.setTextCursor(cursor)
+    drop_point = note.mapToScene(layout.position() + QPointF(2, line.height() / 2))
+    payload = "N1\nN2"
+    _drop_text_through_viewport(canvas, drop_point, plain=payload)
+    expected_text = f"keep\n{payload}replace me\nkeep"
+    assert note.toPlainText() == expected_text
+    pasted_end = caret_before + len(payload)
+    assert note.textCursor().position() == pasted_end
+    assert (
+        _note_paragraph_heights(note)
+        == [_NOTE_PASTE_LINE_HEIGHT] * note.document().blockCount()
+    )
+    _key(canvas, Qt.Key.Key_Z, Qt.KeyboardModifier.ControlModifier)
+    assert note.toPlainText() == "keep\nreplace me\nkeep"
+    assert note.textCursor().position() == caret_before
+    _redo(canvas)
+    assert note.toPlainText() == expected_text
+    assert note.textCursor().position() == pasted_end
+    _commit_note_by_defocus(window, canvas)
+    session = canvas.services.canvas_document_session_service
+    state = session.snapshot_state()
+    record = next(n for n in state["notes"] if n["text"] == expected_text)
+    assert record["text"] == expected_text
+    assert record["html"].count("line-height:150%") == note.document().blockCount()
 
 
 @pytest.mark.parametrize(
