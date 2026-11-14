@@ -705,8 +705,12 @@ class MainWindowDocumentActionServiceTest(unittest.TestCase):
             file_dialog.getSaveFileName.call_args.args[3],
             "ChemDraw XML (*.cdxml);;All Files (*)",
         )
+        canvas = active_canvas_for_window(self.window)
         save_canvas_to_path.assert_called_once_with(
-            self.window, str(Path("/tmp/new-drawing.cdxml")), canvas=None
+            self.window,
+            str(Path("/tmp/new-drawing.cdxml")),
+            canvas=canvas,
+            message_box=QMessageBox,
         )
 
     def test_save_canvas_as_confirms_overwrite_when_normalization_retargets(
@@ -756,7 +760,10 @@ class MainWindowDocumentActionServiceTest(unittest.TestCase):
                             )
                         )
                     save_canvas_to_path.assert_called_once_with(
-                        self.window, str(existing), canvas=None
+                        self.window,
+                        str(existing),
+                        canvas=active_canvas_for_window(self.window),
+                        message_box=message_box,
                     )
 
     def test_save_as_cdxml_filter_confirms_extensionless_existing_target(self) -> None:
@@ -815,7 +822,10 @@ class MainWindowDocumentActionServiceTest(unittest.TestCase):
                     )
                 )
             save_canvas_to_path.assert_called_once_with(
-                self.window, str(existing), canvas=None
+                self.window,
+                str(existing),
+                canvas=active_canvas_for_window(self.window),
+                message_box=message_box,
             )
             message_box.question.assert_not_called()
 

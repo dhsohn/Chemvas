@@ -5,7 +5,7 @@ from unittest import mock
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from PyQt6.QtWidgets import QApplication, QLineEdit, QToolButton
+from PyQt6.QtWidgets import QApplication, QLineEdit, QMessageBox, QToolButton
 
 from chemvas.bootstrap.main_window import build_main_window
 from chemvas.core.document_io import ChemvasDocument
@@ -105,8 +105,12 @@ class MainWindowPanelActionsTest(unittest.TestCase):
 
         dialog.assert_called_once()
         self.assertEqual(dialog.call_args.args[2], "/tmp/current.cdxml")
+        canvas = active_canvas_for_window(self.window)
         save_path.assert_called_once_with(
-            self.window, str(Path("/tmp/new-drawing.cdxml")), canvas=None
+            self.window,
+            str(Path("/tmp/new-drawing.cdxml")),
+            canvas=canvas,
+            message_box=QMessageBox,
         )
 
     def test_load_menu_action_uses_dialog_path_and_handles_failure(self) -> None:

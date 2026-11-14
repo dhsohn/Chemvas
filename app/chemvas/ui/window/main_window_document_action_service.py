@@ -210,6 +210,7 @@ class MainWindowDocumentActionService:
         # keep ``path`` as the user-facing document path and recent-file entry.
         write_path = path if protected else resolved_document_path(path)
         try:
+            target.services.tool_controller.prepare_for_document_edit()
             # Refuse before the overwrite prompt: this save cannot succeed.
             require_preserved_calculation_plan_for(target)
             current_path = self.current_file_path(window, canvas=target)
@@ -329,6 +330,11 @@ class MainWindowDocumentActionService:
         protected = (
             target.runtime_state.document_metadata_state.protected_import_source_path
         )
+        try:
+            target.services.tool_controller.prepare_for_document_edit()
+        except Exception as exc:
+            message_box.warning(window, "Save Error", f"Failed to save file:\n{exc}")
+            return False
         dialog_path, selected_filter = file_dialog.getSaveFileName(
             window,
             "Save Drawing As",
@@ -350,11 +356,9 @@ class MainWindowDocumentActionService:
             window, dialog_path, path, message_box
         ):
             return False
-        if protected:
-            return self.save_canvas_to_path(
-                window, path, canvas=target, message_box=message_box
-            )
-        return self.save_canvas_to_path(window, path, canvas=canvas)
+        return self.save_canvas_to_path(
+            window, path, canvas=target, message_box=message_box
+        )
 
     def export_mol(
         self,
@@ -721,6 +725,13 @@ class MainWindowDocumentActionService:
     ) -> bool:
         message_box = QMessageBox if message_box is None else message_box
         documents = window.services.canvas_document_service
+        try:
+            canvas.services.tool_controller.prepare_for_document_edit()
+        except Exception as exc:
+            message_box.warning(
+                window, "Close Error", f"Failed to close document:\n{exc}"
+            )
+            return False
         if not documents.is_dirty(canvas):
             return True
         name = documents.display_name(canvas)
