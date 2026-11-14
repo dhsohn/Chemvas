@@ -6,7 +6,7 @@ import pytest
 from PyQt6.QtCore import QEvent, QPointF, Qt
 from PyQt6.QtGui import QKeyEvent, QKeySequence, QMouseEvent
 from PyQt6.QtTest import QTest
-from PyQt6.QtWidgets import QMenu
+from PyQt6.QtWidgets import QMenu, QMessageBox
 
 from chemvas.ui.transactions.document import DocumentSavepoint
 from chemvas.ui.window.main_window_path_logic import resolve_save_as_path
@@ -31,21 +31,6 @@ def _menu_action(window, text: str):
             if action.text() == text:
                 return action
     raise AssertionError(f"Could not find menu action with text={text!r}")
-
-
-def _model_on_disk(model):
-    normalized = dict(model)
-    atoms = normalized.get("atoms")
-    if isinstance(atoms, dict):
-        normalized["atoms"] = {str(key): value for key, value in atoms.items()}
-    bonds = normalized.get("bonds")
-    if isinstance(bonds, dict):
-        normalized["bonds"] = {str(key): value for key, value in bonds.items()}
-    return normalized
-
-
-def _assert_saved_model_matches(original_model, path):
-    assert _model_on_disk(original_model) == read_document(path).state["model"]
 
 
 def test_double_bond_menu_cancels_drag_before_style_edit(drawing, qt_errors):
@@ -415,7 +400,8 @@ def test_save_action_during_gesture_writes_cancelled_state(
     actions = window.services.document_action_service
     documents = window.services.canvas_document_service
     assert actions.save_canvas_to_path(window, str(path))
-    _assert_saved_model_matches(original["model"], path)
+    on_disk = read_document(path).state
+    on_disk_bytes = path.read_bytes()
     assert not documents.is_dirty(canvas)
     stacks = canvas.services.history_service.capture_stack_snapshot()
     end = start_drag(canvas, kind, point, item)
@@ -427,7 +413,8 @@ def test_save_action_during_gesture_writes_cancelled_state(
     assert not qt_errors
     assert not tool.has_active_gesture
     assert after_save == original
-    _assert_saved_model_matches(original["model"], path)
+    assert read_document(path).state == on_disk
+    assert path.read_bytes() == on_disk_bytes
     assert not documents.is_dirty(canvas)
     canvas.services.history_service.verify_stack_snapshot(stacks)
     release(canvas, end)
@@ -435,20 +422,24 @@ def test_save_action_during_gesture_writes_cancelled_state(
     canvas.services.history_service.verify_stack_snapshot(stacks)
 
 
-def test_save_action_during_gesture_does_not_write_when_cancel_fails(drawing, tmp_path):
+@pytest.mark.parametrize("kind", ["molecule", "handle", "rotation", "move", "note"])
+def test_save_action_during_gesture_does_not_write_when_cancel_fails(
+    drawing, tmp_path, kind
+):
     window, canvas = drawing
-    point, item = populate(canvas, "molecule")
+    point, item = populate(canvas, kind)
     session = canvas.services.canvas_document_session_service
     original = session.snapshot_state()
-    path = tmp_path / "bound.cdxml"
+    path = tmp_path / f"{kind}-bound.cdxml"
     actions = window.services.document_action_service
     documents = window.services.canvas_document_service
     assert actions.save_canvas_to_path(window, str(path))
     on_disk = read_document(path).state
+    on_disk_bytes = path.read_bytes()
     bound = documents.file_path(canvas)
     assert bound is not None
     stacks = canvas.services.history_service.capture_stack_snapshot()
-    end = start_drag(canvas, "molecule", point, item)
+    end = start_drag(canvas, kind, point, item)
     tool = canvas.services.tool_controller.active
     warning = mock.Mock()
     with (
@@ -464,6 +455,7 @@ def test_save_action_during_gesture_does_not_write_when_cancel_fails(drawing, tm
     warning.warning.assert_called_once()
     assert warning.warning.call_args.args[1] == "Save Error"
     assert read_document(path).state == on_disk
+    assert path.read_bytes() == on_disk_bytes
     assert documents.file_path(canvas) == bound
     canvas.services.history_service.verify_stack_snapshot(stacks)
     assert session.snapshot_state() != original
@@ -475,7 +467,11 @@ def test_save_as_opens_dialog_after_gesture_cancelled(drawing, qt_errors, tmp_pa
     point, _item = populate(canvas, "molecule")
     session = canvas.services.canvas_document_session_service
     original = session.snapshot_state()
+    baseline_path = tmp_path / "baseline.cdxml"
     path = tmp_path / "settled.cdxml"
+    actions = window.services.document_action_service
+    assert actions.save_canvas_to_path(window, str(baseline_path))
+    on_disk_baseline = read_document(baseline_path).state
     end = start_drag(canvas, "molecule", point)
     assert canvas.services.tool_controller.active.has_active_gesture
     file_dialog = mock.Mock()
@@ -486,14 +482,13 @@ def test_save_as_opens_dialog_after_gesture_cancelled(drawing, qt_errors, tmp_pa
         return (str(path), "")
 
     file_dialog.getSaveFileName.side_effect = settled_dialog
-    actions = window.services.document_action_service
     assert actions.save_canvas_as(
         window,
         file_dialog=file_dialog,
         resolve_save_as_path=resolve_save_as_path,
     )
     assert not qt_errors
-    _assert_saved_model_matches(original["model"], path)
+    assert read_document(path).state == on_disk_baseline
     release(canvas, end)
 
 
@@ -537,4 +532,83 @@ def test_save_as_does_not_open_dialog_when_gesture_cancel_fails(drawing):
     file_dialog.getSaveFileName.assert_not_called()
     message_box.warning.assert_called_once()
     assert message_box.warning.call_args.args[1] == "Save Error"
+    release(canvas, end)
+
+
+def test_confirm_close_canvas_skips_prompt_for_clean_saved_mid_drag(
+    drawing, qt_errors, tmp_path
+):
+    window, canvas = drawing
+    point, item = populate(canvas, "molecule")
+    session = canvas.services.canvas_document_session_service
+    original = session.snapshot_state()
+    path = tmp_path / "clean.cdxml"
+    actions = window.services.document_action_service
+    documents = window.services.canvas_document_service
+    assert actions.save_canvas_to_path(window, str(path))
+    assert not documents.is_dirty(canvas)
+    end = start_drag(canvas, "molecule", point, item)
+    assert session.snapshot_state() != original
+    assert documents.is_dirty(canvas)
+    message_box = mock.Mock()
+    assert actions.confirm_close_canvas(window, canvas, message_box=message_box)
+    message_box.question.assert_not_called()
+    assert not qt_errors
+    release(canvas, end)
+
+
+def test_confirm_close_canvas_still_prompts_for_dirty_mid_drag(drawing, qt_errors):
+    window, canvas = drawing
+    point, item = populate(canvas, "arrow")
+    session = canvas.services.canvas_document_session_service
+    committed = session.snapshot_state()
+    documents = window.services.canvas_document_service
+    assert documents.is_dirty(canvas)
+    end = start_drag(canvas, "arrow", point, item)
+    assert session.snapshot_state() != committed
+    message_box = mock.Mock()
+    message_box.question.return_value = QMessageBox.StandardButton.Cancel
+    actions = window.services.document_action_service
+    assert not actions.confirm_close_canvas(window, canvas, message_box=message_box)
+    message_box.question.assert_called_once()
+    assert documents.is_dirty(canvas)
+    assert session.snapshot_state() == committed
+    assert not qt_errors
+    release(canvas, end)
+
+
+@pytest.mark.parametrize("kind", ["molecule", "handle", "rotation", "move", "note"])
+def test_confirm_close_canvas_refuses_close_when_gesture_cancel_fails(
+    drawing, tmp_path, kind
+):
+    window, canvas = drawing
+    point, item = populate(canvas, kind)
+    session = canvas.services.canvas_document_session_service
+    original = session.snapshot_state()
+    path = tmp_path / f"{kind}-close.cdxml"
+    actions = window.services.document_action_service
+    documents = window.services.canvas_document_service
+    assert actions.save_canvas_to_path(window, str(path))
+    on_disk = read_document(path).state
+    bound = documents.file_path(canvas)
+    stacks = canvas.services.history_service.capture_stack_snapshot()
+    end = start_drag(canvas, kind, point, item)
+    tool = canvas.services.tool_controller.active
+    warning = mock.Mock()
+    with (
+        mock.patch.object(
+            tool, "deactivate", side_effect=RuntimeError("gesture cancellation failed")
+        ),
+        mock.patch(
+            "chemvas.ui.window.main_window_document_action_service.QMessageBox",
+            warning,
+        ),
+    ):
+        assert not actions.confirm_close_canvas(window, canvas, message_box=warning)
+    warning.warning.assert_called_once()
+    assert warning.warning.call_args.args[1] == "Close Error"
+    assert read_document(path).state == on_disk
+    assert documents.file_path(canvas) == bound
+    canvas.services.history_service.verify_stack_snapshot(stacks)
+    assert session.snapshot_state() != original
     release(canvas, end)

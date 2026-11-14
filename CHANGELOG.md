@@ -18,6 +18,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Save and Save As cancel an unfinished pointer gesture before writing or
   opening the save dialog, so a mid-drag shortcut no longer persists
   uncommitted edits or marks the document clean.
+- Close window and tab prompts cancel an unfinished pointer gesture before
+  checking the saved-document dirty flag, so a mid-drag Cmd+W or Cmd+Q on a
+  clean saved drawing no longer shows a spurious Save Changes dialog.
 - Escape while placing a ring template cancels the preview and returns to
   Select, keeping the toolbar, status bar, and context options in sync.
 - Apply toolbar and context-bar tool choices when assistive technology

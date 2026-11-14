@@ -725,6 +725,13 @@ class MainWindowDocumentActionService:
     ) -> bool:
         message_box = QMessageBox if message_box is None else message_box
         documents = window.services.canvas_document_service
+        try:
+            canvas.services.tool_controller.prepare_for_document_edit()
+        except Exception as exc:
+            message_box.warning(
+                window, "Close Error", f"Failed to close document:\n{exc}"
+            )
+            return False
         if not documents.is_dirty(canvas):
             return True
         name = documents.display_name(canvas)
