@@ -15,6 +15,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Save and Save As cancel an unfinished pointer gesture before writing or
+  opening the save dialog, so a mid-drag shortcut no longer persists
+  uncommitted edits or marks the document clean.
 - Escape while placing a ring template cancels the preview and returns to
   Select, keeping the toolbar, status bar, and context options in sync.
 - Apply toolbar and context-bar tool choices when assistive technology
