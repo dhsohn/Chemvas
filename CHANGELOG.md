@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.29.0] - 2026-11-14
+
 ### Added
 
 - Edit plain ChemDraw filled rectangles and circle-filled ovals in preserved
@@ -3331,7 +3333,8 @@ housekeeping.
   `.chemvas` document type (double-clicking a file opens it in Chemvas), and a
   Linux `.desktop` entry with an `application/x-chemvas` MIME type.
 
-[Unreleased]: https://github.com/dhsohn/Chemvas/compare/v0.28.0...HEAD
+[Unreleased]: https://github.com/dhsohn/Chemvas/compare/v0.29.0...HEAD
+[0.29.0]: https://github.com/dhsohn/Chemvas/compare/v0.28.0...v0.29.0
 [0.28.0]: https://github.com/dhsohn/Chemvas/compare/v0.27.1...v0.28.0
 [0.25.0]: https://github.com/dhsohn/Chemvas/compare/v0.24.0...v0.25.0
 [0.24.0]: https://github.com/dhsohn/Chemvas/compare/v0.23.0...v0.24.0
