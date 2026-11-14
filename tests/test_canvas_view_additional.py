@@ -110,6 +110,17 @@ class _FakeCommand(HistoryCommand):
         self.redo_calls += 1
 
 
+def _history_view(**state_kwargs):
+    state = CanvasHistoryState(**state_kwargs)
+    view = SimpleNamespace(runtime_state=canvas_runtime_state())
+    service = CanvasHistoryService(
+        CanvasHistoryOperations(view), state, replay_context=nullcontext
+    )
+    view.runtime_state.history_service = service
+    view.services = canvas_runtime_services(history_service=service)
+    return view, service, state
+
+
 class _FakeScene:
     def __init__(self, selected_items=None, items_at_pos=None) -> None:
         self._selected_items = list(selected_items or [])
@@ -199,117 +210,65 @@ class CanvasViewAdditionalTest(unittest.TestCase):
         first = _FakeCommand()
         second = _FakeCommand()
         third = _FakeCommand()
-        history_view = SimpleNamespace(
-            runtime_state=canvas_runtime_state(
-                history_state=CanvasHistoryState(limit=2, redo_stack=["stale"]),
-            ),
+        history_view, history_service, history_state = _history_view(
+            limit=2, redo_stack=["stale"]
         )
-        history_view.runtime_state.history_service = CanvasHistoryService(
-            CanvasHistoryOperations(history_view),
-            history_view.runtime_state.history_state,
-            replay_context=nullcontext,
-        )
-
-        history_service = history_view.runtime_state.history_service
         history_service.push(first)
         history_service.push(second)
-        history_view.runtime_state.history_state.redo_stack = ["stale"]
+        history_state.redo_stack = ["stale"]
         history_service.push(third)
 
-        self.assertEqual(
-            history_view.runtime_state.history_state.history, [second, third]
-        )
-        self.assertEqual(history_view.runtime_state.history_state.redo_stack, [])
+        self.assertEqual(history_state.history, [second, third])
+        self.assertEqual(history_state.redo_stack, [])
 
-        failing_push_view = SimpleNamespace(
-            runtime_state=canvas_runtime_state(
-                history_state=CanvasHistoryState(
-                    history=[first],
-                    redo_stack=[second],
-                    change_callback=mock.Mock(
-                        side_effect=RuntimeError("notify failed")
-                    ),
-                ),
-            ),
+        change_callback = mock.Mock(side_effect=RuntimeError("notify failed"))
+        failing_push_view, _, failing_push_state = _history_view(
+            history=[first],
+            redo_stack=[second],
+            change_callback=change_callback,
         )
-        failing_push_history = CanvasHistoryService(
-            CanvasHistoryOperations(failing_push_view),
-            failing_push_view.runtime_state.history_state,
-            replay_context=nullcontext,
-        )
+        failing_push_history = failing_push_view.runtime_state.history_service
         failing_push_history.push(third)
-        self.assertEqual(
-            failing_push_view.runtime_state.history_state.history, [first, third]
-        )
-        self.assertEqual(failing_push_view.runtime_state.history_state.redo_stack, [])
-        failing_push_view.runtime_state.history_state.change_callback.assert_called_once_with()
+        self.assertEqual(failing_push_state.history, [first, third])
+        self.assertEqual(failing_push_state.redo_stack, [])
+        change_callback.assert_called_once_with()
 
-        undo_redo_view = SimpleNamespace(
-            runtime_state=canvas_runtime_state(
-                history_state=CanvasHistoryState(history=[first])
-            )
+        undo_redo_view, undo_redo_history, undo_redo_state = _history_view(
+            history=[first]
         )
-        undo_redo_view.runtime_state.history_service = CanvasHistoryService(
-            CanvasHistoryOperations(undo_redo_view),
-            undo_redo_view.runtime_state.history_state,
-            replay_context=nullcontext,
-        )
-        undo_redo_history = undo_redo_view.runtime_state.history_service
         undo_redo_history.undo()
         self.assertEqual(first.undo_calls, 1)
-        self.assertEqual(undo_redo_view.runtime_state.history_state.history, [])
-        self.assertEqual(undo_redo_view.runtime_state.history_state.redo_stack, [first])
+        self.assertEqual(undo_redo_state.history, [])
+        self.assertEqual(undo_redo_state.redo_stack, [first])
 
         undo_redo_history.redo()
         self.assertEqual(first.redo_calls, 1)
-        self.assertEqual(undo_redo_view.runtime_state.history_state.history, [first])
-        self.assertEqual(undo_redo_view.runtime_state.history_state.redo_stack, [])
+        self.assertEqual(undo_redo_state.history, [first])
+        self.assertEqual(undo_redo_state.redo_stack, [])
 
         failing_undo = _FakeCommand()
         failing_undo.undo = mock.Mock(side_effect=RuntimeError("undo failed"))
-        failing_undo_view = SimpleNamespace(
-            runtime_state=canvas_runtime_state(
-                history_state=CanvasHistoryState(history=[failing_undo])
-            )
-        )
-        failing_undo_history = CanvasHistoryService(
-            CanvasHistoryOperations(failing_undo_view),
-            failing_undo_view.runtime_state.history_state,
-            replay_context=nullcontext,
+        failing_undo_view, failing_undo_history, failing_undo_state = _history_view(
+            history=[failing_undo]
         )
         # A command whose undo fails part-way is dropped: leaving it on the
         # stack would re-apply its completed parts on the next attempt.
         with self.assertRaisesRegex(RuntimeError, "undo failed"):
             failing_undo_history.undo()
-        self.assertEqual(failing_undo_view.runtime_state.history_state.history, [])
-        self.assertEqual(failing_undo_view.runtime_state.history_state.redo_stack, [])
+        self.assertEqual(failing_undo_state.history, [])
+        self.assertEqual(failing_undo_state.redo_stack, [])
 
         failing_redo = _FakeCommand()
         failing_redo.redo = mock.Mock(side_effect=RuntimeError("redo failed"))
-        failing_redo_view = SimpleNamespace(
-            runtime_state=canvas_runtime_state(
-                history_state=CanvasHistoryState(redo_stack=[failing_redo])
-            )
-        )
-        failing_redo_history = CanvasHistoryService(
-            CanvasHistoryOperations(failing_redo_view),
-            failing_redo_view.runtime_state.history_state,
-            replay_context=nullcontext,
+        failing_redo_view, failing_redo_history, failing_redo_state = _history_view(
+            redo_stack=[failing_redo]
         )
         with self.assertRaisesRegex(RuntimeError, "redo failed"):
             failing_redo_history.redo()
-        self.assertEqual(failing_redo_view.runtime_state.history_state.history, [])
-        self.assertEqual(failing_redo_view.runtime_state.history_state.redo_stack, [])
+        self.assertEqual(failing_redo_state.history, [])
+        self.assertEqual(failing_redo_state.redo_stack, [])
 
-        noop_view = SimpleNamespace(
-            runtime_state=canvas_runtime_state(history_state=CanvasHistoryState())
-        )
-        noop_view.runtime_state.history_service = CanvasHistoryService(
-            CanvasHistoryOperations(noop_view),
-            noop_view.runtime_state.history_state,
-            replay_context=nullcontext,
-        )
-        noop_history = noop_view.runtime_state.history_service
+        noop_view, noop_history, _noop_state = _history_view()
         noop_history.undo()
         noop_history.redo()
 

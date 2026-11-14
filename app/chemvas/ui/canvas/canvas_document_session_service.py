@@ -80,7 +80,6 @@ if TYPE_CHECKING:
 # and callback wiring or a cache that validates itself against the model.
 _DOCUMENT_SESSION_RUNTIME_FIELDS = frozenset(
     {
-        "history_state",
         "history_service",
         "input_view_state",
         "callback_state",
