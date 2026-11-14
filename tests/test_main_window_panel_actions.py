@@ -254,12 +254,12 @@ class MainWindowPanelActionsTest(unittest.TestCase):
         scene_transform.flip_selected_items = mock.Mock()
         self.assertFalse(undo_action.isEnabled())
         self.assertFalse(redo_action.isEnabled())
-        active_canvas_for_window(self.window).runtime_state.history_state.history = [
+        active_canvas_for_window(self.window).services.history_service.state.history = [
             object()
         ]
-        active_canvas_for_window(self.window).runtime_state.history_state.redo_stack = [
-            object()
-        ]
+        active_canvas_for_window(
+            self.window
+        ).services.history_service.state.redo_stack = [object()]
         self.window.services.action_availability_service.update_action_availability(
             self.window
         )

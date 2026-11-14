@@ -13,8 +13,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   CDXML documents as vector shapes when local outline width is zero or
   omitted.
 
+### Changed
+
+- Remove the duplicate `CanvasRuntimeState.history_state` alias;
+  `CanvasHistoryService.state` remains the single undo/redo stack reference,
+  and `DocumentSavepoint` captures history state only through its explicit
+  `history_service` argument.
+
 ### Fixed
 
+- Reconfigure real `TextIOWrapper` `stdout` streams to UTF-8 for recognized
+  headless CLI commands so redirected non-UTF-8 Windows streams preserve
+  non-ASCII paths and text (such as Korean or emoji) in JSON output without
+  failing after output files are written.
 - Save and Save As cancel an unfinished pointer gesture before writing or
   opening the save dialog, so a mid-drag shortcut no longer persists
   uncommitted edits or marks the document clean.

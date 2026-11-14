@@ -47,7 +47,6 @@ class CanvasRuntimeState(SceneRenderState):
     selection_info_state: SelectionInfoState
     group_state: CanvasGroupState
     insert_state: CanvasInsertState
-    history_state: CanvasHistoryState
     history_service: CanvasHistoryService
     spatial_index_state: CanvasSpatialIndexState
     input_view_state: InputViewState
@@ -63,6 +62,11 @@ class CanvasRuntimeState(SceneRenderState):
         from chemvas.ui.history.history_operations import CanvasHistoryOperations
 
         history_state = CanvasHistoryState()
+        history_service = CanvasHistoryService(
+            CanvasHistoryOperations(canvas),
+            history_state,
+            replay_context=partial(batch_selection_updates, canvas),
+        )
         return cls(
             document_metadata_state=CanvasDocumentMetadataState(),
             calculation_plan_state=CanvasCalculationPlanState(),
@@ -71,12 +75,7 @@ class CanvasRuntimeState(SceneRenderState):
             graph_state=CanvasGraphState(),
             group_state=CanvasGroupState(),
             insert_state=CanvasInsertState(),
-            history_state=history_state,
-            history_service=CanvasHistoryService(
-                CanvasHistoryOperations(canvas),
-                history_state,
-                replay_context=partial(batch_selection_updates, canvas),
-            ),
+            history_service=history_service,
             atom_coords_3d_state=CanvasAtomCoords3DState(),
             atom_graphics_state=CanvasAtomGraphicsState(),
             bond_graphics_state=CanvasBondGraphicsState(),

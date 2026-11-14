@@ -93,7 +93,7 @@ def test_stereo_perspective_refusal_preserves_document_and_history(
     canvas.runtime_state.callback_state.error = errors.append
     before = deepcopy(canvas.services.canvas_document_session_service.snapshot_state())
     mark_document_clean_for(canvas, before)
-    state = canvas.runtime_state.history_state
+    state = canvas.services.history_service.state
     stacks = (list(state.history), list(state.redo_stack))
     controller = canvas.services.selection_rotation_controller
     assert not controller.begin_selection_3d_rotation(
@@ -145,7 +145,7 @@ def test_ring_fill_materializes_selected_graph_cycle_in_one_undo(
     )
     before = canvas.services.canvas_document_session_service.snapshot_state()
     history = canvas.runtime_state.history_service
-    count = len(canvas.runtime_state.history_state.history)
+    count = len(canvas.services.history_service.state.history)
     color = canvas.services.canvas_color_mutation_service
     color.apply_ring_fill_color_to_items(
         canvas.scene().selectedItems(), QColor("#ffcc00")
@@ -154,18 +154,18 @@ def test_ring_fill_materializes_selected_graph_cycle_in_one_undo(
     assert set(canvas.runtime_state.ring_items()[0].data(2)) == set(ids)
     after = canvas.services.canvas_document_session_service.snapshot_state()
     assert after["model"] == before["model"]
-    assert len(canvas.runtime_state.history_state.history) == count + 1
+    assert len(canvas.services.history_service.state.history) == count + 1
     history.undo()
     assert canvas.services.canvas_document_session_service.snapshot_state() == before
     history.redo()
     assert canvas.services.canvas_document_session_service.snapshot_state() == after
     # Repeated application reuses the native ring instead of duplicating it.
-    count = len(canvas.runtime_state.history_state.history)
+    count = len(canvas.services.history_service.state.history)
     color.apply_ring_fill_color_to_items(
         canvas.scene().selectedItems(), QColor("#ffcc00")
     )
     assert len(canvas.runtime_state.ring_items()) == 1
-    assert len(canvas.runtime_state.history_state.history) == count
+    assert len(canvas.services.history_service.state.history) == count
     canvas.services.canvas_document_session_service.restore_state(after)
     assert canvas.services.canvas_document_session_service.snapshot_state() == after
 
@@ -183,7 +183,7 @@ def test_ring_fill_failure_restores_exact_document_selection_and_stacks(
     )
     before = deepcopy(canvas.services.canvas_document_session_service.snapshot_state())
     history = canvas.runtime_state.history_service
-    state = canvas.runtime_state.history_state
+    state = canvas.services.history_service.state
     stacks = (list(state.history), list(state.redo_stack))
     selected = set(canvas.scene().selectedItems())
     scene_items = set(canvas.scene().items())
@@ -241,7 +241,7 @@ def test_ring_fill_partial_selection_has_actionable_message_and_no_mutation(
     canvas.services.selection.restore_ids(selected_atoms, selected_bonds)
     before = canvas.services.canvas_document_session_service.snapshot_state()
     mark_document_clean_for(canvas, before)
-    state = canvas.runtime_state.history_state
+    state = canvas.services.history_service.state
     stacks = (list(state.history), list(state.redo_stack))
     selected = set(canvas.scene().selectedItems())
     scene_items = set(canvas.scene().items())
@@ -316,7 +316,7 @@ def test_first_perspective_keeps_absent_depth_absent_on_rollback(canvas, axis, f
     assert "perspective" not in before
     mark_document_clean_for(canvas, before)
     history = canvas.runtime_state.history_service
-    state = canvas.runtime_state.history_state
+    state = canvas.services.history_service.state
     stacks = (list(state.history), list(state.redo_stack))
     controller = canvas.services.selection_rotation_controller
     assert controller.begin_selection_3d_rotation(

@@ -50,7 +50,6 @@ def _make_canvas(*, atoms=None, bonds=None, next_atom_id=0):
             group_state=CanvasGroupState(),
             atom_coords_3d_state=CanvasAtomCoords3DState(),
             atom_graphics_state=CanvasAtomGraphicsState(),
-            history_state=CanvasHistoryState(),
         ),
     )
 
@@ -107,7 +106,6 @@ class CanvasHistoryRecordingServiceTest(unittest.TestCase):
                 )
                 self.runtime_state = canvas_runtime_state(
                     atom_coords_3d_state=CanvasAtomCoords3DState(),
-                    history_state=state,
                 )
                 self._services = services
                 self.services_reads = 0

@@ -25,7 +25,7 @@ def test_visible_insert_image_refusal_preserves_drawing_and_history(
     path = tmp_path / "misnamed.png"
     path.write_bytes(output.getvalue())
     before = snapshot_canvas_document_state(canvas)
-    state = canvas.runtime_state.history_state
+    state = canvas.services.history_service.state
     stacks = list(state.history), list(state.redo_stack)
     monkeypatch.setattr(
         image_actions.QFileDialog, "getOpenFileName", lambda *_: (str(path), "")

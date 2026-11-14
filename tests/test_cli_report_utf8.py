@@ -49,6 +49,66 @@ def _byte_name(stem, suffix):
     return os.fsdecode(stem.encode("utf-8") + b"-\xe9." + suffix.encode("ascii"))
 
 
+@pytest.mark.parametrize(
+    "command", ["compose-document", "inspect-document", "render-document"]
+)
+def test_public_cli_unicode_paths_with_cp1252_stdout_emit_parseable_utf8_json(
+    tmp_path, command
+):
+    """Regression for redirected Windows stdout using a locale code page."""
+    source = tmp_path / "결과.cdxml"
+    write_document(source, compose_document_state(_composition()), CANVAS_FILE_VERSION)
+    original = source.read_bytes()
+    output = None
+    request = None
+    if command == "compose-document":
+        request = tmp_path / "반응.json"
+        write_payload_text(
+            request, json.dumps(_composition(), ensure_ascii=False), encoding="utf-8"
+        )
+        request_bytes = request.read_bytes()
+        output = tmp_path / "작성.cdxml"
+        args = [command, str(request), "--output", str(output)]
+    elif command == "render-document":
+        output = tmp_path / "그림😀.svg"
+        args = [command, str(source), "--output", str(output)]
+    else:
+        args = [command, str(source)]
+    environment = dict(
+        os.environ,
+        PYTHONPATH=str(Path(__file__).resolve().parents[1] / "app"),
+        QT_QPA_PLATFORM="offscreen",
+        PYTHONIOENCODING="cp1252:strict",
+        XDG_DATA_HOME=str(tmp_path / "data"),
+        XDG_CONFIG_HOME=str(tmp_path / "config"),
+        XDG_CACHE_HOME=str(tmp_path / "cache"),
+    )
+    result = subprocess.run(
+        [sys.executable, "-m", "chemvas", *args],
+        capture_output=True,
+        env=environment,
+        timeout=20,
+    )
+    assert result.returncode == 0, result.stderr.decode("utf-8", errors="replace")
+    stdout = result.stdout.decode("utf-8")
+    report = json.loads(stdout)
+    assert "😀" in stdout or "반응" in stdout or "결과" in stdout
+    assert source.read_bytes() == original
+    if request is not None:
+        assert request.read_bytes() == request_bytes
+        assert report["composition"] == str(request)
+        assert report["written"] is True
+    else:
+        assert report["source"] == str(source)
+        assert report["source_sha256"] == hashlib.sha256(original).hexdigest()
+    if output is not None:
+        assert report["output"] == str(output)
+        assert (
+            report["output_sha256"] == hashlib.sha256(output.read_bytes()).hexdigest()
+        )
+        assert output.stat().st_size > 100
+
+
 @pytest.mark.skipif(
     sys.platform != "linux", reason="Linux/WSL filesystem permits non-UTF-8 byte names"
 )

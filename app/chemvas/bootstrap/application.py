@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import io
 import logging
 import os
 import sys
@@ -32,6 +33,15 @@ SCHEME_LAYOUT_COMMANDS = frozenset(("layout-document",))
 DOCUMENT_TEMPLATE_COMMANDS = frozenset(("insert-template",))
 DOCUMENT_RENDER_COMMANDS = frozenset(("render-document",))
 CDXML_REVIEW_COMMANDS = frozenset(("review-cdxml",))
+HEADLESS_DISPATCH_COMMANDS = frozenset().union(
+    DOCUMENT_PATCH_COMMANDS,
+    DOCUMENT_COMPOSITION_COMMANDS,
+    DOCUMENT_LAYOUT_COMMANDS,
+    SCHEME_LAYOUT_COMMANDS,
+    DOCUMENT_TEMPLATE_COMMANDS,
+    DOCUMENT_RENDER_COMMANDS,
+    CDXML_REVIEW_COMMANDS,
+)
 HEADLESS_SUBCOMMAND_HELP = (
     ("apply-patch", "validate or apply a Chemvas graph patch"),
     ("compose-document", "create a Chemvas document from a strict composition"),
@@ -46,6 +56,12 @@ HEADLESS_SUBCOMMAND_HELP = (
 
 def _should_filter_stderr(platform: str | None = None) -> bool:
     return (platform or sys.platform) in {"darwin", "linux"}
+
+
+def _configure_headless_stdout_encoding() -> None:
+    """Match frozen builds: JSON CLI reports are UTF-8 on redirected stdout."""
+    if isinstance(sys.stdout, io.TextIOWrapper):
+        sys.stdout.reconfigure(encoding="utf-8")
 
 
 def _startup_document_path(argv: list[str]) -> str | None:
@@ -239,6 +255,9 @@ def main() -> None:
     if len(sys.argv) > 1 and sys.argv[1] == "--version":
         sys.stdout.write(f"chemvas {__version__}\n")
         raise SystemExit(0)
+
+    if len(sys.argv) > 1 and sys.argv[1] in HEADLESS_DISPATCH_COMMANDS:
+        _configure_headless_stdout_encoding()
 
     if len(sys.argv) > 1 and sys.argv[1] in DOCUMENT_COMPOSITION_COMMANDS:
         from chemvas.bootstrap.document_composition import run

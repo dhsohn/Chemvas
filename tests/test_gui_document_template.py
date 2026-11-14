@@ -187,10 +187,10 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
             ).services.canvas_scene_reset_service.clear_scene()
             active_canvas_for_window(
                 self.window
-            ).runtime_state.history_state.history = ["dirty"]
+            ).services.history_service.state.history = ["dirty"]
             active_canvas_for_window(
                 self.window
-            ).runtime_state.history_state.redo_stack = ["dirty"]
+            ).services.history_service.state.redo_stack = ["dirty"]
 
             active_canvas_for_window(
                 self.window
@@ -217,13 +217,15 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
             len(active_canvas_for_window(self.window).runtime_state.arrow_items()), 1
         )
         self.assertEqual(
-            active_canvas_for_window(self.window).runtime_state.history_state.history,
+            active_canvas_for_window(
+                self.window
+            ).services.history_service.state.history,
             [],
         )
         self.assertEqual(
             active_canvas_for_window(
                 self.window
-            ).runtime_state.history_state.redo_stack,
+            ).services.history_service.state.redo_stack,
             [],
         )
 
@@ -664,12 +666,12 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
         active_canvas_for_window(self.window).services.note_controller.create_text_note(
             QPointF(75.0, 10.0), "Keep me"
         )
-        active_canvas_for_window(self.window).runtime_state.history_state.history = [
+        active_canvas_for_window(self.window).services.history_service.state.history = [
             "keep-history"
         ]
-        active_canvas_for_window(self.window).runtime_state.history_state.redo_stack = [
-            "keep-redo"
-        ]
+        active_canvas_for_window(
+            self.window
+        ).services.history_service.state.redo_stack = ["keep-redo"]
         self._set_current_file_path("/tmp/original.cdxml")
         self.window.statusBar().showMessage("Before load")
 
@@ -702,13 +704,15 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
             len(active_canvas_for_window(self.window).runtime_state.note_items()), 1
         )
         self.assertEqual(
-            active_canvas_for_window(self.window).runtime_state.history_state.history,
+            active_canvas_for_window(
+                self.window
+            ).services.history_service.state.history,
             ["keep-history"],
         )
         self.assertEqual(
             active_canvas_for_window(
                 self.window
-            ).runtime_state.history_state.redo_stack,
+            ).services.history_service.state.redo_stack,
             ["keep-redo"],
         )
 
