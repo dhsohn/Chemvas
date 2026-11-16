@@ -469,7 +469,7 @@ def test_molecular_area_uses_cdxml_color_mapping(index, expected):
 
     from PIL import Image
 
-    raw = f'''<CDXML><colortable><color r="1" g="0" b="0"/></colortable>
+    raw = f'''<CDXML><colortable><color r="1" g="0" b="0"/><color r="0" g="0" b="0"/></colortable>
     <page id="1" Width="100" Height="100"><fragment id="2">
     <n id="3" p="10 10"/><n id="4" p="80 10"/><n id="5" p="40 80"/>
     </fragment><ColoredMolecularArea id="6" BasisObjects="3 4 5" bgcolor="{index}"/>
@@ -484,7 +484,7 @@ def test_molecular_area_uses_cdxml_color_mapping(index, expected):
         )
 
 
-@pytest.mark.parametrize("index", ["2", "99", "-1"])
+@pytest.mark.parametrize("index", ["4", "99", "-1"])
 def test_missing_molecular_area_color_is_refused(index):
     raw = f'''<CDXML><page id="1" Width="100" Height="100"><fragment id="2">
     <n id="3" p="10 10"/><n id="4" p="80 10"/><n id="5" p="40 80"/>

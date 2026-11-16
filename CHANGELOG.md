@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.29.1] - 2026-11-17
+
+### Fixed
+
+- Honor CDXML's default foreground (palette index 3), inherited colors and
+  absolute black/white indexes 0/1. Adding the first custom color to a native
+  document now preserves its implicit background and foreground palette slots.
+- Render numeric CDXML curve closure, fill, bold, dash and arrow flags, and
+  explicit solid fills. Reject malformed or unsupported curve styles instead
+  of silently displaying a different outline.
+- Import and preserve ChemDraw's filled curves and rounded rectangles with zero
+  outline width. Native saves retain the established paint order when ChemDraw
+  omits atom-label ranks or shares arrow ranks with superseded graphics.
+- Preserve ChemDraw's fragment and group paint-order slots when saving native
+  documents, preventing colliding bond ranks from hiding chemistry behind fills.
+  Retain zero-width filled rectangles' native corner radii and display their
+  rounded corners using the document line width, as ChemDraw does on reopening.
+
 ## [0.29.0] - 2026-11-14
 
 ### Added
@@ -3333,7 +3351,8 @@ housekeeping.
   `.chemvas` document type (double-clicking a file opens it in Chemvas), and a
   Linux `.desktop` entry with an `application/x-chemvas` MIME type.
 
-[Unreleased]: https://github.com/dhsohn/Chemvas/compare/v0.29.0...HEAD
+[Unreleased]: https://github.com/dhsohn/Chemvas/compare/v0.29.1...HEAD
+[0.29.1]: https://github.com/dhsohn/Chemvas/compare/v0.29.0...v0.29.1
 [0.29.0]: https://github.com/dhsohn/Chemvas/compare/v0.28.0...v0.29.0
 [0.28.0]: https://github.com/dhsohn/Chemvas/compare/v0.27.1...v0.28.0
 [0.25.0]: https://github.com/dhsohn/Chemvas/compare/v0.24.0...v0.25.0

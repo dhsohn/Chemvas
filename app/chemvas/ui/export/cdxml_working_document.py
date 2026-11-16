@@ -45,6 +45,8 @@ def serialize_working_document(context: SceneRenderContext, rect: QRectF) -> byt
     items = collect_export_items(context.scene)
     root = ET.Element("CDXML", CreationProgram="Chemvas", InterpretChemically="yes")
     colors = ET.SubElement(root, "colortable")
+    ET.SubElement(colors, "color", r="1", g="1", b="1")
+    ET.SubElement(colors, "color", r="0", g="0", b="0")
     fonts = ET.SubElement(root, "fonttable")
     page = ET.SubElement(
         root,

@@ -21,7 +21,7 @@ from tests.test_cdxml_export import _simple_state
 
 pytestmark = pytest.mark.usefixtures("qt_application")
 
-SOURCE = b"""<CDXML LabelFont="3" LabelSize="10" CaptionFont="3" CaptionSize="10" BondLength="40" LineWidth="1"><fonttable><font id="3" name="Arial"/></fonttable><colortable><color r="0.95" g="0.84" b="0.84"/></colortable><page id="1" BoundingBox="0 0 240 160"><graphic id="2" Z="1" GraphicType="Rectangle" RectangleType="RoundEdge Filled" BoundingBox="45 40 120 80" color="2"/><graphic id="3" Z="1" GraphicType="Rectangle" RectangleType="RoundEdge Filled" BoundingBox="140 40 200 80" color="2"/><fragment id="4"><n id="5" Z="2" p="60 60"/><n id="6" Z="2" p="100 60" Element="8" NumHydrogens="0"><t id="7" Z="2" p="100 60"><s font="3" size="10" face="96">O</s></t></n><b id="8" Z="2" B="5" E="6"/></fragment><t id="9" Z="2" p="150 62"><s font="3" size="10">step</s></t></page></CDXML>"""
+SOURCE = b"""<CDXML LabelFont="3" LabelSize="10" CaptionFont="3" CaptionSize="10" BondLength="40" LineWidth="1"><fonttable><font id="3" name="Arial"/></fonttable><colortable><color r="0.95" g="0.84" b="0.84"/><color r="0" g="0" b="0"/></colortable><page id="1" BoundingBox="0 0 240 160"><graphic id="2" Z="1" GraphicType="Rectangle" RectangleType="RoundEdge Filled" BoundingBox="45 40 120 80" color="2"/><graphic id="3" Z="1" GraphicType="Rectangle" RectangleType="RoundEdge Filled" BoundingBox="140 40 200 80" color="2"/><fragment id="4"><n id="5" Z="2" p="60 60"/><n id="6" Z="2" p="100 60" Element="8" NumHydrogens="0"><t id="7" Z="2" p="100 60"><s font="3" size="10" face="96">O</s></t></n><b id="8" Z="2" B="5" E="6"/></fragment><t id="9" Z="2" p="150 62"><s font="3" size="10">step</s></t></page></CDXML>"""
 Z_TAGS = {"n", "b", "t", "graphic", "arrow", "curve", "embeddedobject"}
 
 
@@ -375,12 +375,103 @@ def test_unique_native_order_is_unchanged_even_when_xml_siblings_differ(tmp_path
     )
 
 
+@pytest.mark.parametrize("restack", [False, True])
+def test_chemdraw_dependent_z_keeps_independent_order_and_native_reopen(
+    tmp_path, restack
+):
+    root = ET.fromstring(SOURCE)
+    for z, e in enumerate((e for e in root.iter() if e.tag in Z_TAGS), 1):
+        e.set("Z", str(z))
+    # ChemDraw omits Z on a node's own label, and gives a legacy fallback
+    # the same Z as its arrow. Neither has an independent painter.
+    del root.find('.//t[@id="7"]').attrib["Z"]
+    root.find('.//t[@id="9"]').set("p", "70 62")
+    page = root.find("page")
+    page.append(
+        ET.fromstring(
+            '<graphic id="10" Z="100" SupersededBy="11" GraphicType="Line" '
+            'BoundingBox="190 120 140 120"/>'
+        )
+    )
+    page.append(
+        ET.fromstring('<arrow id="11" Z="100" Tail3D="140 120 0" Head3D="190 120 0"/>')
+    )
+    state = parse_cdxml_document(ET.tostring(root)).state
+    path = tmp_path / "dependent.cdxml"
+    with offscreen_canvas(state, command="dependent-paint-order") as (canvas, service):
+        if restack:
+            # A dependency-only repair must not conceal edited scene stacking.
+            canvas.runtime_state.image_items()[0].setZValue(10)
+            path.write_bytes(b"keep existing file")
+            with pytest.raises(ValueError, match="snapshot cannot restore"):
+                service.save_to_file(str(path))
+            assert path.read_bytes() == b"keep existing file"
+            return
+        before = _render(canvas)
+        service.save_to_file(str(path))
+        native = _native(path.read_bytes())
+        saved = ET.fromstring(native)
+        assert {e.get("id"): e.get("Z") for e in saved.iter() if e.tag in Z_TAGS} == {
+            e.get("id"): e.get("Z") for e in root.iter() if e.tag in Z_TAGS
+        }
+        assert _without_z(native) == _without_z(ET.tostring(root))
+        independent = [
+            e.get("id")
+            for e in sorted(
+                (
+                    e
+                    for e in root.iter()
+                    if e.tag in Z_TAGS and e.get("id") not in {"7", "10"}
+                ),
+                key=lambda e: int(e.get("Z")),
+            )
+        ]
+        ranks = {
+            e.get("id"): int(e.get("Z"))
+            for e in saved.iter()
+            if e.tag in Z_TAGS and "Z" in e.attrib
+        }
+        assert [ranks[key] for key in independent] == sorted(
+            ranks[key] for key in independent
+        )
+        for reopened in (read_document(path).state, parse_cdxml_document(native).state):
+            service.apply_state(reopened)
+            assert _render(canvas) == before
+
+
+@pytest.mark.parametrize("unique_leaves", [False, True])
+def test_scene_repair_reserves_retained_fragment_and_group_z(tmp_path, unique_leaves):
+    root = ET.fromstring(SOURCE)
+    if unique_leaves:
+        for rank, element in enumerate((e for e in root.iter() if e.tag in Z_TAGS), 1):
+            element.set("Z", str(rank))
+    page = root.find("page")
+    fragment = page.find("fragment")
+    fragment.set("Z", "1")
+    page.remove(fragment)
+    group = ET.SubElement(page, "group", id="10", Z="2")
+    group.append(fragment)
+    with offscreen_canvas(
+        parse_cdxml_document(ET.tostring(root)).state, command="container-z-repair"
+    ) as (canvas, service):
+        before = _render(canvas)
+        path = tmp_path / "container-repair.cdxml"
+        service.save_to_file(str(path))
+        saved = ET.fromstring(path.read_bytes())
+        ranks = [int(e.get("Z")) for e in saved.iter() if "Z" in e.attrib]
+        assert len(set(ranks)) == len(ranks)
+        assert all(0 < z <= 32767 for z in ranks)
+        assert _without_z(path.read_bytes()) == _without_z(ET.tostring(root))
+        service.apply_state(parse_cdxml_document(_native(path.read_bytes())).state)
+        assert _render(canvas) == before
+
+
 def test_overlapping_tied_fills_keep_the_visible_tie_order(tmp_path):
     root = ET.fromstring(SOURCE)
     ET.SubElement(root.find("colortable"), "color", r="0.75", g="0.85", b="1")
     second = root.find('.//graphic[@id="3"]')
     second.set("BoundingBox", "80 40 150 80")
-    second.set("color", "3")
+    second.set("color", "4")
     with offscreen_canvas(
         parse_cdxml_document(ET.tostring(root)).state, command="tied-fills"
     ) as (canvas, service):
