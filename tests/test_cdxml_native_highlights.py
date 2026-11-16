@@ -21,7 +21,7 @@ pytestmark = pytest.mark.usefixtures("qt_application")
 
 SOURCE = b"""<CDXML LabelFont="3" LabelSize="10" CaptionFont="3" CaptionSize="10" BondLength="40" LineWidth="1">
 <fonttable><font id="3" name="Arial"/></fonttable>
-<colortable><color r="0.95" g="0.84" b="0.84"/></colortable>
+<colortable><color r="0.95" g="0.84" b="0.84"/><color r="0" g="0" b="0"/></colortable>
 <page id="1" BoundingBox="0 0 240 160">
   <graphic id="2" Z="1" GraphicType="Rectangle" RectangleType="RoundEdge Filled" BoundingBox="45 40 120 80" color="2"/>
   <graphic id="3" Z="1" GraphicType="Rectangle" RectangleType="RoundEdge Filled" BoundingBox="140 40 200 80" color="2"/>
@@ -199,7 +199,7 @@ def test_projection_uses_rendered_native_extent_not_a_generic_xml_box(kind):
         expected = (-81.5, -61.5, 83, 83)
     else:
         graphic.tag = "curve"
-        graphic.set("CurveType", "Closed Filled")
+        graphic.set("CurveType", "129")
         graphic.set("CurvePoints", "40 40 40 40 40 80 120 80 120 40 120 40")
         graphic.set("BoundingBox", "200 120 230 140")  # Stale cache, not the path.
         expected = None

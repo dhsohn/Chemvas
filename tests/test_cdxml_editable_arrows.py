@@ -180,7 +180,7 @@ def test_recolor_black_is_not_reinterpreted_as_native_foreground():
     raw = drawing('<arrow id="10" Tail3D="20 50 0" Head3D="100 50 0"/>')
     raw = raw.replace(
         b'<CDXML LineWidth="0.75">',
-        b'<CDXML LineWidth="0.75" fgcolor="2"><colortable><color r="1" g="0" b="0"/></colortable>',
+        b'<CDXML LineWidth="0.75" color="2"><colortable><color r="1" g="0" b="0"/></colortable>',
     )
     state = parse_cdxml_document(raw).state
     assert state["arrows"][0]["color"] == "#ff0000"
@@ -318,7 +318,7 @@ def test_untouched_arrow_fill_overlap_and_fallback_keep_native_reopen_pixels(
         '<arrow id="11" Tail3D="20 80 0" Head3D="100 80 0"/>'
     ).replace(
         b'<CDXML LineWidth="0.75">',
-        b'<CDXML LineWidth="0.75"><colortable><color r="1" g="0" b="0"/></colortable>',
+        b'<CDXML LineWidth="0.75"><colortable><color r="1" g="0" b="0"/><color r="0" g="0" b="0"/></colortable>',
     )
     state = parse_cdxml_document(raw).state
     original = ET.fromstring(state["cdxml_source"]["xml"])

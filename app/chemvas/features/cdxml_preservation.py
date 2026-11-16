@@ -104,7 +104,11 @@ class PreservingImporter:
             raise ValueError("Invalid CDXML page size.")
         self.offset = (left + width / 2, top + height / 2)
         self.sheet_mm = [width * 25.4 / 72, height * 25.4 / 72]
-        self.colors = ["#ffffff", "#000000"]
+        # Reserved 0/1 are absolute black/white. Table entries start at 2;
+        # only an absent table supplies the implicit white/black 2/3 pair.
+        self.colors = ["#000000", "#ffffff"]
+        if root.find("colortable") is None:
+            self.colors.extend(["#ffffff", "#000000"])
         for e in root.findall("./colortable/color"):
             rgb = [self.number(e.get(k, ""), e) for k in ("r", "g", "b")]
             if any(not 0 <= v <= 1 for v in rgb):
@@ -146,14 +150,8 @@ class PreservingImporter:
             current = self.parents.get(current)
         return default
 
-    def color(self, e: ET.Element, attribute: str = "color", default: str = "0") -> str:
+    def color(self, e: ET.Element, attribute: str = "color", default: str = "3") -> str:
         index = int(self.inherited(e, attribute, default))
-        if index == 0 and "fgcolor" in self.root.attrib:
-            index = int(self.root.attrib["fgcolor"])
-        if index == 0:
-            return "#000000"
-        if index == 1:
-            return "#ffffff"
         if index >= len(self.colors) or index < 0:
             raise ValueError("CDXML references a missing color")
         return self.colors[index]

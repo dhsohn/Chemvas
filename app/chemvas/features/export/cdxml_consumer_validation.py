@@ -114,7 +114,7 @@ class _Scene:
                 # colored atom; it does not inherit the atom-label color.
                 index = int(item.get("color", parent.get("color", "3")))
             else:
-                index = int(self.inherited(item, "color", "0"))
+                index = int(self.inherited(item, "color", "3"))
         except ValueError as exc:
             raise ValueError("CDXML reference has an invalid color") from exc
         if index < 2:

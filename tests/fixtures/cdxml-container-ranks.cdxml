@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CDXML LineWidth="0.6" BondLength="20" LabelFont="3" LabelSize="10">
+  <fonttable><font id="3" name="Arial"/></fonttable>
+  <page id="1" BoundingBox="0 0 120 80">
+    <graphic id="2" Z="1" GraphicType="Rectangle" RectangleType="Filled"
+      BoundingBox="10 10 110 70" LineWidth="0" color="1"/>
+    <group id="3" Z="2">
+      <fragment id="4" Z="3">
+        <n id="5" Z="4" p="20 30"/>
+        <n id="6" Z="5" p="40 30"/>
+        <n id="7" Z="6" p="60 30" Element="8" NumHydrogens="0">
+          <t id="8" p="60 30"><s font="3" size="10" face="96">O</s></t>
+        </n>
+        <b id="9" Z="7" B="5" E="6" Order="3"/>
+        <b id="10" Z="8" B="6" E="7"/>
+      </fragment>
+    </group>
+    <graphic id="11" Z="9" SupersededBy="12" GraphicType="Line"
+      BoundingBox="90 55 30 55"/>
+    <arrow id="12" Z="9" Tail3D="30 55 0" Head3D="90 55 0"/>
+  </page>
+</CDXML>

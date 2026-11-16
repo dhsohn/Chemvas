@@ -166,12 +166,26 @@ def embedded_image(reader: Any, e: ET.Element) -> dict[str, object]:
     )
 
 
+def _curve_flags(reader: Any, e: ET.Element) -> int:
+    """CurveType is a decimal bit field, unlike the named graphic types."""
+    try:
+        flags = int(e.get("CurveType", "0"))
+    except ValueError:
+        reader.unsupported(e, "invalid numeric CurveType")
+    if flags < 0 or flags & ~0xFF:
+        # Shaded/doubled curves need a different projection; never silently
+        # draw these (or unknown flags) as ordinary solid outlines.
+        reader.unsupported(e, "unsupported curve flags")
+    return flags
+
+
 def native_stroke_width(reader: Any, e: ET.Element, line_width: float) -> float:
     """Return the stroke width ChemDraw draws for a native graphic or arrow."""
     styles = " ".join(
         e.get(key, "") for key in ("LineType", "RectangleType", "OvalType")
     )
-    if "Bold" not in styles.split():
+    bold_curve = e.tag == "curve" and bool(_curve_flags(reader, e) & 4)
+    if "Bold" not in styles.split() and not bold_curve:
         return line_width
     width = float(reader.number(reader.inherited(e, "BoldWidth", "2"), e))
     if not 0 < width <= 100:
@@ -187,7 +201,13 @@ class _GraphicProjection:
         self.width = self.reader.number(
             self.reader.inherited(self.e, "LineWidth", "0.6"), self.e
         )
-        if not 0 < self.width <= 100:
+        fill_only = self.e.tag == "curve" or (
+            self.e.tag == "graphic"
+            and self.e.get("GraphicType") == "Rectangle"
+            and self.e.get("RectangleType") == "RoundEdge Filled"
+            and self.e.get("LineType", "Solid") == "Solid"
+        )
+        if not 0 <= self.width <= 100 or (self.width == 0 and not fill_only):
             self.reader.unsupported(self.e, "line width")
         # ChemDraw strokes Bold lines, rectangles and ovals at BoldWidth, while
         # arrowheads, lips and corners stay proportional to LineWidth.
@@ -281,19 +301,31 @@ class _GraphicProjection:
                         + t**3 * d[1],
                     )
                 )
-        closed = self.e.get("Closed", "no") == "yes" or "Closed" in self.e.get(
-            "CurveType", ""
+        flags = _curve_flags(self.reader, self.e)
+        closed = self.e.get("Closed", "yes" if flags & 1 else "no") == "yes"
+        fill = self.e.get("FillType", "Solid" if flags & 128 else "None")
+        if fill not in {"None", "Solid"}:
+            self.reader.unsupported(self.e, "unsupported curve fill")
+        head_kind = self.e.get(
+            "ArrowheadHead",
+            "Full" if flags & 8 else "HalfLeft" if flags & 32 else "None",
         )
-        self.paths.append(
-            (
-                curve,
-                closed,
-                self.color if "Filled" in self.e.get("CurveType", "") else None,
-            )
+        tail_kind = self.e.get(
+            "ArrowheadTail",
+            "Full" if flags & 16 else "HalfLeft" if flags & 64 else "None",
         )
-
-        head_kind = self.e.get("ArrowheadHead", "None")
-        tail_kind = self.e.get("ArrowheadTail", "None")
+        # ChemDraw gives arrowheads priority over closure/fill. Dashed curves
+        # cannot be filled either. Modern explicit properties override the
+        # corresponding legacy bits when both are present.
+        if head_kind != "None" or tail_kind != "None":
+            closed, fill = False, "None"
+        if flags & 2 or "Dashed" in self.e.get("LineType", ""):
+            fill = "None"
+        # ChemDraw saves filled polygons with no outline as LineWidth=0.
+        # A zero-width curve still needs a fill after arrow/dash precedence.
+        if self.width == 0 and fill != "Solid":
+            self.reader.unsupported(self.e, "line width")
+        self.paths.append((curve, closed, self.color if fill == "Solid" else None))
         if head_kind != "None":
             self.head(curve[-1], curve[-2], head_kind)
         if tail_kind != "None":
@@ -399,11 +431,17 @@ class _GraphicProjection:
             if "RoundEdge" in self.e.get("RectangleType", ""):
                 left, right = sorted((a[0], b[0]))
                 top, bottom = sorted((a[1], b[1]))
+                # ChemDraw reopens zero-width rounded fills using the document
+                # line width for corner geometry. Zero still suppresses the
+                # outline; it does not make the retained native corners square.
+                corner_width = self.width or self.reader.number(
+                    self.reader.root.get("LineWidth", "0.6"), self.e
+                )
                 radius = min(
                     (right - left) / 2,
                     (bottom - top) / 2,
                     self.reader.number(self.e.get("CornerRadius", "600"), self.e)
-                    * self.width
+                    * corner_width
                     / 100,
                 )
                 rectangle = []
@@ -516,7 +554,7 @@ class _GraphicProjection:
         # Raster strokes are whole pixels. Pick the scale so the main stroke is
         # an exact pixel count near eight per point; a fixed 4 px/pt rounded a
         # 0.6 pt stroke down to 0.5 pt. Large graphics keep the 4 px/pt budget.
-        scale = max(1, round(self.stroke * 8)) / self.stroke
+        scale = max(1, round(self.stroke * 8)) / self.stroke if self.stroke else 8.0
         for candidate in (scale, 4.0):
             pixels = (
                 max(1, math.ceil(w * candidate)),
@@ -537,10 +575,12 @@ class _GraphicProjection:
                 draw.polygon(coords, fill=fill)
             if closed:
                 coords.append(coords[0])
-            if self.tag != "ColoredMolecularArea":
+            if self.tag != "ColoredMolecularArea" and stroke > 0:
                 dashed = "Dashed" in self.e.get(
                     "RectangleType", ""
                 ) or "Dashed" in self.e.get("LineType", "")
+                if self.tag == "curve" and _curve_flags(self.reader, self.e) & 2:
+                    dashed = True
                 if dashed and not fill:
                     phase = 0.0
                     dash = max(1.0, self.width * scale * 4)

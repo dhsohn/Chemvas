@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CDXML color="4" fgcolor="3" LineWidth="0.6" BondLength="20" CaptionFont="3" CaptionSize="10">
+  <fonttable><font id="3" name="Arial" charset="utf-8"/></fonttable>
+  <colortable>
+    <color r="0.8" g="0.9" b="1"/>
+    <color r="0" g="0" b="1"/>
+    <color r="0" g="1" b="0"/>
+  </colortable>
+  <page id="1" BoundingBox="0 0 200 120">
+    <fragment id="2">
+      <n id="3" p="20 20"/>
+      <n id="4" p="40 20" color="0"/>
+      <n id="5" p="60 20" color="1"/>
+      <b id="6" B="3" E="4"/>
+      <b id="7" B="4" E="5" color="0"/>
+    </fragment>
+    <group id="8" color="3">
+      <t id="9" p="20 55"><s font="3" size="10">Inherited</s><s font="3" size="10" color="0">Black</s></t>
+      <graphic id="10" GraphicType="Rectangle" RectangleType="Filled" LineWidth="0" BoundingBox="100 20 120 40"/>
+    </group>
+  </page>
+</CDXML>

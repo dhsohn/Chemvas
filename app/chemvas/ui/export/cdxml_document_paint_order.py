@@ -45,7 +45,7 @@ def normalize_document_paint_order(
     context: SceneRenderContext,
     source_xml: str,
 ) -> None:
-    """Assign positive unique INT16 Z without changing native chemistry/artwork.
+    """Keep valid native ranks, resolving ambiguous scene order within INT16.
 
     Already unambiguous retained native ordering is kept. New objects' ranks
     are provisional even when unique. A repair uses actual scene stacking,
@@ -54,31 +54,44 @@ def normalize_document_paint_order(
     explicit native order. Hidden definitions/fallbacks only reserve numbers.
     """
     leaves = [e for e in root.iter() if e.tag in _Z_TAGS]
+    # ChemDraw writes Z on groups/fragments despite the SDK's drawable list.
+    # They reserve the same slots as bonds: a collision can move the bond
+    # below an opaque background when ChemDraw reconstructs the page.
+    containers = [e for e in root.iter() if e.tag not in _Z_TAGS and "Z" in e.attrib]
+    ranked = leaves + containers
     try:
-        old_z = {e: int(e.get("Z", "0")) for e in leaves}
+        old_z = {e: int(e.get("Z", "0")) for e in ranked}
     except ValueError as exc:
         raise ValueError("Native CDXML paint order must use integer Z values.") from exc
-    if len(leaves) > _Z_MAX:
+    if len(ranked) > _Z_MAX:
         raise ValueError("Too many drawable objects for CDXML INT16 paint order.")
     import xml.etree.ElementTree as ET
 
-    original_z = {
-        e.get("id"): int(e.get("Z", "0"))
+    original_leaves = {
+        e.get("id"): e
         for e in ET.fromstring(source_xml).iter()
         if e.tag in _Z_TAGS and e.get("id") is not None
+    }
+    original_z = {
+        identity: int(e.attrib["Z"])
+        for identity, e in original_leaves.items()
+        if "Z" in e.attrib
     }
     # New marks get _top_z + 1 from the headless writer on every save. That
     # provisional number says nothing about their position in this scene and
     # must not bypass resolution after the retained source has unique ranks.
     if (
-        len(set(old_z.values())) == len(leaves)
+        len(set(old_z.values())) == len(ranked)
         and all(0 < z <= _Z_MAX for z in old_z.values())
-        and all(e.get("id") in original_z for e in leaves)
+        and all(e.get("id") in original_leaves for e in leaves)
     ):
         return
 
     parents = {c: p for p in root.iter() for c in p}
     byid = {e.get("id"): e for e in root.iter() if e.tag not in {"font", "objecttag"}}
+    if all(e.get("id") in original_leaves for e in leaves):
+        if _valid_dependent_z(ranked, parents, byid):
+            return
     scene = list(context.scene.items(Qt.SortOrder.AscendingOrder))
     ranks = {item: rank for rank, item in enumerate(scene)}
     projections = native_object_projections(context)
@@ -137,6 +150,7 @@ def normalize_document_paint_order(
         owner.leaves.append(leaf)
         # A contracted definition and a superseded graphic have no independent
         # visible ink; their old numbers cannot constrain the label/active arrow.
+        # Missing Z (common on atom text) is not an explicit zero rank either.
         if not leaf.get("SupersededBy") and not any(
             e.tag == "fragment" for e in chain[: chain.index(owner.element)]
         ):
@@ -145,8 +159,58 @@ def normalize_document_paint_order(
 
     ordered = _order_painters(painters, context)
     ordered_leaves = [e for p in ordered for e in p.leaves] + hidden
-    for z, leaf in enumerate(ordered_leaves, 1):
-        leaf.set("Z", str(z))
+    # On a genuine scene repair, reserve each retained container once, before
+    # its first descendant. Do not invent Z on containers that had none.
+    pending = set(containers)
+    ordered_objects = []
+    for leaf in ordered_leaves:
+        for ancestor in reversed(list(ancestors(leaf))):
+            if ancestor in pending:
+                ordered_objects.append(ancestor)
+                pending.remove(ancestor)
+        ordered_objects.append(leaf)
+    ordered_objects.extend(e for e in containers if e in pending)
+    for z, element in enumerate(ordered_objects, 1):
+        element.set("Z", str(z))
+
+
+def _valid_dependent_z(
+    leaves: list[ET.Element],
+    parents: dict[ET.Element, ET.Element],
+    byid: dict[str | None, ET.Element],
+) -> bool:
+    """Accept native owner-dependent labels/fallbacks without renumbering them.
+
+    ChemDraw omits Z on node labels and shares arrow Z with fallback graphics.
+    These have no independent ink. When every independent object already has
+    a unique rank, keep that native order instead of rebuilding fragment order
+    from the editor's separate bond/annotation/atom-label layers.
+    """
+    dependent: dict[ET.Element, ET.Element] = {}
+    for leaf in leaves:
+        parent = parents.get(leaf)
+        if leaf.tag == "t" and "Z" not in leaf.attrib:
+            if parent is not None and parent.tag == "n":
+                dependent[leaf] = parent
+        if leaf.tag == "graphic" and leaf.get("SupersededBy"):
+            target = byid.get(leaf.get("SupersededBy"))
+            if target is not None and target.tag == "arrow":
+                dependent[leaf] = target
+    if not dependent:
+        return False
+    independent = [e for e in leaves if e not in dependent]
+    ranks = {e: int(e.get("Z", "0")) for e in independent}
+    if (
+        len(set(ranks.values())) != len(ranks)
+        or any(not 0 < z <= _Z_MAX for z in ranks.values())
+        or any(owner not in ranks for owner in dependent.values())
+        or any(
+            leaf.tag == "graphic" and leaf.get("Z") != owner.get("Z")
+            for leaf, owner in dependent.items()
+        )
+    ):
+        return False
+    return True
 
 
 def _order_painters(
