@@ -27,6 +27,14 @@ def graphic_image(reader: Any, e: ET.Element) -> dict[str, object] | None:
     return _GraphicProjection(reader, e).render()
 
 
+def native_dash_length(reader: Any, e: ET.Element) -> float:
+    """HashSpacing supplies native dash and gap lengths in CDXML points."""
+    spacing = reader.number(reader.inherited(e, "HashSpacing", "2.5"), e)
+    if not 0 < spacing <= 1000:
+        reader.unsupported(e, "hash spacing")
+    return float(spacing)
+
+
 def native_image_z(
     reader: Any,
     e: ET.Element,
@@ -583,7 +591,9 @@ class _GraphicProjection:
                     dashed = True
                 if dashed and not fill:
                     phase = 0.0
-                    dash = max(1.0, self.width * scale * 4)
+                    # The bounded raster projection cannot resolve subpixel
+                    # dashes; retain its one-pixel minimum traversal step.
+                    dash = max(1.0, native_dash_length(self.reader, self.e) * scale)
                     for p, q in pairwise(coords):
                         length = math.dist(p, q)
                         position = 0.0

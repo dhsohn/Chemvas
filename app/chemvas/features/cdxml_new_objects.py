@@ -61,6 +61,18 @@ def append_new_objects(
                     p=f"{item['x'] + offset[0]:.12g} {item['y'] + offset[1] + float(root.get('CaptionSize', '12')):.12g}",
                 )
                 note_writer(root, e, item)
+                placement = item.get("native_caption")
+                if placement is not None:
+                    dx, dy, alignment, native_rotation = placement
+                    angle = math.radians(item.get("rotation", 0))
+                    x = item["x"] + dx * math.cos(angle) - dy * math.sin(angle)
+                    y = item["y"] + dx * math.sin(angle) + dy * math.cos(angle)
+                    e.set("p", f"{x + offset[0]:.12g} {y + offset[1]:.12g}")
+                    e.set("Justification", alignment)
+                    e.set(
+                        "RotationAngle",
+                        f"{(native_rotation + item.get('rotation', 0)) * 65536:.12g}",
+                    )
             elif kind == "arrows":
                 e = _append_arrow(page, item, point, fresh, color_index)
             elif kind == "shapes":

@@ -232,7 +232,8 @@ def test_scene_native_strokes_retain_metrics_during_edit_and_kind_change(attrs, 
             item, replace(record, kind="line_dashed", mirrored=False)
         )
         assert item.pen().widthF() == 0.75
-        assert item.pen().style() == Qt.PenStyle.DashLine
+        assert item.pen().style() == Qt.PenStyle.CustomDashLine
+        assert [v * item.pen().widthF() for v in item.pen().dashPattern()] == [2.5, 2.5]
         saved = service.snapshot_state()
         assert (
             ET.fromstring(update_native_document(saved))
@@ -394,7 +395,7 @@ def test_bold_arrow_thickens_only_its_shaft_like_chemdraw():
         assert abs(shape.boundingRect().height() - 2 * 2.5 * 0.6) < 0.05
 
 
-def test_bold_dashed_line_keeps_line_width_dash_period():
+def test_bold_dashed_line_keeps_native_dash_period():
     from PyQt6.QtCore import Qt
 
     from chemvas.bootstrap.document_cli_shared import offscreen_canvas
@@ -410,5 +411,5 @@ def test_bold_dashed_line_keeps_line_width_dash_period():
         pen = item.pen()
         assert pen.widthF() == 2.0
         assert pen.capStyle() == Qt.PenCapStyle.FlatCap
-        # Dash and gap are each four LineWidths (2.4 pt), not four BoldWidths.
-        assert [round(v * pen.widthF(), 6) for v in pen.dashPattern()] == [2.4, 2.4]
+        # The measured consumer SVG uses 50 twentieth-points for dash and gap.
+        assert [round(v * pen.widthF(), 6) for v in pen.dashPattern()] == [2.5, 2.5]

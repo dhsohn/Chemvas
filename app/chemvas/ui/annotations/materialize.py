@@ -127,6 +127,13 @@ def create_note_item_from_state(
     )
     note_style_applier(item)
     item.setRotation(float(cast("Any", note_state.get("rotation", 0.0))))
+    if isinstance(item, NoteItem) and "native_caption" in note_state:
+        item.set_native_caption(
+            cast(
+                "tuple[float, float, str, float]",
+                tuple(cast("list", note_state["native_caption"])),
+            )
+        )
     # The committed baseline must match the styled live document, otherwise
     # merely entering/leaving a restored note records a false format edit.
     set_committed_note_text_for(item, item.toPlainText())

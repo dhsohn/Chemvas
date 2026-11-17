@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from typing import TYPE_CHECKING, cast
 
 from PyQt6.QtCore import Qt
@@ -12,6 +13,27 @@ from chemvas.ui.canvas.graphics_items import NoSelectRectItem
 
 if TYPE_CHECKING:
     from chemvas.ui.canvas.canvas_text_style_state import CanvasTextStyleState
+
+
+class _NoteBox(NoSelectRectItem):
+    padding: float = 0.0
+    border_width: float = 0.0
+
+
+def refresh_note_box_geometry(item: QGraphicsTextItem) -> None:
+    box = item.data(20)
+    if not isinstance(box, _NoteBox):
+        return
+    transform = item.sceneTransform()
+    scale = math.hypot(transform.m11(), transform.m12())
+    if scale <= 0:
+        return
+    padding = box.padding / scale
+    box.setRect(item.boundingRect().adjusted(-padding, -padding, padding, padding))
+    pen = box.pen()
+    if pen.style() != Qt.PenStyle.NoPen:
+        pen.setWidthF(box.border_width / scale)
+        box.setPen(pen)
 
 
 def apply_note_style(item: QGraphicsTextItem, style: CanvasTextStyleState) -> None:
@@ -49,21 +71,19 @@ def apply_note_appearance(
 
 def update_note_box(item: QGraphicsTextItem, style: CanvasTextStyleState) -> None:
     box = item.data(20)
-    rect = item.boundingRect().adjusted(
-        -style.note_padding, -style.note_padding, style.note_padding, style.note_padding
-    )
     if not (style.note_box_enabled or style.note_border_enabled):
         if isinstance(box, QGraphicsRectItem):
             box.setVisible(False)
         return
-    if not isinstance(box, QGraphicsRectItem):
-        box = NoSelectRectItem(item)
+    if not isinstance(box, _NoteBox):
+        box = _NoteBox(item)
         box.setData(0, "note_box")
         box.setZValue(-1)
         box.setFlag(QGraphicsItem.GraphicsItemFlag.ItemStacksBehindParent, True)
         item.setData(20, box)
     box.setVisible(True)
-    box.setRect(rect)
+    box.padding = style.note_padding
+    box.border_width = style.note_border_width
     if style.note_box_enabled:
         fill = QColor(style.note_box_color)
         fill.setAlphaF(style.note_box_alpha)
@@ -76,3 +96,4 @@ def update_note_box(item: QGraphicsTextItem, style: CanvasTextStyleState) -> Non
         box.setPen(pen)
     else:
         box.setPen(QPen(Qt.PenStyle.NoPen))
+    refresh_note_box_geometry(item)

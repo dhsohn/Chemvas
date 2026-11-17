@@ -250,7 +250,11 @@ def _validate_note_fields(
     error: str,
 ) -> None:
     keys = set(note_state)
-    if not required_keys <= keys or not keys <= required_keys | {"html", "rotation"}:
+    if not required_keys <= keys or not keys <= required_keys | {
+        "html",
+        "rotation",
+        "native_caption",
+    }:
         raise ValueError(error)
     if not isinstance(note_state.get("text"), str):
         raise ValueError(error)
@@ -263,6 +267,15 @@ def _validate_note_fields(
         raise ValueError(error)
     if not _is_number(note_state.get("x")) or not _is_number(note_state.get("y")):
         raise ValueError(error)
+    if "native_caption" in note_state:
+        placement = note_state["native_caption"]
+        if (
+            not isinstance(placement, (list, tuple))
+            or len(placement) != 4
+            or not all(_is_number(placement[i]) for i in (0, 1, 3))
+            or placement[2] not in ("Left", "Center", "Right", "Justify")
+        ):
+            raise ValueError(error)
 
 
 def _validate_arrow_labels(labels: object, *, error: str) -> None:

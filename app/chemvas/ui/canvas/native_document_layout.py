@@ -1,4 +1,4 @@
-"""Transient layout derived from retained CDXML, without rewriting edit state."""
+"""Native caption typography and transient layout derived from retained CDXML."""
 
 from __future__ import annotations
 
@@ -8,8 +8,8 @@ from dataclasses import replace
 from itertools import pairwise
 from typing import TYPE_CHECKING
 
-from PyQt6.QtCore import Qt
-from PyQt6.QtGui import QTransform
+from PyQt6.QtCore import QSignalBlocker, Qt
+from PyQt6.QtGui import QImage, QTextCharFormat, QTextCursor, QTextFormat, QTransform
 
 from chemvas.domain.document.cdxml_source import parse_native_xml
 
@@ -191,6 +191,9 @@ def place_native_caption(
 
 def _place_caption(item, placement: tuple[float, float, str, float]) -> None:
     px, py, alignment, rotation = placement
+    scale = _caption_font_scale(item)
+    item.setTextWidth(-1)
+    item.setTextWidth(item.document().idealWidth())
     item.boundingRect()  # Materialize QTextLayout before reading its baseline.
     layout = item.document().begin().layout()
     line = layout.lineAt(0)
@@ -203,11 +206,103 @@ def _place_caption(item, placement: tuple[float, float, str, float]) -> None:
         QTransform()
         .translate(px, py)
         .rotate(rotation)
+        .scale(scale, scale)
         .translate(
             -layout.position().x() - anchor,
             -layout.position().y() - line.y() - line.ascent(),
         )
     )
+
+
+def _caption_font_scale(item) -> float:
+    """Shape native point fonts at 100x precision without changing their sizes.
+
+    Qt rounds the font engine's pixel size even for fractional point fonts.
+    A 7200-DPI layout device and a 1/100 scene transform retain hundredths of
+    a CDXML point, including mixed runs. Old snapshots containing pixel fonts
+    retain their existing layout and saved HTML.
+    """
+    document = item.document()
+    if not hasattr(item, "_native_caption_device"):
+        pixel_fonts = any(
+            f.toCharFormat().font().pixelSize() > 0 for f in document.allFormats()
+        )
+        item._native_caption_device = None
+        if not pixel_fonts:
+            device = QImage(1, 1, QImage.Format.Format_ARGB32_Premultiplied)
+            device.setDotsPerMeterX(round(7200 / 0.0254))
+            device.setDotsPerMeterY(round(7200 / 0.0254))
+            item._native_caption_device = device
+            document.documentLayout().setPaintDevice(device)
+    if item._native_caption_device is None:
+        # A clipboard wrapper supplies source defaults. Qt can retain both its
+        # point size and a run's overriding pixel size, paint with pixels, then
+        # serialize only points. Remove that shadowed property before publishing
+        # legacy pixel HTML so materializing the record keeps the painted size.
+        changes = []
+        block = document.begin()
+        while block.isValid():
+            fragments = block.begin()
+            while not fragments.atEnd():
+                fragment = fragments.fragment()
+                fmt = fragment.charFormat()
+                if fmt.font().pixelSize() > 0 and fmt.hasProperty(
+                    QTextFormat.Property.FontPointSize
+                ):
+                    fmt.clearProperty(QTextFormat.Property.FontPointSize)
+                    changes.append((fragment.position(), fragment.length(), fmt))
+                fragments += 1
+            block = block.next()
+        if changes:
+            with QSignalBlocker(document):
+                cursor = QTextCursor(document)
+                cursor.joinPreviousEditBlock()
+                for start, length, fmt in changes:
+                    cursor.setPosition(start)
+                    cursor.setPosition(start + length, QTextCursor.MoveMode.KeepAnchor)
+                    cursor.setCharFormat(fmt)
+                cursor.endEditBlock()
+        return 1.0
+
+    # Pasted HTML can introduce pixel fonts. In this native point document a
+    # requested 12px run means 12 scene points, not 12/100 of a point. Join the
+    # conversion to the text edit so one Undo still undoes the whole paste.
+    changes = []
+    largest_size = document.defaultFont().pointSizeF()
+    block = document.begin()
+    while block.isValid():
+        fragments = block.begin()
+        while not fragments.atEnd():
+            fragment = fragments.fragment()
+            font = fragment.charFormat().font()
+            pixels = font.pixelSize()
+            largest_size = max(largest_size, pixels, font.pointSizeF())
+            if pixels > 0:
+                changes.append((fragment.position(), fragment.length(), pixels))
+            fragments += 1
+        block = block.next()
+    if changes:
+        with QSignalBlocker(document):
+            cursor = QTextCursor(document)
+            cursor.joinPreviousEditBlock()
+            for start, length, pixels in changes:
+                cursor.setPosition(start)
+                cursor.setPosition(start + length, QTextCursor.MoveMode.KeepAnchor)
+                fmt = QTextCharFormat()
+                fmt.setFontPointSize(float(pixels))
+                cursor.mergeCharFormat(fmt)
+            cursor.endEditBlock()
+    # Large native captions are supported up to 1000pt. Keep the shaping
+    # engine below its glyph-size limit while retaining tenth-point precision.
+    resolution = 10 if largest_size > 300 else 100
+    dpi = 72 * resolution
+    if item._native_caption_device.logicalDpiY() != dpi:
+        device = QImage(1, 1, QImage.Format.Format_ARGB32_Premultiplied)
+        device.setDotsPerMeterX(round(dpi / 0.0254))
+        device.setDotsPerMeterY(round(dpi / 0.0254))
+        item._native_caption_device = device
+        document.documentLayout().setPaintDevice(device)
+    return 1 / resolution
 
 
 def apply_native_presentation(context: SceneRenderContext, item) -> None:
@@ -223,6 +318,8 @@ def apply_native_presentation(context: SceneRenderContext, item) -> None:
     if record_id in state.native_arrow_styles:
         context.arrows.render_record(item, context.arrows.record(item))
     placement = state.native_caption_placements.get(record_id)
+    if placement is None and record_id in state.note_state.records:
+        placement = state.note_state.records[record_id].native_caption
     if placement is not None:
         place_native_caption(item, placement)
     elif hasattr(item, "set_derived_layout"):

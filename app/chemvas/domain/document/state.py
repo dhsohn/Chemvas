@@ -516,6 +516,8 @@ def clipboard_state_document_record(
         }
         if "rotation" in item_state:
             note_state["rotation"] = item_state["rotation"]
+        if "native_caption" in item_state:
+            note_state["native_caption"] = item_state["native_caption"]
         html = item_state.get("html")
         if isinstance(html, str):
             note_state["html"] = html

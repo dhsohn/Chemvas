@@ -30,6 +30,7 @@ from chemvas.features.export import (
 from chemvas.ui.annotations.records import require_ts_bracket_record
 from chemvas.ui.canvas.graphics_items import AtomLabelItem, ExportTextItem
 from chemvas.ui.export.export_scope import collect_export_items, export_item_closure
+from chemvas.ui.molecule.native_atom_labels import NativeAtomLabelItem
 from chemvas.ui.scene.scene_item_access import item_is_unavailable_for_scene_operation
 
 if TYPE_CHECKING:
@@ -140,6 +141,12 @@ def _rich_text_sizes(item: QGraphicsTextItem) -> Iterator[_GlyphSize]:
 
 def _atom_sizes(item: AtomLabelItem) -> Iterator[_GlyphSize]:
     if item.defaultTextColor().alpha() == 0 or not item.toPlainText().strip():
+        return
+    if isinstance(item, NativeAtomLabelItem):
+        # Native outlines come directly from this already-shaped document.
+        # Measuring its runs retains fractional sizes, fallback faces and
+        # script sizes without switching or intercepting the paint path.
+        yield from _rich_text_sizes(item)
         return
     picture = QPicture()
     painter = _AtomFontPainter(picture)

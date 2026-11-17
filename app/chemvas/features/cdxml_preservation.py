@@ -276,13 +276,13 @@ class PreservingImporter:
             family = self.fonts.get(run.get("font"), self.caption_font)
             css = [
                 f"font-family: {_css_string_literal(family)}",
-                f"font-size: {size}px",
+                # Keep the fractional point size in Qt's editable HTML. Native
+                # caption layout supplies the points-to-scene conversion.
+                f"font-size: {size}pt",
                 f"color: {self.color(run)}",
+                f"font-weight:{700 if face & 1 else 400}",
+                f"font-style:{'italic' if face & 2 else 'normal'}",
             ]
-            if face & 1:
-                css.append("font-weight:700")
-            if face & 2:
-                css.append("font-style:italic")
             if face & 4:
                 css.append("text-decoration:underline")
             # 96 means chemical text with automatic baseline formatting.

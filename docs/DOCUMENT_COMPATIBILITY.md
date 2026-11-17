@@ -22,6 +22,19 @@ objects outside the editable drawing projection. Unsupported destructive edits
 fail before replacing the destination file. Binary CDX and multipage CDXML are
 not supported.
 
+Native caption runs retain their fractional point sizes, normal/bold/italic
+faces and baseline anchors. The editor and figure exports use the same precise
+layout; font availability and platform rasterization can still affect glyphs.
+Whole-note copying carries the caption's placement and font defaults into the
+destination document, including through Undo/Redo and save/reopen. Note box
+padding and border widths remain scene dimensions at either precision scale.
+Minimum-font SVG/PNG checks include native atom runs and their script sizes.
+Older Chemvas snapshots containing pixel-sized captions retain their existing
+size. Imported dashed drawing strokes use equal dashes and gaps from inherited
+`HashSpacing` (2.5 points by default); raster-only decorative projections retain
+their pixel quantization. These display corrections do not rewrite untouched
+native XML.
+
 MOL remains an import format; its working copy is saved as CDXML. SVG is figure
 output only; embedded Chemvas editing metadata is no longer read or written.
 Plain SVG, PDF and PNG remain figure export formats. Internal JSON snapshots

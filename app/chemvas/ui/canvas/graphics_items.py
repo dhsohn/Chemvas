@@ -412,7 +412,10 @@ class ExportTextItem(QGraphicsTextItem):
 
     @override
     def paint(self, painter, option, widget=None) -> None:
-        if not self._outline_mode:
+        native_display = hasattr(self, "_native_caption_device") and not (
+            self.textInteractionFlags() & Qt.TextInteractionFlag.TextEditable
+        )
+        if not (self._outline_mode or native_display):
             super().paint(painter, option, widget)
             return
         # Let Qt outline the rich text itself so shaping and baseline offsets
@@ -422,6 +425,13 @@ class ExportTextItem(QGraphicsTextItem):
         assert document is not None
         outlined = document.clone()
         assert outlined is not None
+        # Native captions use a high-resolution layout device to retain
+        # fractional point sizes. Cloning does not copy that device.
+        device = getattr(self, "_native_caption_device", None)
+        if device is not None:
+            outlined_layout = outlined.documentLayout()
+            assert outlined_layout is not None
+            outlined_layout.setPaintDevice(device)
         block = outlined.begin()
         while block.isValid():
             if block.textList() is not None:
