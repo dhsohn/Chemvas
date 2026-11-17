@@ -5,7 +5,7 @@ from unittest import mock
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from PyQt6.QtWidgets import QApplication, QLineEdit, QToolButton
+from PyQt6.QtWidgets import QApplication, QLineEdit, QMessageBox, QToolButton
 
 from chemvas.bootstrap.main_window import build_main_window
 from chemvas.core.document_io import ChemvasDocument
@@ -105,8 +105,12 @@ class MainWindowPanelActionsTest(unittest.TestCase):
 
         dialog.assert_called_once()
         self.assertEqual(dialog.call_args.args[2], "/tmp/current.cdxml")
+        canvas = active_canvas_for_window(self.window)
         save_path.assert_called_once_with(
-            self.window, str(Path("/tmp/new-drawing.cdxml")), canvas=None
+            self.window,
+            str(Path("/tmp/new-drawing.cdxml")),
+            canvas=canvas,
+            message_box=QMessageBox,
         )
 
     def test_load_menu_action_uses_dialog_path_and_handles_failure(self) -> None:
@@ -127,7 +131,7 @@ class MainWindowPanelActionsTest(unittest.TestCase):
                 return_value=("/tmp/input.cdxml", ""),
             ) as dialog,
             mock.patch(
-                "chemvas.ui.window.main_window_document_action_service.default_read_document",
+                "chemvas.ui.window.main_window_document_action_service.read_desktop_cdxml_document",
                 return_value=ChemvasDocument(
                     payload={}, state=state, source_sha256=source_sha256
                 ),
@@ -167,7 +171,7 @@ class MainWindowPanelActionsTest(unittest.TestCase):
                 return_value=("/tmp/broken.cdxml", ""),
             ),
             mock.patch(
-                "chemvas.ui.window.main_window_document_action_service.default_read_document",
+                "chemvas.ui.window.main_window_document_action_service.read_desktop_cdxml_document",
                 side_effect=RuntimeError("bad file"),
             ),
             mock.patch(
@@ -196,7 +200,7 @@ class MainWindowPanelActionsTest(unittest.TestCase):
                 return_value=("/tmp/restore-broken.cdxml", ""),
             ),
             mock.patch(
-                "chemvas.ui.window.main_window_document_action_service.default_read_document",
+                "chemvas.ui.window.main_window_document_action_service.read_desktop_cdxml_document",
                 return_value=ChemvasDocument(
                     payload={}, state={"model": {}}, source_sha256=source_sha256
                 ),
@@ -250,12 +254,12 @@ class MainWindowPanelActionsTest(unittest.TestCase):
         scene_transform.flip_selected_items = mock.Mock()
         self.assertFalse(undo_action.isEnabled())
         self.assertFalse(redo_action.isEnabled())
-        active_canvas_for_window(self.window).runtime_state.history_state.history = [
+        active_canvas_for_window(self.window).services.history_service.state.history = [
             object()
         ]
-        active_canvas_for_window(self.window).runtime_state.history_state.redo_stack = [
-            object()
-        ]
+        active_canvas_for_window(
+            self.window
+        ).services.history_service.state.redo_stack = [object()]
         self.window.services.action_availability_service.update_action_availability(
             self.window
         )

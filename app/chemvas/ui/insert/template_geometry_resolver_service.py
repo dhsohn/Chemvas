@@ -34,7 +34,7 @@ class TemplateGeometryResolverService:
             from PyQt6.QtCore import QPointF
 
             point_factory = QPointF
-        # The browser adapter resolves templates with its own point type.
+        # Headless callers may resolve templates with their own point type.
         self.point_factory = point_factory
 
     def point_resolvers(self) -> TemplatePointResolvers:

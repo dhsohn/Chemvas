@@ -7,22 +7,128 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Open native ChemDraw black `RectangleType="Plain"` rectangles with a positive
+  solid outline as editable shapes. Move, resize and delete write back to the
+  original `<graphic>`; adding a fill or changing the outline is refused before
+  the file is replaced. The canvas draws the outline at the regular shape width,
+  while the saved file keeps the native `LineWidth`. Coloured, styled, rotated
+  and linked-fallback rectangles stay raster.
+
+## [0.29.1] - 2026-11-17
+
+### Fixed
+
+- Honor CDXML's default foreground (palette index 3), inherited colors and
+  absolute black/white indexes 0/1. Adding the first custom color to a native
+  document now preserves its implicit background and foreground palette slots.
+- Render numeric CDXML curve closure, fill, bold, dash and arrow flags, and
+  explicit solid fills. Reject malformed or unsupported curve styles instead
+  of silently displaying a different outline.
+- Import and preserve ChemDraw's filled curves and rounded rectangles with zero
+  outline width. Native saves retain the established paint order when ChemDraw
+  omits atom-label ranks or shares arrow ranks with superseded graphics.
+- Preserve ChemDraw's fragment and group paint-order slots when saving native
+  documents, preventing colliding bond ranks from hiding chemistry behind fills.
+  Retain zero-width filled rectangles' native corner radii and display their
+  rounded corners using the document line width, as ChemDraw does on reopening.
+
+## [0.29.0] - 2026-11-14
+
 ### Added
 
-- Define equal desktop release acceptance for Windows, macOS and Linux, with
-  public CDXML documents for repeatable editing and export checks. Native bundle
-  installation acceptance remains pending.
+- Edit plain ChemDraw filled rectangles and circle-filled ovals in preserved
+  CDXML documents as vector shapes when local outline width is zero or
+  omitted.
 
 ### Changed
 
-- Import native ChemDraw black Plain and black Filled ``RectangleType`` graphics
-  as editable Chemvas shapes (solid stroke) and write move, resize, recolor and
-  delete back to the original ``<graphic>``. Coloured rectangles stay raster
-  because shapes have no stroke colour; RoundEdge, Shadow, dashed/bold and other
-  unsupported styles stay raster too. Documents previously saved with an
-  embedded Chemvas snapshot keep those rectangles as images until the snapshot
-  is invalidated; reopening native XML alone uses the shape binding for black
-  Plain/Filled.
+- Remove the duplicate `CanvasRuntimeState.history_state` alias;
+  `CanvasHistoryService.state` remains the single undo/redo stack reference,
+  and `DocumentSavepoint` captures history state only through its explicit
+  `history_service` argument.
+
+### Fixed
+
+- Reconfigure real `TextIOWrapper` `stdout` streams to UTF-8 for recognized
+  headless CLI commands so redirected non-UTF-8 Windows streams preserve
+  non-ASCII paths and text (such as Korean or emoji) in JSON output without
+  failing after output files are written.
+- Save and Save As cancel an unfinished pointer gesture before writing or
+  opening the save dialog, so a mid-drag shortcut no longer persists
+  uncommitted edits or marks the document clean.
+- Close window and tab prompts cancel an unfinished pointer gesture before
+  checking the saved-document dirty flag, so a mid-drag Cmd+W or Cmd+Q on a
+  clean saved drawing no longer shows a spurious Save Changes dialog.
+- Escape while placing a ring template cancels the preview and returns to
+  Select, keeping the toolbar, status bar, and context options in sync.
+- Apply toolbar and context-bar tool choices when assistive technology
+  activates a checkable button through Qt's accessibility toggle path, not only
+  through mouse click or keyboard shortcuts.
+- Re-apply the active Color swatch to a new selection when assistive technology
+  activates the already-checked preset swatch, without changing the displayed
+  preset or adding an extra undo step.
+- Reset the status-bar zoom readout to 100% when activated through Qt's
+  accessible click path, without intercepting delayed single- or double-click
+  mouse behavior or changing document state or undo history.
+- Retain destination paragraph line spacing when pasting or dropping plain
+  text or HTML into a note via Cmd+V/Ctrl+V, Edit > Paste, or drag-and-drop,
+  preserving rich character formatting and single-step undo with caret
+  restoration without recording an undo step for a no-op paste.
+- Preserve allowlisted note headings (`h1`–`h6`), preformatted blocks (`pre`),
+  and bounded tables (`table`, `tr`, `td`, `th`) with sanitized styles,
+  validated integer table/cell attributes, and repeated spaces across
+  working-document save, restore, and copy, while stripping external-resource
+  and active attributes, flattening oversized or ambiguous table-bearing markup
+  to cell text while keeping safe inline formatting, and continuing to refuse
+  strict native CDXML table export. The table grid preflight matches Qt span
+  placement on strictly nested saved markup; live paste and drop are unchanged.
+- Keep native CDXML rectangles, ovals, brackets and curves at their exact
+  stroke width. Their raster projection rounded a 0.6 pt stroke to 0.5 pt.
+- Draw ChemDraw Bold lines, arrows, curves, rectangles and ovals at the
+  document's BoldWidth instead of LineWidth, as ChemDraw does. Arrowheads stay
+  sized by LineWidth, and Bold dashed lines keep the LineWidth dash period.
+- Open ChemDraw CDXML files whose formula or molecular-weight captions are
+  linked chemical properties. The caption opens as ordinary text and the link
+  is preserved; editing or deleting the caption, or deleting part of its
+  structure, drops the link and keeps the caption as plain text.
+- Keep native highlights behind overlapping chemistry when distant objects have
+  lower Z values, while retaining foreground drawings over nearby bonds.
+- Fix working-document CDXML saves that retained ambiguous missing or duplicate
+  paint-order values. Where the live scene establishes an order, assign unique
+  positive INT16 Z values while preserving native chemistry, graphics, and
+  references. Refuse ambiguous overlapping order before replacing the file.
+- Preserve native atom-label formatting when CDXML text runs are indented,
+  retain high-precision caption font sizes through HTML sanitizing, and keep
+  explicit node label display separate from automatic token reordering while
+  preserving authored text anchors.
+- Preserve plain native atom labels when CDXML omits a run's font face, while
+  retaining explicit formula and subscript/superscript styles.
+- Update English and Korean export, reference, and image documentation to match
+  desktop Save/Save As CDXML working documents, CLI-only native CDXML export and
+  reviewed label bindings, the 1200 DPI Figure Export ceiling, and 0–100% Image
+  Properties opacity, align the Export Figure status tip (SVG/PDF/PNG/TIFF, not
+  CDXML), and show dialog-oriented Export Figure preview errors with native
+  accessibility name and description exposure that clears when settings are
+  valid.
+
+## [0.28.0] - 2026-11-04
+
+### Removed
+
+- The experimental browser editor (`chemvas --ui web`), which was never
+  distributed, has been retired; Leaf opens `.cdxml` documents in the desktop
+  app instead. `chemvas --ui web` now exits with a message saying so, and
+  `--ui qt` is still accepted. See ADR 0068.
+
+### Added
+
+- Show a notice when a document uses fonts that are unavailable and the
+  desktop app displays substitutes.
+- Define equal desktop release acceptance for Windows, macOS and Linux, with
+  public CDXML documents for repeatable editing and export checks. Native bundle
+  installation acceptance remains pending.
 
 ### Security
 
@@ -32,6 +138,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Save native CDXML after undoing deletion of newly attached atoms, retain
+  explicit carbon labels, and keep centered or right-aligned captions anchored
+  when edited and reopened.
+- Preserve the source font when saving edited native CDXML captions.
+- Reject new bonds to retained native CDXML fragment and nickname definitions
+  with undo guidance before replacing the file, instead of losing their internal
+  attachment mappings. Ordinary atom additions and supported explicit label
+  replacements remain available.
+- Preserve native CDXML fragment and nickname attachment mappings and bond-label
+  attachment offsets when restyling existing bonds, including order changes and
+  reversed direction. Offsets follow their original endpoint; stereo descriptors
+  and ordinary atom coordination are still invalidated conservatively.
+- Reject a retained CDXML source whose atom or bond bindings name records
+  missing from its baseline, bind an atom to anything but a top-level native
+  atom node, or bind a bond to anything but a native bond joining its atoms'
+  nodes. Saving such a snapshot previously failed with an internal error or
+  moved and rewrote the wrong native objects; it is now refused when the
+  document is opened or saved.
+- Undoing the deletion of an imported CDXML arrow or caption now redraws it with
+  its native line width, arrowhead geometry and caption placement instead of the
+  editor defaults, including when it was deleted as part of a group.
+- A failed document replacement now restores an imported CDXML document's
+  retained source, item bindings and native arrow styles, instead of failing
+  its own rollback check and leaving a blank canvas.
+- Keep ChemDraw stereo descriptors (``AS``, ``BS``, ``CIP``) when saving an
+  imported CDXML after recoloring atoms or bonds or moving a double bond's second
+  line; a recolored bond now writes only its new color. Edits that can change
+  stereochemistry (bond order, wedge or hash, topology, element, charge, atom
+  positions) now drop those descriptors across the whole fragment, including
+  double-bond ``BS`` after atom moves, instead of only on the edited atoms.
+- Allow native CDXML saves after deleting a bond from a surviving elemental
+  atom by dropping its stale ``BondOrdering`` and ``Geometry``. Keep valid
+  ordering on untouched atoms and continue refusing deletions that break
+  contracted-node attachment mappings or other native references.
 - Refuse alias and ambiguous atom labels (Ac, Ts, Ar) when editing imported
   ChemDraw CDXML in place, matching fresh export; they are no longer written as
   actinium, tennessine or argon. Expand short ``#rgb`` colors such as ``#f00``
@@ -3220,7 +3360,10 @@ housekeeping.
   `.chemvas` document type (double-clicking a file opens it in Chemvas), and a
   Linux `.desktop` entry with an `application/x-chemvas` MIME type.
 
-[Unreleased]: https://github.com/dhsohn/Chemvas/compare/v0.25.0...HEAD
+[Unreleased]: https://github.com/dhsohn/Chemvas/compare/v0.29.1...HEAD
+[0.29.1]: https://github.com/dhsohn/Chemvas/compare/v0.29.0...v0.29.1
+[0.29.0]: https://github.com/dhsohn/Chemvas/compare/v0.28.0...v0.29.0
+[0.28.0]: https://github.com/dhsohn/Chemvas/compare/v0.27.1...v0.28.0
 [0.25.0]: https://github.com/dhsohn/Chemvas/compare/v0.24.0...v0.25.0
 [0.24.0]: https://github.com/dhsohn/Chemvas/compare/v0.23.0...v0.24.0
 [0.23.0]: https://github.com/dhsohn/Chemvas/compare/v0.22.0...v0.23.0

@@ -406,9 +406,9 @@ def _planned_template(
         if plan.generator == "benzene"
         else None
     )
-    resolved_orders = StructureBuildCommitter(canvas).resolved_ring_bond_orders(
-        ring_ids, orders
-    )
+    resolved_orders = StructureBuildCommitter.for_canvas(
+        canvas
+    ).resolved_ring_bond_orders(ring_ids, orders)
     original_pairs = {
         frozenset((bond.a, bond.b)) for bond in original.bonds if bond is not None
     }

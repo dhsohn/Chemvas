@@ -209,7 +209,8 @@ class CanvasInputControllerTest(unittest.TestCase):
         canvas.runtime_state.insert_state.template_active = True
         template_event = _FakeEvent(key=Qt.Key.Key_Escape)
         controller.key_press_event(template_event)
-        canvas.services.insert_controller.cancel_template_insert.assert_called_once_with()
+        canvas.tool_mode_controller.set_tool.assert_called_once_with("select")
+        canvas.services.insert_controller.cancel_template_insert.assert_not_called()
         template_event.accept.assert_called_once_with()
 
         canvas = _Canvas()

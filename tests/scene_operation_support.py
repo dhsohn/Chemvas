@@ -291,7 +291,7 @@ class _FakeCanvas:
             ),
         )
 
-        geometry = CanvasMoveController(
+        geometry = CanvasMoveController.for_canvas(
             self, hit_testing_service=self.services.hit_testing_service
         )
         geometry.update_bond_geometries_for_atoms = lambda atom_ids, **_kwargs: (

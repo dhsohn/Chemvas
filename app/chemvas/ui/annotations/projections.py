@@ -17,6 +17,7 @@ from chemvas.domain.document.shapes import shape_to_state
 from chemvas.domain.document.ts_brackets import ts_bracket_to_state
 from chemvas.ui.annotations.materialize import create_scene_item_from_state
 from chemvas.ui.canvas.canvas_scene_items_state import DOCUMENT_COLLECTION_STATES
+from chemvas.ui.canvas.native_document_layout import apply_native_presentation
 from chemvas.ui.scene.note_item_access import new_note_item_for
 from chemvas.ui.scene.scene_record_ids import (
     bind_scene_record,
@@ -103,6 +104,9 @@ def resolve_projection(canvas, record_id: int, state: dict | None = None):
     bind_scene_record(item, document, record_id)
     if state.get("kind") == "mark" and "item_pos" in state:
         item.setPos(*state["item_pos"])
+    # Materialization drew under the temporary ID; the retained native
+    # presentation is keyed by the record's own ID, as at document load.
+    apply_native_presentation(canvas.render_context, item)
     runtime.scene_items_state.projections[record_id] = item
     return item
 

@@ -98,7 +98,6 @@ _DELETE_MUTATED_RUNTIME_FIELDS = (
     "scene_clipboard_state",
     "insert_state",
     "rotation_state",
-    "history_state",
     "calculation_plan_state",
     "tool_settings_state",
     "text_style_state",
@@ -217,16 +216,6 @@ class DocumentSavepoint:
 
         runtime_states: dict[str, object | None] = {}
         for name in _DELETE_MUTATED_RUNTIME_FIELDS:
-            # A publication checkpoint intentionally excludes history: pushing
-            # the command is the expected delta being published, while the
-            # caller verifies that delta with its independently captured
-            # HistoryStackSnapshot/checkpoint. Including the runtime-owned
-            # alias here would reject every successful push as a canvas
-            # mutation even when ``history_service=None`` was explicitly
-            # requested for that purpose.
-            if name == "history_state" and history_service is None:
-                runtime_states[name] = None
-                continue
             state = runtime_state_object_for(canvas, name)
             runtime_states[name] = state
             append(state)

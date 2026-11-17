@@ -40,7 +40,7 @@ def _target():
 def _builder_for(canvas: _FakeCanvas) -> StructureBondBuildService:
     return StructureBondBuildService(
         canvas,
-        StructureBuildCommitter(canvas),
+        StructureBuildCommitter.for_canvas(canvas),
         hit_testing_service=canvas.services.hit_testing_service,
         move_controller=canvas.services.move_controller,
         graph_service=canvas.services.graph_service,

@@ -1,6 +1,6 @@
 # ADR 0032: Browser chemical clipboard and recovery drafts
 
-- Status: Accepted
+- Status: Superseded by [ADR 0068](0068-retire-browser-adapter.md)
 - Date: 2026-10-03
 - Extends: [ADR 0005](0005-responsibility-based-editor-boundaries.md), [ADR 0029](0029-browser-adapter.md)
 

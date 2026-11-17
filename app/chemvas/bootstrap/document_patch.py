@@ -50,7 +50,7 @@ def run(argv: list[str]) -> int:
 def _argument_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="chemvas",
-        description="Chemvas LLM-safe document inspection and graph/note patch tools.",
+        description="Chemvas document inspection and graph/note patch tools.",
     )
     subparsers = parser.add_subparsers(dest="command", required=True)
     inspect_parser = subparsers.add_parser(

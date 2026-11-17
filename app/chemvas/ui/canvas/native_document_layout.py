@@ -5,10 +5,88 @@ from __future__ import annotations
 import math
 from contextlib import contextmanager
 from dataclasses import replace
+from itertools import pairwise
+from typing import TYPE_CHECKING
 
+from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QTransform
 
 from chemvas.domain.document.cdxml_source import parse_native_xml
+
+if TYPE_CHECKING:
+    from PyQt6.QtWidgets import QGraphicsItem
+
+    from chemvas.ui.scene.scene_render_context import SceneRenderContext
+
+
+def native_object_projections(
+    context: SceneRenderContext,
+) -> dict[tuple[str, str | int], list[QGraphicsItem]]:
+    """Graphics keyed by the existing native writer's stable record bindings."""
+    from chemvas.ui.canvas.canvas_document_state import GROUP_COLLECTION_STATES
+    from chemvas.ui.export.export_scope import export_item_closure
+
+    projections: dict[tuple[str, str | int], list[QGraphicsItem]] = {}
+    atoms = context.state.atom_graphics_state
+    for collection in (atoms.atom_items, atoms.atom_dots):
+        for aid, item in collection.items():
+            projections.setdefault(("atoms", str(aid)), []).append(item)
+    for bid, bond in enumerate(context.model.bonds):
+        if bond is not None:
+            key = f"{min(bond.a, bond.b)}:{max(bond.a, bond.b)}"
+            projections["bonds", key] = list(
+                context.state.bond_graphics_state.bond_items.get(bid, ())
+            )
+    for kind, name in GROUP_COLLECTION_STATES.items():
+        for index, item in enumerate(context.state.scene_items(name)):
+            if item is not None:
+                projections[kind, index] = [item]
+    return {key: export_item_closure(items) for key, items in projections.items()}
+
+
+def restore_native_paint_order(context: SceneRenderContext, state: dict) -> None:
+    """Restore retained native order within the editor's existing paint layers.
+
+    Graph IDs and model array order are unchanged. Missing/tied source ranks
+    retain the renderer's stable insertion order. Cross-layer orders still use
+    the established native presentation; save verifies their reconstruction.
+    """
+    source = state.get("cdxml_source")
+    if source is None:
+        return
+    root = parse_native_xml(source["xml"])
+    byid = {
+        e.get("id"): float(e.get("Z", "0"))
+        for e in root.iter()
+        if e.tag not in {"font", "objecttag"} and e.get("id") is not None
+    }
+    bindings = {
+        (kind, key): identity
+        for kind in ("atoms", "bonds")
+        for key, identity in source[kind].items()
+    }
+    bindings.update(
+        ((kind, index), identity)
+        for kind, identities in source["items"].items()
+        for index, identity in enumerate(identities)
+        if identity is not None
+    )
+    native_z = {
+        item: byid[bindings[key]]
+        for key, items in native_object_projections(context).items()
+        if key in bindings
+        for item in items
+    }
+    bands: dict[tuple[QGraphicsItem | None, float], list[QGraphicsItem]] = {}
+    for item in context.scene.items(Qt.SortOrder.AscendingOrder):
+        bands.setdefault((item.parentItem(), item.zValue()), []).append(item)
+    for items in bands.values():
+        bound = iter(
+            sorted((i for i in items if i in native_z), key=native_z.__getitem__)
+        )
+        ordered = [next(bound) if i in native_z else i for i in items]
+        for above, below in pairwise(reversed(ordered)):
+            below.stackBefore(above)
 
 
 def native_bond_metrics(state: dict) -> dict[tuple[int, int], dict[str, float]]:
@@ -100,6 +178,18 @@ def place_native_caption(
 ) -> None:
     if placement is None:
         return
+    set_derived_layout = getattr(item, "set_derived_layout", None)
+    if set_derived_layout is not None:
+        # Editable captions re-anchor whenever their text or format changes;
+        # the installer applies the placement once immediately.
+        set_derived_layout(lambda note: _place_caption(note, placement))
+    else:
+        _place_caption(item, placement)
+    # Captions are annotations above the retained graphic projections.
+    item.setZValue(2)
+
+
+def _place_caption(item, placement: tuple[float, float, str, float]) -> None:
     px, py, alignment, rotation = placement
     item.boundingRect()  # Materialize QTextLayout before reading its baseline.
     layout = item.document().begin().layout()
@@ -118,5 +208,23 @@ def place_native_caption(
             -layout.position().y() - line.y() - line.ascent(),
         )
     )
-    # Captions are annotations above the retained graphic projections.
-    item.setZValue(2)
+
+
+def apply_native_presentation(context: SceneRenderContext, item) -> None:
+    """Give an annotation projection its retained CDXML presentation.
+
+    Document load and history re-creation both call this once the item
+    carries its final record ID. The native styles and caption placements are
+    keyed by that ID, so a projection materialized under a temporary ID was
+    drawn without them.
+    """
+    record_id = item.data(3)
+    state = context.state
+    if record_id in state.native_arrow_styles:
+        context.arrows.render_record(item, context.arrows.record(item))
+    placement = state.native_caption_placements.get(record_id)
+    if placement is not None:
+        place_native_caption(item, placement)
+    elif hasattr(item, "set_derived_layout"):
+        # A projection without a retained caption anchor keeps Qt's layout.
+        item.set_derived_layout(None)

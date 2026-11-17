@@ -1,10 +1,7 @@
 # Architecture
 
-The browser presentation adapter is described in [WEB_ADAPTER.md](WEB_ADAPTER.md)
-and [ADR 0029](adr/0029-browser-adapter.md). Its Python session
-reuses existing document and feature APIs and CanvasHistoryService. The browser
-mirrors accepted state; toolbar definitions and artwork come from the existing
-desktop owners. SVG materialization and event wiring are cohesive adapters. The Qt architecture below remains the default desktop editor.
+Chemvas is the Qt desktop editor described below and its headless CLI. The
+former browser adapter was retired ([ADR 0068](adr/0068-retire-browser-adapter.md)).
 
 [한국어](ARCHITECTURE.ko.md)
 
@@ -63,7 +60,7 @@ the editor, not layers below it.
 
 - **Feature ownership**: Interaction workflows are centered in controllers, which call concrete collaborators directly. Each canvas-owned collaborator has one spelling: runtimes are `canvas.services.<name>` (a flat `CanvasRuntimeServices`), state is `canvas.runtime_state.<name>`, and the objects canvas setup creates are `canvas.model`, `canvas.renderer`, `canvas.render_context` and `canvas.bond_renderer`. Modules that only forwarded to one of those spellings were removed ([ADR 0012](adr/0012-flat-editor-runtime-and-ui-packages.md)).
 - **Service dependencies**: Graph queries receive a current-model provider, renderer and graph cache. Bond edits and ring fills use the existing `SceneRenderContext`; shortcuts receive their model provider, hover state and concrete editing collaborators. Document replacement therefore remains visible at invocation time without giving these services the whole view. View-level lifecycle and input controllers retain a typed `CanvasView`. Runtime assembly and history adapters use concrete types; note editing (`CanvasNoteController`) requires injected selection and history collaborators without `canvas.services` fallback or direct note-selection state mutation, and mark edits and history recording require an injected history service. Graph, shortcut and note-controller modules are checked in strict mode. Heterogeneous scene snapshots and command composition still have dynamic parts. Reproducible edit/Undo/Redo measurements are described in [the performance baseline](performance/README.md).
-- **State ownership**: `CanvasRuntimeState` is the single owner of canvas runtime state and extends `SceneRenderState`. Other modules interact via the owner's public interface without duplicate state; history, invalidation, and lifecycle management remain the owner's responsibility.
+- **State ownership**: `CanvasRuntimeState` owns canvas scene and input runtime state (extending `SceneRenderState`), and `CanvasHistoryService` owns the undo/redo stacks (`history_service.state`). Other modules interact via each owner's public interface without duplicate state; history, invalidation, and lifecycle management remain the owner's responsibility.
 - **Dynamic dependencies and lifecycle**: Window actions resolve the active document at invocation time. The shared render context tracks replacement models and scenes, adhering to lifecycle contracts.
 - **Document models and scene separation**: Molecular graphs and `AnnotationCollection` own document data independently of Qt. All eight annotation families use this collection for membership, order and saved values; graphics items are projections keyed by runtime ID ([ADR 0010](adr/0010-document-owned-notes-and-marks.md)).
 - **Dependency boundaries**: `domain`, `core`, and `features` remain Qt-free. Desktop Qt implementations belong in `ui`, with framework adapters in `adapters` and application wiring in `bootstrap`. Features must not depend on adapters, editor widgets, or application entry points. Cross-package eager imports remain acyclic.
@@ -187,7 +184,14 @@ the saved group format.
 
 Notes retain plain text, sanitized HTML, position and rotation in document records.
 Native editor changes publish those values while Qt retains cursor, focus and
-text Undo. Marks retain kind, text, atom binding, offsets, center and color;
+text Undo. Sanitized note HTML preserves allowlisted heading (`h1`–`h6`),
+preformatted (`pre`) and bounded table (`table`, `tr`, `td`, `th`) structure
+alongside inline, paragraph and list formatting while stripping external-resource
+and event attributes; notes that exceed the table grid slot budget or carry
+ambiguous table-bearing markup on the persistence path keep cell text and safe
+inline formatting without table layout. Live paste and drop reach Qt before this
+guard ([ADR 0071](adr/0071-bounded-note-table-grid-preflight.md)). Marks retain kind,
+text, atom binding, offsets, center and color;
 metadata roles are derived from these records. Save, atom-bound mark copying and
 electronic-state reconciliation read records even when views are absent. Failed
 native frame restoration reinstates the captured record after position, font and
@@ -308,12 +312,13 @@ math, preparing distinct live and baseline arrow records (`ImageArrowPromotion`)
 before `promote_linked_images_to_arrows` stages and publishes both projections
 in each projection's image order while preserving retained image order
 ([ADR 0060](adr/0060-editable-native-arrows-and-local-platform-gates.md)).
-`features.cdxml_editable_rectangles` maps black Plain and black Filled native
-rectangles to bound shape records and rewrites `BoundingBox`, `RectangleType`
-and `color` on save; coloured rectangles stay raster because shapes have no
-stroke colour, and other rectangle styles remain raster projections. A
-preparation failure leaves the input unchanged, and `xml`, `offset`, atom/bond
-bindings, unsupported native XML and the persisted schema stay unchanged.
+`features.cdxml_editable_shapes` maps fill-only native rectangles and circles and
+black outlined Plain rectangles to bound shape records. Outlined rectangles
+support only move, resize and delete through `transform_native`; coloured or
+unsupported styles stay raster projections
+([ADR 0072](adr/0072-outlined-black-native-cdxml-rectangles.md)). A preparation
+failure leaves the input unchanged, and `xml`, `offset`, atom/bond bindings,
+unsupported native XML and the persisted schema stay unchanged.
 `ui.canvas.canvas_cdxml_source` retains the boundary between runtime
 `AnnotationCollection` record IDs and persisted positional bindings.
 
@@ -377,12 +382,6 @@ Simple bond-length and bond-update history commands reuse
 `history_command_transaction`. Document replacement snapshots require the native
 Qt scene contract rather than alternate test-only scene representations.
 
-Browser chemical clipboard operations reuse the canonical selection payload builder
-and paste planner, preserving atom ID remapping, groups and annotation transforms
-without a parallel chemistry schema. Automatic browser drafts are managed
-independently of Qt recovery by `bootstrap/web_drafts.py`, using single-server
-process locking and envelope storage ([ADR 0032](adr/0032-browser-clipboard-and-drafts.md)).
-
 - [ADR 0025: Shared atom position mutation](adr/0025-shared-atom-position-mutation.md)
 - [ADR 0026: Endpoint selection draft](adr/0026-endpoint-selection-draft.md)
 - [ADR 0027: Record-based annotation transforms](adr/0027-record-based-annotation-transforms.md)
@@ -435,3 +434,7 @@ process locking and envelope storage ([ADR 0032](adr/0032-browser-clipboard-and-
 - [ADR 0065: Three-platform desktop release acceptance](adr/0065-three-platform-release-acceptance.md)
 - [ADR 0066: Linux per-user frozen installation](adr/0066-linux-user-installation.md)
 - [ADR 0067: Coupled native CDXML collections](adr/0067-coupled-native-cdxml-collections.md)
+- [ADR 0068: Retire the browser adapter](adr/0068-retire-browser-adapter.md)
+- [ADR 0069: Plain filled native CDXML shapes](adr/0069-plain-filled-native-cdxml-shapes.md)
+- [ADR 0071: Bounded note table grid preflight](adr/0071-bounded-note-table-grid-preflight.md)
+- [ADR 0072: Outlined black native CDXML rectangles](adr/0072-outlined-black-native-cdxml-rectangles.md)

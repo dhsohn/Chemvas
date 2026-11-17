@@ -114,6 +114,12 @@ def normalized_shape(shape: Shape) -> Shape:
     )
 
 
+def inscribed_circle_size(width: float, height: float) -> tuple[float, float]:
+    """Return the diameter and radius of the circle inscribed in a box."""
+    diameter = min(width, height)
+    return diameter, diameter / 2
+
+
 def moved_shape(shape: Shape, dx: float, dy: float) -> Shape:
     return replace(
         shape,
@@ -126,6 +132,7 @@ def moved_shape(shape: Shape, dx: float, dy: float) -> Shape:
 
 __all__ = [
     "Shape",
+    "inscribed_circle_size",
     "moved_shape",
     "normalized_shape",
     "shape_from_state",

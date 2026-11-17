@@ -71,8 +71,6 @@ where = ["app"]
 include = ["chemvas*"]
 namespaces = false
 
-# The experimental browser editor (web/ assets and bootstrap/web_*.py) runs from
-# a source checkout only; setup.py keeps its modules out of distributions.
 [tool.setuptools.package-data]
 chemvas = ["assets/icon/*.svg", "assets/icon/*.png"]
 

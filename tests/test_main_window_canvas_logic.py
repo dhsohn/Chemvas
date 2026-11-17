@@ -39,7 +39,6 @@ class MainWindowCanvasLogicTest(unittest.TestCase):
             operations, history_state, replay_context=nullcontext
         )
         canvas.runtime_state = canvas_runtime_state(
-            history_state=history_state,
             history_service=history_service,
             callback_state=CanvasCallbackState(),
             selection_info_state=SelectionInfoState(),
@@ -147,7 +146,7 @@ class MainWindowCanvasLogicTest(unittest.TestCase):
             document_change_callback,
         )
         self.assertIs(
-            active_canvas.runtime_state.history_state.change_callback,
+            active_canvas.services.history_service.state.change_callback,
             history_change_callback,
         )
         self.assertIsNone(inactive_canvas.runtime_state.selection_info_state.callback)
@@ -155,4 +154,6 @@ class MainWindowCanvasLogicTest(unittest.TestCase):
         self.assertIsNone(inactive_canvas.runtime_state.callback_state.tool_change)
         self.assertIsNone(inactive_canvas.runtime_state.callback_state.zoom)
         self.assertIsNone(inactive_canvas.runtime_state.callback_state.document_change)
-        self.assertIsNone(inactive_canvas.runtime_state.history_state.change_callback)
+        self.assertIsNone(
+            inactive_canvas.services.history_service.state.change_callback
+        )

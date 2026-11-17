@@ -34,6 +34,7 @@ class NativeAtomLabel:
     justification: str
     line_height: float | None
     rotation: float = 0.0
+    automatic_display: bool = True
 
 
 def native_atom_labels(state: dict) -> dict[int, NativeAtomLabel]:
@@ -70,24 +71,41 @@ def native_atom_labels(state: dict) -> dict[int, NativeAtomLabel]:
                     run.text or "",
                     family,
                     size,
-                    int(run.get("face", root.get("LabelFace", "96"))),
+                    # Native CDXML omits face=0 even under LabelFace=96.
+                    # An existing style run defaults to plain, not formula.
+                    int(run.get("face", "0")),
                 )
             )
+        # Explicit node display must not trigger automatic token reversal or
+        # stacking; explicit stacks retain the source's authored line breaks.
+        # The text's alignment is the resolved automatic direction; its
+        # justification independently locates the authored baseline at t.p.
+        alignment = node.get("LabelDisplay", "Auto")
+        automatic_display = alignment not in {
+            "Left",
+            "Center",
+            "Right",
+            "Above",
+            "Below",
+        }
+        if automatic_display:
+            alignment = text.get("LabelAlignment", "Left")
         labels[int(atom_id)] = NativeAtomLabel(
             "".join(r[0] for r in runs).strip(),
             (position[0] - atom_position[0], position[1] - atom_position[1]),
             tuple(runs),
-            text.get("LabelAlignment", "Left"),
+            alignment,
             text.get("LabelJustification", "Left"),
             (
                 float(text.get("BoundingBox", "").split()[3])
                 - float(text.get("BoundingBox", "").split()[1])
             )
             / 2
-            if text.get("LabelAlignment") in {"Above", "Below"}
+            if alignment in {"Above", "Below"}
             and len(text.get("BoundingBox", "").split()) == 4
             else None,
             float(text.get("RotationAngle", "0")) / 65536,
+            automatic_display=automatic_display,
         )
     return labels
 
@@ -135,7 +153,7 @@ class NativeAtomLabelItem(AtomLabelItem):
         # Drop any fixed stack pitch left by a previously applied native label.
         cursor.setBlockFormat(QTextBlockFormat())
         runs = label.runs
-        if len(runs) == 1 and runs[0][3] & 0x60 == 0x60:
+        if label.automatic_display and len(runs) == 1 and runs[0][3] & 0x60 == 0x60:
             text, family, size, face = runs[0]
             if label.alignment == "Right":
                 text = reversed_display_text(text) or text

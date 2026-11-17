@@ -118,7 +118,14 @@ def parse_native_xml(xml: str) -> ET.Element:
     return root
 
 
-def validate_cdxml_source(source: object, state: Mapping[str, object]) -> None:
+def validate_cdxml_source(source: object, state: Mapping[str, object]) -> ET.Element:
+    """Validate retained provenance and return its freshly parsed native tree.
+
+    Bindings are checked against what the native writer relies on, not only
+    that their IDs exist: atom and bond keys name baseline records, an atom
+    binds a top-level ``<n>``, and a bond binds a ``<b>`` joining its atoms'
+    bound nodes.
+    """
     if not isinstance(source, dict) or set(source) != {
         "xml",
         "offset",
@@ -164,6 +171,55 @@ def validate_cdxml_source(source: object, state: Mapping[str, object]) -> None:
 
     _validate_canvas_state(baseline)
     _validate_item_bindings(source["baseline_items"], baseline, ids)
+    _validate_structure_bindings(source, baseline, root)
+    return root
+
+
+def _validate_structure_bindings(
+    source: Mapping[str, Any], baseline: Mapping[str, Any], root: ET.Element
+) -> None:
+    """Tie atom and bond bindings to baseline records and their native roles.
+
+    Bindings are keyed by the baseline model, which survives later deletions
+    in the live model, so deleted atoms and bonds stay valid here.
+    """
+    by_id = {
+        e.attrib["id"]: e
+        for e in root.iter()
+        if e.tag not in {"font", "objecttag"} and e.get("id") is not None
+    }
+    inside_atom = {
+        descendant
+        for node in root.iter("n")
+        for child in node
+        for descendant in child.iter()
+    }
+    model = baseline["model"]
+    baseline_atoms = {str(atom_id) for atom_id in model["atoms"]}
+    atoms: Mapping[str, str] = source["atoms"]
+    for key, native_id in atoms.items():
+        node = by_id[native_id]
+        if str(key) not in baseline_atoms or node.tag != "n" or node in inside_atom:
+            raise ValueError("Invalid CDXML atoms bindings.")
+    native_atoms = {str(key): native_id for key, native_id in atoms.items()}
+    baseline_bonds = {
+        f"{min(bond['a'], bond['b'])}:{max(bond['a'], bond['b'])}"
+        for bond in model["bonds"]
+        if bond is not None
+    }
+    bonds: Mapping[str, str] = source["bonds"]
+    for key, native_id in bonds.items():
+        ends = str(key).split(":")
+        node = by_id[native_id]
+        if (
+            len(ends) != 2
+            or str(key) not in baseline_bonds
+            or node.tag != "b"
+            or node in inside_atom
+            or any(end not in native_atoms for end in ends)
+            or {node.get("B"), node.get("E")} != {native_atoms[end] for end in ends}
+        ):
+            raise ValueError("Invalid CDXML bonds bindings.")
 
 
 def native_ids_for_collection(

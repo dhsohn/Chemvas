@@ -684,13 +684,20 @@ def build_color_palette_page(
 ) -> ButtonGroupPage:
     page, layout = new_context_page()
     group = QButtonGroup(page)
-    buttons = {}
+    # Exclusive groups reject accessibility toggle on the already-checked swatch.
+    group.setExclusive(not checkable)
+    buttons: dict[str, QToolButton] = {}
     selected_color = QColor("#000000")
 
     def apply_color(value: str) -> None:
         nonlocal selected_color
         selected_color = QColor(value)
         apply_preset(value)
+        if checkable:
+            for hex_value_key, button in buttons.items():
+                blocked = button.blockSignals(True)
+                button.setChecked(hex_value_key == value)
+                button.blockSignals(blocked)
 
     def choose_color() -> None:
         color = QColorDialog.getColor(selected_color, page, tooltip_prefix)

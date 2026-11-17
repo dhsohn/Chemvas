@@ -6,7 +6,7 @@ import math
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from chemvas.core.document_io import atomic_write_via_temp
+from chemvas.core.document_io import atomic_create_bytes, atomic_write_via_temp
 from chemvas.features.export import (
     ExportPlan,
     points_for_mm,
@@ -111,6 +111,9 @@ class FigureExportService:
         then is the stated meaning handed to the exporter, which still decides
         whether that meaning fits the label.
         """
+        from chemvas.features.export import (
+            LABEL_BINDING_FIELD_NAMES,
+        )
         from chemvas.ui.export.export_cdxml import CdxmlLabelBinding
         from chemvas.ui.export.export_scope import export_item_closure
 
@@ -138,9 +141,7 @@ class FigureExportService:
                 )
             typed[entry.atom_id] = CdxmlLabelBinding(
                 entry.meaning,
-                element=entry.element,
-                fragment=entry.fragment,
-                author_note=entry.author_note,
+                **{name: getattr(entry, name) for name in LABEL_BINDING_FIELD_NAMES},
             )
         return typed
 
@@ -211,6 +212,7 @@ class FigureExportService:
         min_font_pt: float | None = None,
         label_bindings: CdxmlLabelBindings | None = None,
         layout_reference: CdxmlTextLayoutReference | None = None,
+        create_only: bool = False,
     ) -> ExportPlan:
         if label_bindings is not None and fmt.lower() != "cdxml":
             raise ValueError(
@@ -282,7 +284,10 @@ class FigureExportService:
             def write_cdxml(tmp: Path) -> None:
                 tmp.write_bytes(cdxml_bytes)
 
-            atomic_write_via_temp(Path(path), write_cdxml)
+            if create_only:
+                atomic_create_bytes(path, cdxml_bytes)
+            else:
+                atomic_write_via_temp(Path(path), write_cdxml)
             return plan
 
         if min_font_pt is not None:

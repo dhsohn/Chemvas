@@ -477,7 +477,7 @@ def curved_control_point(start: Point2D, end: Point2D) -> Point2D:
 def new_arrow_record(
     start: Point2D, end: Point2D, kind: str, *, mirrored: bool = False
 ) -> Arrow:
-    """Build the initial record shared by native and browser drawing."""
+    """Build the initial record for a newly drawn arrow."""
     return normalized_arrow_control(
         Arrow(
             kind="arrow" if kind == "reaction" else kind,

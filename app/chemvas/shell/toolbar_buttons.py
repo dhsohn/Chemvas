@@ -22,6 +22,46 @@ def _chevron_icon(direction: str) -> QIcon:
     return icon
 
 
+class ActionToolButton(QToolButton):
+    """Apply Qt's accessibility toggle like a click.
+
+    ``QAccessibleButton`` toggles a checkable button with the non-virtual
+    ``toggle()``, which only calls ``setChecked()``. Every click path (mouse,
+    Space, ``click()``) and a button group's exclusivity go through
+    ``nextCheckState()`` instead.
+    """
+
+    _in_next_check_state = False
+
+    @override
+    def nextCheckState(self) -> None:
+        self._in_next_check_state = True
+        try:
+            super().nextCheckState()
+        finally:
+            self._in_next_check_state = False
+
+    @override
+    def checkStateSet(self) -> None:
+        action = self.defaultAction()
+        if (
+            self._in_next_check_state
+            or self.signalsBlocked()
+            or not self.isEnabled()
+            or (action is not None and action.isChecked() == self.isChecked())
+        ):
+            super().checkStateSet()
+            return
+        if action is None:
+            super().checkStateSet()
+            self.clicked.emit(self.isChecked())
+            return
+        action.trigger()
+        if self.isChecked() != action.isChecked():
+            # The active action of an exclusive group stays checked.
+            self.setChecked(action.isChecked())
+
+
 class ArrowButton(QToolButton):
     def __init__(self, direction: str, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -32,7 +72,7 @@ class ArrowButton(QToolButton):
         self.setIconSize(QSize(12, 12))
 
 
-class CornerMenuButton(QToolButton):
+class CornerMenuButton(ActionToolButton):
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self._menu_chevron = _chevron_icon("down")
@@ -78,6 +118,7 @@ class CornerMenuToolButton(CornerMenuButton):
 
 
 __all__ = [
+    "ActionToolButton",
     "ArrowButton",
     "CornerMenuButton",
     "CornerMenuToolButton",

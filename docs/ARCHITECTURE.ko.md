@@ -1,11 +1,7 @@
 # 아키텍처
 
-브라우저 어댑터는 [사용 안내](WEB_ADAPTER.ko.md)와
-[ADR 0029](adr/0029-browser-adapter.md)를 따른다. Python 세션은
-기존 문서·기능 API와 CanvasHistoryService를 재사용한다. 브라우저는 승인된
-상태를 표시하고 UI 정의·그림은 기존 소유자에서 읽는다. SVG 표시와 이벤트 연결은
-각각 응집된 연결 코드로 유지한다.
-아래 Qt 구조는 기존 기본 데스크톱 편집기에 해당한다.
+Chemvas는 아래의 Qt 데스크톱 편집기와 헤드리스 CLI로 구성된다. 이전의 브라우저
+어댑터는 중단되었다([ADR 0068](adr/0068-retire-browser-adapter.md)).
 
 [English](ARCHITECTURE.md)
 
@@ -63,7 +59,7 @@ import하며, `bootstrap`만 adapters를 알고 편집기를 조립합니다. `u
 
 - **기능 소유권**: 상호작용 흐름은 컨트롤러 중심으로 구성하고 구체적인 협력 객체를 직접 주입받아 호출합니다. 캔버스가 소유하는 협력 객체는 한 가지 표기만 갖습니다. 런타임은 `canvas.services.<이름>`(평탄한 `CanvasRuntimeServices`), 상태는 `canvas.runtime_state.<이름>`, 캔버스 셋업이 만드는 객체는 `canvas.model`, `canvas.renderer`, `canvas.render_context`, `canvas.bond_renderer`입니다. 이 표기로 단순 위임만 하던 모듈은 제거했습니다 ([ADR 0012](adr/0012-flat-editor-runtime-and-ui-packages.md)).
 - **서비스 의존성**: 그래프 조회는 현재 모델 조회 함수·렌더러·그래프 캐시를 받습니다. 결합 편집과 고리 채움은 기존 `SceneRenderContext`를, 단축키는 모델 조회 함수·호버 상태·구체적인 편집 서비스를 받습니다. 이 서비스들에 뷰 전체를 전달하지 않아도 문서 교체 후 현재 모델을 읽습니다. 뷰 수명과 입력을 조정하는 컨트롤러는 타입이 명시된 `CanvasView`를 유지합니다. 런타임 조립과 이력 어댑터에는 구체 타입을 적용합니다. 메모 편집(`CanvasNoteController`)에는 선택 컨트롤러와 이력 서비스를 필수로 주입해 `canvas.services` 우회 조회나 노트 선택 상태 직접 변경을 두지 않으며, 마크 편집과 이력 기록에도 이력 서비스를 필수로 주입합니다. 그래프·단축키 서비스와 노트 컨트롤러는 strict 타입 검사를 받습니다. 서로 다른 장면 객체의 복원과 명령 조합에는 동적인 부분이 남습니다. 편집·Undo/Redo 측정은 [성능 기준 문서](performance/README.md)에 정리합니다.
-- **상태 소유권**: `CanvasRuntimeState`가 캔버스 런타임 상태의 단일 소유자이며 `SceneRenderState`를 확장합니다. 상태 복사본을 두지 않고 소유자의 공개 인터페이스를 통해 작업하며, 히스토리·캐시 무효화·수명 주기 처리는 해당 소유자가 전담합니다.
+- **상태 소유권**: `CanvasRuntimeState`가 캔버스 장면·입력 런타임 상태를 소유하며(`SceneRenderState` 확장), Undo/Redo 스택은 `CanvasHistoryService`(`history_service.state`)가 소유합니다. 상태 복사본을 두지 않고 각 소유자의 공개 인터페이스를 통해 작업하며, 히스토리·캐시 무효화·수명 주기 처리는 해당 소유자가 전담합니다.
 - **동적 의존성 및 수명**: 윈도우 액션은 호출 시점에 활성 문서를 조회합니다. 공통 렌더 컨텍스트는 모델 및 장면 교체 시 최신 인스턴스를 추적하며, 수명 주기 계약을 준수합니다.
 - **문서 모델과 장면 분리**: 분자 그래프와 `AnnotationCollection`은 Qt와 독립적으로 문서 데이터를 소유합니다. 주석 8종 모두 이 컬렉션에서 존재 여부·순서·저장 값을 읽으며, 그래픽 아이템은 런타임 ID로 연결된 표시 객체입니다 ([ADR 0010](adr/0010-document-owned-notes-and-marks.md)).
 - **의존성 경계**: `domain`, `core`, `features`는 Qt-free를 유지합니다. 데스크톱 Qt 구현은 `ui`, 프레임워크 어댑터는 `adapters`, 애플리케이션 조립은 `bootstrap`에 둡니다. 기능 모듈은 어댑터, 편집기 위젯, 애플리케이션 진입점에 의존하지 않습니다. 패키지 간 비순환 import를 보장합니다.
@@ -169,7 +165,13 @@ Qt 변환이나 데이터 역할만 바꾸는 것은 문서 편집이 아닙니�
 추가하지 않습니다.
 
 노트 기록은 평문·정제한 HTML·위치·회전을 소유합니다. Qt 편집기는 커서·포커스·텍스트
-Undo를 담당하고 입력과 서식 변경 결과를 기록에 반영합니다. 표식 기록은 종류·텍스트·
+Undo를 담당하고 입력과 서식 변경 결과를 기록에 반영합니다. 정제한 노트 HTML은 외부
+자원과 이벤트 속성을 제거하면서 허용된 인라인·문단·목록 서식과 제목(`h1`–`h6`)·서식
+유지 블록(`pre`)·한도 내 표(`table`, `tr`, `td`, `th`) 구조를 보존합니다. 표 격자
+슬롯 한도를 넘거나 저장·로드 경로에서 모호한 표 마크업을 담은 노트는 표 레이아웃 없이
+셀 텍스트와 안전한 인라인 서식만 유지합니다. 라이브 붙여넣기·드롭은 이 검사보다 먼저
+Qt에 전달됩니다 ([ADR 0071](adr/0071-bounded-note-table-grid-preflight.md)).
+표식 기록은 종류·텍스트·
 소속 원자·오프셋·중심·색상을 소유하며 Qt 메타데이터는 이 기록에서 읽습니다. 저장,
 원자에 붙은 표식 복사, 전하·라디칼 계산은 표시 객체가 없어도 기록을 읽습니다.
 복구 중 위치·글꼴·텍스트를 차례로 되돌릴 때 생기는 중간 신호가 결과를 바꾸지 않도록
@@ -286,10 +288,10 @@ ID도 직렬화하지 않습니다. `features.cdxml_editable_arrows`는 네이�
 `promote_linked_images_to_arrows`가 두 투영의 변경을 모두 스테이징해 각 투영의
 이미지 순서와 남은 이미지 순서를 보존하며 원자적으로 반영합니다
 ([ADR 0060](adr/0060-editable-native-arrows-and-local-platform-gates.md)).
-`features.cdxml_editable_rectangles`는 검은 Plain·검은 Filled 네이티브 사각형을
-바인딩된 도형 레코드로 가져오고 저장 시 `BoundingBox`·`RectangleType`·`color`를
-다시 쓰며, 도형에 선 색이 없어 색이 있는 사각형과 그 밖의 스타일은 래스터
-투영으로 남깁니다. 준비에
+`features.cdxml_editable_shapes`는 채움만 있는 사각형·원과 검은 테두리 Plain
+사각형을 바인딩된 도형 레코드로 가져옵니다. 테두리 사각형은 `transform_native`를
+통한 이동·크기 조절·삭제만 지원하며, 색이 있거나 지원되지 않는 스타일은 래스터
+투영으로 남깁니다([ADR 0072](adr/0072-outlined-black-native-cdxml-rectangles.md)). 준비에
 실패하면 입력 상태는 바뀌지 않으며, `xml`·`offset`·원자/결합 바인딩·미지원 네이티브
 XML·저장 스키마는 그대로 유지됩니다. `ui.canvas.canvas_cdxml_source`는 런타임
 `AnnotationCollection` 레코드 ID와 저장 위치 기반 바인딩 사이의 경계를 유지합니다.
@@ -352,12 +354,6 @@ ADR을 언제 쓰는지, 작성 규칙과 템플릿은 [ADR 안내](adr/README.m
 단순 결합 길이·속성 Undo 명령은 `history_command_transaction`을 재사용합니다.
 문서 교체 스냅샷은 테스트 전용 대체 장면 대신 실제 Qt 장면 계약을 사용합니다.
 
-브라우저 화학 클립보드는 기존 선택 페이로드 빌더와 붙여넣기 계획기를 재사용하여
-별도의 화학 스키마 없이 원자 ID 재매핑, 그룹 및 주석 변환을 보존합니다. 브라우저
-자동 복구 드래프트는 Qt 복구와 분리되어 `bootstrap/web_drafts.py`가 단일 서버
-프로세스 잠금과 봉투 저장을 소유합니다
-([ADR 0032](adr/0032-browser-clipboard-and-drafts.md)).
-
 - [ADR 0025: Shared atom position mutation](adr/0025-shared-atom-position-mutation.md)
 - [ADR 0026: Endpoint selection draft](adr/0026-endpoint-selection-draft.md)
 - [ADR 0027: Record-based annotation transforms](adr/0027-record-based-annotation-transforms.md)
@@ -410,3 +406,7 @@ ADR을 언제 쓰는지, 작성 규칙과 템플릿은 [ADR 안내](adr/README.m
 - [ADR 0065: Three-platform desktop release acceptance](adr/0065-three-platform-release-acceptance.md)
 - [ADR 0066: Linux per-user frozen installation](adr/0066-linux-user-installation.md)
 - [ADR 0067: Coupled native CDXML collections](adr/0067-coupled-native-cdxml-collections.md)
+- [ADR 0068: Retire the browser adapter](adr/0068-retire-browser-adapter.md)
+- [ADR 0069: Plain filled native CDXML shapes](adr/0069-plain-filled-native-cdxml-shapes.md)
+- [ADR 0071: Bounded note table grid preflight](adr/0071-bounded-note-table-grid-preflight.md)
+- [ADR 0072: Outlined black native CDXML rectangles](adr/0072-outlined-black-native-cdxml-rectangles.md)

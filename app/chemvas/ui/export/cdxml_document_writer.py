@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 import hashlib
+import xml.etree.ElementTree as ET
 from typing import TYPE_CHECKING, Any
 
-from chemvas.core.document_io import atomic_write_via_temp
+from chemvas.core.document_io import atomic_create_bytes, atomic_write_via_temp
 from chemvas.features.cdxml_document import embed_document
 from chemvas.ui.canvas.sheet_setup_access import sheet_rect_for
 
@@ -17,11 +18,20 @@ if TYPE_CHECKING:
 
 def serialize_cdxml_document(canvas: CanvasView, state: dict[str, Any]) -> bytes:
     if "cdxml_source" in state:
-        from chemvas.features.cdxml_native_writer import update_native_document
+        from chemvas.features.cdxml_native_writer import native_document_tree
+        from chemvas.ui.export.cdxml_document_paint_order import (
+            normalize_document_paint_order,
+            retain_resolved_paint_order,
+        )
         from chemvas.ui.export.cdxml_native_text import write_native_caption
 
+        root, objects = native_document_tree(state, note_writer=write_native_caption)
+        normalize_document_paint_order(
+            root, objects, canvas.render_context, state["cdxml_source"]["xml"]
+        )
+        state = retain_resolved_paint_order(root, state, canvas.render_context)
         return embed_document(
-            update_native_document(state, note_writer=write_native_caption), state
+            ET.tostring(root, encoding="utf-8", xml_declaration=True), state
         )
     from chemvas.ui.export.cdxml_working_document import serialize_working_document
 
@@ -30,11 +40,16 @@ def serialize_cdxml_document(canvas: CanvasView, state: dict[str, Any]) -> bytes
     )
 
 
-def save_cdxml_document(canvas: CanvasView, path: str, state: dict[str, Any]) -> str:
+def save_cdxml_document(
+    canvas: CanvasView, path: str, state: dict[str, Any], *, create_only: bool = False
+) -> str:
     raw = serialize_cdxml_document(canvas, state)
 
     def write(temporary: Path) -> None:
         temporary.write_bytes(raw)
 
-    atomic_write_via_temp(path, write)
+    if create_only:
+        atomic_create_bytes(path, raw)
+    else:
+        atomic_write_via_temp(path, write)
     return hashlib.sha256(raw).hexdigest()
