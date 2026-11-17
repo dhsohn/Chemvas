@@ -3,9 +3,11 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from PyQt6.QtCore import QRectF
+from PyQt6.QtGui import QFont, QTextDocument
 
 from chemvas.domain.document import CLIPBOARD_SELECTION_VERSION, Bond
 from chemvas.domain.document.marks import mark_to_state
+from chemvas.features.annotations import sanitize_note_html
 from chemvas.ui.canvas.canvas_document_state import snapshot_ring_fills
 from chemvas.ui.export.export_render_service import (
     render_scene_to_pdf_bytes,
@@ -34,6 +36,39 @@ def build_selection_clipboard_payload_for_canvas(
     scene_item_state_getter: Callable[[QGraphicsItem], dict],
     version: int,
 ) -> dict | None:
+    def copied_item_state(item):
+        state = scene_item_state_getter(item)
+        if state.get("kind") != "note":
+            return state
+        placement = canvas.runtime_state.native_caption_placements.get(item.data(3))
+        if placement is not None or "native_caption" in state:
+            # Whole-note copying severs retained-source bindings. Carry the
+            # placement with the note and make inherited HTML defaults explicit
+            # so another document's font defaults cannot change its faces.
+            state = dict(state)
+            if placement is not None:
+                state["native_caption"] = list(placement)
+            # Content comes from the authoritative note record, not its view.
+            style = canvas.runtime_state.text_style_state
+            font = QFont(style.text_font_family, style.text_font_size)
+            font.setWeight(style.text_font_weight)
+            font.setItalic(style.text_italic)
+            document = QTextDocument()
+            document.setDefaultFont(font)
+            if state.get("html"):
+                document.setHtml(state["html"])
+            else:
+                document.setPlainText(state["text"])
+            state["html"] = (
+                sanitize_note_html(
+                    document.toHtml()
+                    .replace("<body", "<div")
+                    .replace("</body>", "</div>")
+                )
+                or ""
+            )
+        return state
+
     return build_selection_clipboard_payload(
         selected_items=selected_items,
         explicit_atom_ids=explicit_atom_ids,
@@ -51,7 +86,7 @@ def build_selection_clipboard_payload_for_canvas(
         ],
         atom_state_getter=atom_state_getter,
         bond_state_getter=bond_state_getter,
-        scene_item_state_getter=scene_item_state_getter,
+        scene_item_state_getter=copied_item_state,
         perspective_state_getter=(
             lambda atom_ids: (
                 _selection_perspective_state_for_canvas(canvas, atom_ids)

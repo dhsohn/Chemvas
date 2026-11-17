@@ -139,6 +139,13 @@ class NativeAtomLabelItem(AtomLabelItem):
         self._typographic = False
         self._stack_element_rect = None
 
+    @override
+    def paint(self, painter, option, widget=None) -> None:
+        # Transformed text rasterization can thicken the same Regular
+        # face that exports correctly as outlines. Use the shaped glyphs in
+        # the canvas too; atom editing does not use a QTextDocument caret.
+        self._paint_outlined(painter)
+
     def apply_native(self, label: NativeAtomLabel, color: str) -> None:
         signature = (label, color)
         if getattr(self, "_native_signature", None) == signature:

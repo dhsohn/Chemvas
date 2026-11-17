@@ -51,6 +51,10 @@ def editable_arrow(reader: Any, e: ET.Element) -> dict[str, Any] | None:
     width = reader.number(reader.inherited(e, "LineWidth", "0.6"), e)
     if not 0 < width <= 100:
         reader.unsupported(e, "line width")
+    if "Dashed" in line:
+        from chemvas.features.cdxml_graphics import native_dash_length
+
+        native_dash_length(reader, e)
     for name, default in (
         ("HeadSize", "600"),
         ("ArrowheadWidth", "200"),

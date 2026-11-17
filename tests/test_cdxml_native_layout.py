@@ -10,7 +10,7 @@ from copy import deepcopy
 
 import pytest
 from PyQt6.QtCore import QPointF
-from PyQt6.QtGui import QFontInfo, QTextCharFormat
+from PyQt6.QtGui import QTextCharFormat
 from PyQt6.QtWidgets import QApplication
 
 from chemvas.features.cdxml_document import parse_cdxml_document
@@ -62,7 +62,9 @@ def test_caption_scene_baseline_center_size_and_foreground_preserve_state():
         )
         assert item.mapToScene(anchor) == QPointF(-70, -60)
         font = item.document().begin().begin().fragment().charFormat().font()
-        assert QFontInfo(font).pixelSize() == 5
+        assert font.pointSizeF() == 5
+        glyph = layout.glyphRuns(0, 1)[0]
+        assert glyph.rawFont().pixelSize() * item.transform().m11() == pytest.approx(5)
         assert (
             item.zValue()
             > next(iter(context.state.scene_items_state.shape_items.values())).zValue()
@@ -113,12 +115,13 @@ def test_caption_precision_survives_sanitizing_into_resolved_qt_font(size, inher
         fragments = block.begin()
         base = fragments.fragment().charFormat()
         font = base.font().resolve(item.font())
-        expected_pixels = int(float(size) + 0.5)
-        assert QFontInfo(font).pixelSize() == expected_pixels
+        assert font.pointSizeF() == pytest.approx(float(size))
         assert base.font().bold()
         # Check the shaped glyphs, not just the HTML's declared size.
         glyph = block.layout().glyphRuns(1, 1)[0]
-        assert glyph.rawFont().pixelSize() == pytest.approx(expected_pixels)
+        assert glyph.rawFont().pixelSize() * item.transform().m11() == pytest.approx(
+            float(size), abs=0.005
+        )
         fragments += 1
         assert fragments.fragment().text() == "2"
         assert (

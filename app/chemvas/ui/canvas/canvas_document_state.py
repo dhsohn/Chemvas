@@ -258,6 +258,8 @@ def snapshot_note_document_state(canvas, item) -> dict:
     }
     if "rotation" in note_state:
         snapshot["rotation"] = note_state["rotation"]
+    if "native_caption" in note_state:
+        snapshot["native_caption"] = note_state["native_caption"]
     html = note_state.get("html")
     if isinstance(html, str):
         snapshot["html"] = html

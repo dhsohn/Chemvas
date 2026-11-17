@@ -34,6 +34,7 @@ from chemvas.domain.document.notes import Note, note_to_state
 from chemvas.domain.document.orbitals import orbital_from_state, orbital_to_state
 from chemvas.domain.document.ring_fills import RingFill, ring_fill_to_state
 from chemvas.features.annotations import sanitize_note_html
+from chemvas.ui.annotations.text import refresh_note_box_geometry
 from chemvas.ui.canvas.graphics_items import (
     RING_FILL_Z_VALUE,
     ExportTextItem,
@@ -148,6 +149,15 @@ class NoteItem(ExportTextItem):
     def note_state(self) -> dict[str, object]:
         return note_to_state(self.notes.records[self.record_id])
 
+    def set_native_caption(self, placement: tuple[float, float, str, float]) -> None:
+        from chemvas.ui.canvas.native_document_layout import place_native_caption
+
+        self.notes.records[self.record_id] = replace(
+            self.notes.records[self.record_id], native_caption=placement
+        )
+        place_native_caption(self, placement)
+        self.publish_text()
+
     def publish_text(self) -> None:
         # Document reset can dispose an editor after its record has gone.
         current = self.notes.records.get(self.record_id)
@@ -173,6 +183,7 @@ class NoteItem(ExportTextItem):
     def refresh_derived_layout(self) -> None:
         if self._derived_layout is not None:
             self._derived_layout(self)
+        refresh_note_box_geometry(self)
 
     def _text_changed(self) -> None:
         self._fit_text_width()

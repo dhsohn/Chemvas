@@ -67,7 +67,9 @@ def _appearance(state, *, caption=False):
                 )
             )
             (glyph,) = layout.glyphRuns(index, 1)
-            sizes.append(glyph.rawFont().pixelSize() * item.scale())
+            transform = item.sceneTransform()
+            scale = (transform.m11() ** 2 + transform.m12() ** 2) ** 0.5
+            sizes.append(glyph.rawFont().pixelSize() * scale)
         # Fixed source rectangle makes this a painted-position and size check,
         # not a comparison that rescales each result to its own text bounds.
         image = QImage(480, 320, QImage.Format.Format_ARGB32_Premultiplied)

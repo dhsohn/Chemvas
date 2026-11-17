@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.30.1] - 2026-11-17
+
+### Fixed
+
+- Preserve fractional native CDXML caption sizes and explicit normal, bold and
+  italic runs in the canvas and figure exports, avoiding whole-pixel size
+  rounding that could make body text heavier. Display native text using the
+  same glyph outlines as exports while keeping Qt's caret during note editing.
+  Retain existing pixel-sized editing snapshots without changing their saved
+  typography.
+- Keep native caption sizes, mixed faces and placement through whole-note copy,
+  paste and save/reopen; keep note padding and border widths in scene units
+  after precise text layout. Minimum-font SVG/PNG checks measure native atom
+  glyph runs directly, including scripts, while retaining the size thresholds
+  ([ADR 0074](docs/adr/0074-preserve-detached-native-caption-layout.md)).
+- Honor inherited CDXML `HashSpacing` for equal dash and gap lengths on imported
+  drawing strokes, with flat caps and head-to-tail phase on editable native lines.
+
 ## [0.30.0] - 2026-11-17
 
 ### Added
@@ -3375,7 +3393,8 @@ housekeeping.
   `.chemvas` document type (double-clicking a file opens it in Chemvas), and a
   Linux `.desktop` entry with an `application/x-chemvas` MIME type.
 
-[Unreleased]: https://github.com/dhsohn/Chemvas/compare/v0.30.0...HEAD
+[Unreleased]: https://github.com/dhsohn/Chemvas/compare/v0.30.1...HEAD
+[0.30.1]: https://github.com/dhsohn/Chemvas/compare/v0.30.0...v0.30.1
 [0.30.0]: https://github.com/dhsohn/Chemvas/compare/v0.29.1...v0.30.0
 [0.29.1]: https://github.com/dhsohn/Chemvas/compare/v0.29.0...v0.29.1
 [0.29.0]: https://github.com/dhsohn/Chemvas/compare/v0.28.0...v0.29.0

@@ -26,6 +26,7 @@ class NativeArrowStyle:
     spacing: float
     solid: bool
     dashed: bool
+    dash_length: float
     z: float
 
 
@@ -33,7 +34,7 @@ def native_arrow_styles(state: dict[str, Any]) -> dict[int, NativeArrowStyle]:
     source = state.get("cdxml_source")
     if source is None:
         return {}
-    from chemvas.features.cdxml_graphics import native_image_z
+    from chemvas.features.cdxml_graphics import native_dash_length, native_image_z
     from chemvas.features.cdxml_preservation import PreservingImporter
 
     reader = PreservingImporter(source["xml"])
@@ -73,6 +74,7 @@ def native_arrow_styles(state: dict[str, Any]) -> dict[int, NativeArrowStyle]:
             ),
             solid=e.get("ArrowheadType", "Solid") == "Solid",
             dashed="Dashed" in line,
+            dash_length=native_dash_length(reader, e),
             z=native_image_z(reader, e),
         )
     return result
@@ -156,14 +158,13 @@ def native_arrow_paint(record: Arrow, style: NativeArrowStyle):
             stroker.setCapStyle(Qt.PenCapStyle.RoundCap)
             stroker.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
             return stroker.createStroke(path).united(heads), pen, brush
-    if dashed and bold:
-        # ChemDraw keeps a Bold line's dash period at the LineWidth scale, so
-        # its dashes read as short bars rather than stretching with BoldWidth.
-        # Qt dash lengths are in pen widths; flat caps keep the gaps open.
-        dash = 4 * style.width / pen.widthF()
+    if dashed:
+        # ChemDraw 25's SVG uses equal HashSpacing dashes/gaps, starting at the
+        # head endpoint. Qt's default DashLine is 4/2 pen widths and round
+        # caps extend each dash into its gap.
+        dash = style.dash_length / pen.widthF()
         pen.setCapStyle(Qt.PenCapStyle.FlatCap)
         pen.setDashPattern([dash, dash])
-    elif dashed:
-        pen.setStyle(Qt.PenStyle.DashLine)
+        path = path.toReversed()
     path.addPath(heads)
     return path, pen, brush

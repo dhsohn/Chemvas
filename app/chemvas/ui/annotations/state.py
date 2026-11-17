@@ -321,6 +321,13 @@ def _apply_note_state(
     )
     note_style_applier(item)
     item.setRotation(_float_state_value(state.get("rotation"), 0.0))
+    if isinstance(item, NoteItem) and "native_caption" in state:
+        item.set_native_caption(
+            cast(
+                "tuple[float, float, str, float]",
+                tuple(cast("list", state["native_caption"])),
+            )
+        )
     item.setTextInteractionFlags(Qt.TextInteractionFlag.NoTextInteraction)
 
 
