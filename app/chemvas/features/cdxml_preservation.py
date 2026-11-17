@@ -311,7 +311,10 @@ class PreservingImporter:
 
     def state(self) -> dict[str, Any]:
         from chemvas.features.cdxml_editable_arrows import editable_arrow
-        from chemvas.features.cdxml_editable_shapes import editable_shape
+        from chemvas.features.cdxml_editable_shapes import (
+            editable_outlined_rectangle,
+            editable_shape,
+        )
         from chemvas.features.cdxml_graphics import graphic_image
 
         atoms = [self.atom(e, i) for i, e in enumerate(self.nodes)]
@@ -373,7 +376,7 @@ class PreservingImporter:
                     continue
                 # The image writer also transforms linked fallback graphics.
                 shape = (
-                    editable_shape(self, e)
+                    editable_shape(self, e) or editable_outlined_rectangle(self, e)
                     if e.get("id") not in fallback_targets
                     else None
                 )

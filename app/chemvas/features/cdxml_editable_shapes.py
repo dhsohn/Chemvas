@@ -1,4 +1,4 @@
-"""Editable projections of filled native rectangles and circles."""
+"""Editable projections of filled native shapes and black outlined rectangles."""
 
 from __future__ import annotations
 
@@ -17,6 +17,7 @@ if TYPE_CHECKING:
 _AXIS_KEYS = ("Center3D", "MajorAxisEnd3D", "MinorAxisEnd3D")
 # ChemDraw rounds both ends of an axis independently to hundredths of a point.
 _AXIS_TOLERANCE = 0.02
+_BLACK = "#000000"
 
 
 def editable_shape(reader: PreservingImporter, e: ET.Element) -> dict[str, Any] | None:
@@ -51,6 +52,40 @@ def editable_shape(reader: PreservingImporter, e: ET.Element) -> dict[str, Any] 
         "stroke_style": "none",
         "fill": reader.color(e),
         "fill_alpha": 1.0,
+        "z": native_image_z(reader, e, bounds=bounds),
+    }
+
+
+def editable_outlined_rectangle(
+    reader: PreservingImporter, e: ET.Element
+) -> dict[str, Any] | None:
+    """Black ``RectangleType`` Plain graphics with supported positive stroke width."""
+    if e.tag != "graphic" or len(e) or e.get("GraphicType") != "Rectangle":
+        return None
+    if e.get("RectangleType") != "Plain":
+        return None
+    if e.get("LineType", "Solid") != "Solid":
+        return None
+    if "CornerRadius" in e.attrib:
+        return None
+    if reader.color(e) != _BLACK:
+        return None
+    width = reader.number(reader.inherited(e, "LineWidth", "0.6"), e)
+    if not 0 < width <= 100:
+        return None
+    bounds = _shape_bounds(reader, e, "rect")
+    if bounds is None:
+        return None
+    left, top, right, bottom = bounds
+    ox, oy = reader.offset
+    return {
+        "kind": "shape",
+        "left": left - ox,
+        "top": top - oy,
+        "right": right - ox,
+        "bottom": bottom - oy,
+        "shape_kind": "rect",
+        "stroke_style": "solid",
         "z": native_image_z(reader, e, bounds=bounds),
     }
 
@@ -170,3 +205,37 @@ def update_shape(
             e.set("MinorAxisEnd3D", f"{cx:.12g} {cy + radius:.12g} 0")
     if after["fill"] != before["fill"]:
         e.set("color", color_index(after["fill"]))
+
+
+def update_outlined_rectangle(
+    e: ET.Element,
+    before: dict[str, Any],
+    after: dict[str, Any],
+    offset: list[float],
+) -> None:
+    """Move or resize a black outlined native rectangle; refuse every other edit.
+
+    Chemvas strokes shapes with the fixed bond colour, so a fill or recolour
+    cannot be written without changing the native outline.
+    """
+    if after["shape_kind"] != before["shape_kind"]:
+        raise ValueError("Native shape kind change is unsupported.")
+    if after["stroke_style"] != before["stroke_style"]:
+        raise ValueError("Native shape stroke change is unsupported.")
+    if "fill" in after or "fill_alpha" in after:
+        raise ValueError("Filling an outlined native rectangle is unsupported.")
+
+    keys = ("left", "top", "right", "bottom")
+    if any(before[key] != after[key] for key in keys):
+        from chemvas.features.cdxml_native_writer import transform_native
+
+        ox, oy = offset
+        left, top, right, bottom = (after[key] for key in keys)
+        width, height = right - left, bottom - top
+        if min(width, height) <= 0:
+            raise ValueError("Degenerate native shape bounds.")
+        sx = width / (before["right"] - before["left"])
+        sy = height / (before["bottom"] - before["top"])
+        tx = left + ox - sx * (before["left"] + ox)
+        ty = top + oy - sy * (before["top"] + oy)
+        transform_native(e, sx=sx, sy=sy, tx=tx, ty=ty)

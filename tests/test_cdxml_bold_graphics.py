@@ -7,11 +7,19 @@ from PIL import Image
 
 from chemvas.features.cdxml_document import parse_cdxml_document
 
+# Black Plain rectangles open as editable shapes (ADR 0072), so the raster Plain
+# stroke is measured on a red one. The table keeps default index 3 black.
+RED = ' color="2"'
 
-def rectangle_stroke_points(kind: str, line_width: str = "0.6") -> float:
+
+def rectangle_stroke_points(
+    kind: str, line_width: str = "0.6", extra: str = ""
+) -> float:
     raw = (
-        f'<CDXML LineWidth="{line_width}" BoldWidth="2"><page id="1" BoundingBox="0 0 300 200">'
-        f'<graphic id="2" GraphicType="Rectangle" RectangleType="{kind}" '
+        f'<CDXML LineWidth="{line_width}" BoldWidth="2"><colortable>'
+        '<color r="1" g="0" b="0"/><color r="0" g="0" b="0"/></colortable>'
+        '<page id="1" BoundingBox="0 0 300 200">'
+        f'<graphic id="2" GraphicType="Rectangle" RectangleType="{kind}"{extra} '
         'BoundingBox="100 100 20 20"/></page></CDXML>'
     ).encode()
     image = parse_cdxml_document(raw).state["images"][0]
@@ -23,7 +31,7 @@ def rectangle_stroke_points(kind: str, line_width: str = "0.6") -> float:
 
 
 def test_bold_rectangle_strokes_at_bold_width():
-    assert abs(rectangle_stroke_points("Plain") - 0.6) < 0.01
+    assert abs(rectangle_stroke_points("Plain", extra=RED) - 0.6) < 0.01
     assert abs(rectangle_stroke_points("Bold") - 2) < 0.01
     assert abs(rectangle_stroke_points("RoundEdge Bold") - 2) < 0.01
 
@@ -31,4 +39,4 @@ def test_bold_rectangle_strokes_at_bold_width():
 def test_raster_stroke_keeps_its_native_width():
     # A fixed 4 px/pt raster rounded these to 0.5, 0.25 and 0.25 pt.
     for width in ("0.6", "0.3", "0.15", "0.45"):
-        assert abs(rectangle_stroke_points("Plain", width) - float(width)) < 0.005
+        assert abs(rectangle_stroke_points("Plain", width, RED) - float(width)) < 0.005

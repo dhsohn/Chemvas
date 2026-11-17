@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Open native ChemDraw black `RectangleType="Plain"` rectangles with a positive
+  solid outline as editable shapes. Move, resize and delete write back to the
+  original `<graphic>`; adding a fill or changing the outline is refused before
+  the file is replaced. The canvas draws the outline at the regular shape width,
+  while the saved file keeps the native `LineWidth`. Coloured, styled, rotated
+  and linked-fallback rectangles stay raster.
+
 ## [0.29.1] - 2026-11-17
 
 ### Fixed

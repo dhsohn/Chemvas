@@ -1,6 +1,6 @@
 # ADR 0069: Plain filled native CDXML shapes
 
-- Status: Accepted
+- Status: Extended by [ADR 0072](0072-outlined-black-native-cdxml-rectangles.md)
 - Date: 2026-11-13
 - Extends: [ADR 0060](0060-editable-native-arrows-and-local-platform-gates.md)
 

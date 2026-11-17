@@ -311,9 +311,14 @@ retains native stroke representability, raster/opacity eligibility and endpoint
 math, preparing distinct live and baseline arrow records (`ImageArrowPromotion`)
 before `promote_linked_images_to_arrows` stages and publishes both projections
 in each projection's image order while preserving retained image order
-([ADR 0060](adr/0060-editable-native-arrows-and-local-platform-gates.md)). A
-preparation failure leaves the input unchanged, and `xml`, `offset`, atom/bond
-bindings, unsupported native XML and the persisted schema stay unchanged.
+([ADR 0060](adr/0060-editable-native-arrows-and-local-platform-gates.md)).
+`features.cdxml_editable_shapes` maps fill-only native rectangles and circles and
+black outlined Plain rectangles to bound shape records. Outlined rectangles
+support only move, resize and delete through `transform_native`; coloured or
+unsupported styles stay raster projections
+([ADR 0072](adr/0072-outlined-black-native-cdxml-rectangles.md)). A preparation
+failure leaves the input unchanged, and `xml`, `offset`, atom/bond bindings,
+unsupported native XML and the persisted schema stay unchanged.
 `ui.canvas.canvas_cdxml_source` retains the boundary between runtime
 `AnnotationCollection` record IDs and persisted positional bindings.
 
@@ -432,3 +437,4 @@ Qt scene contract rather than alternate test-only scene representations.
 - [ADR 0068: Retire the browser adapter](adr/0068-retire-browser-adapter.md)
 - [ADR 0069: Plain filled native CDXML shapes](adr/0069-plain-filled-native-cdxml-shapes.md)
 - [ADR 0071: Bounded note table grid preflight](adr/0071-bounded-note-table-grid-preflight.md)
+- [ADR 0072: Outlined black native CDXML rectangles](adr/0072-outlined-black-native-cdxml-rectangles.md)

@@ -287,7 +287,11 @@ ID도 직렬화하지 않습니다. `features.cdxml_editable_arrows`는 네이�
 화살표 레코드(`ImageArrowPromotion`)를 각각 준비한 뒤,
 `promote_linked_images_to_arrows`가 두 투영의 변경을 모두 스테이징해 각 투영의
 이미지 순서와 남은 이미지 순서를 보존하며 원자적으로 반영합니다
-([ADR 0060](adr/0060-editable-native-arrows-and-local-platform-gates.md)). 준비에
+([ADR 0060](adr/0060-editable-native-arrows-and-local-platform-gates.md)).
+`features.cdxml_editable_shapes`는 채움만 있는 사각형·원과 검은 테두리 Plain
+사각형을 바인딩된 도형 레코드로 가져옵니다. 테두리 사각형은 `transform_native`를
+통한 이동·크기 조절·삭제만 지원하며, 색이 있거나 지원되지 않는 스타일은 래스터
+투영으로 남깁니다([ADR 0072](adr/0072-outlined-black-native-cdxml-rectangles.md)). 준비에
 실패하면 입력 상태는 바뀌지 않으며, `xml`·`offset`·원자/결합 바인딩·미지원 네이티브
 XML·저장 스키마는 그대로 유지됩니다. `ui.canvas.canvas_cdxml_source`는 런타임
 `AnnotationCollection` 레코드 ID와 저장 위치 기반 바인딩 사이의 경계를 유지합니다.
@@ -405,3 +409,4 @@ ADR을 언제 쓰는지, 작성 규칙과 템플릿은 [ADR 안내](adr/README.m
 - [ADR 0068: Retire the browser adapter](adr/0068-retire-browser-adapter.md)
 - [ADR 0069: Plain filled native CDXML shapes](adr/0069-plain-filled-native-cdxml-shapes.md)
 - [ADR 0071: Bounded note table grid preflight](adr/0071-bounded-note-table-grid-preflight.md)
+- [ADR 0072: Outlined black native CDXML rectangles](adr/0072-outlined-black-native-cdxml-rectangles.md)
