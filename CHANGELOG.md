@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.30.0] - 2026-11-17
+
 ### Added
 
 - Import qualifying page-level ChemDraw ``<group>`` elements as editor groups so
@@ -3373,7 +3375,8 @@ housekeeping.
   `.chemvas` document type (double-clicking a file opens it in Chemvas), and a
   Linux `.desktop` entry with an `application/x-chemvas` MIME type.
 
-[Unreleased]: https://github.com/dhsohn/Chemvas/compare/v0.29.1...HEAD
+[Unreleased]: https://github.com/dhsohn/Chemvas/compare/v0.30.0...HEAD
+[0.30.0]: https://github.com/dhsohn/Chemvas/compare/v0.29.1...v0.30.0
 [0.29.1]: https://github.com/dhsohn/Chemvas/compare/v0.29.0...v0.29.1
 [0.29.0]: https://github.com/dhsohn/Chemvas/compare/v0.28.0...v0.29.0
 [0.28.0]: https://github.com/dhsohn/Chemvas/compare/v0.27.1...v0.28.0
