@@ -316,9 +316,16 @@ in each projection's image order while preserving retained image order
 black outlined Plain rectangles to bound shape records. Outlined rectangles
 support only move, resize and delete through `transform_native`; coloured or
 unsupported styles stay raster projections
-([ADR 0072](adr/0072-outlined-black-native-cdxml-rectangles.md)). A preparation
-failure leaves the input unchanged, and `xml`, `offset`, atom/bond bindings,
-unsupported native XML and the persisted schema stay unchanged.
+([ADR 0072](adr/0072-outlined-black-native-cdxml-rectangles.md)).
+`features.cdxml_native_groups` maps qualifying page-level ChemDraw `<group>`
+elements into editor `state["groups"]` on import. On save it re-derives the
+mapped groups from the immutable source XML and baseline, unwraps one when no
+editor group still contains all of its remaining bound members (carrying
+inherited styles to its children, refusing unsupported group metadata or
+references), and leaves new Chemvas groups and added members in the embedded
+snapshot only ([ADR 0073](adr/0073-native-cdxml-groups.md)). A preparation failure leaves
+the input unchanged, and `xml`, `offset`, atom/bond bindings, unsupported native
+XML and the persisted schema stay unchanged.
 `ui.canvas.canvas_cdxml_source` retains the boundary between runtime
 `AnnotationCollection` record IDs and persisted positional bindings.
 
@@ -438,3 +445,4 @@ Qt scene contract rather than alternate test-only scene representations.
 - [ADR 0069: Plain filled native CDXML shapes](adr/0069-plain-filled-native-cdxml-shapes.md)
 - [ADR 0071: Bounded note table grid preflight](adr/0071-bounded-note-table-grid-preflight.md)
 - [ADR 0072: Outlined black native CDXML rectangles](adr/0072-outlined-black-native-cdxml-rectangles.md)
+- [ADR 0073: Native CDXML groups](adr/0073-native-cdxml-groups.md)

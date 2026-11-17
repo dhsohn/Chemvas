@@ -1,6 +1,7 @@
 # ADR 0058: Desktop CDXML documents
 
-- Status: File-format policy superseded by [ADR 0059](0059-cdxml-only-working-documents.md)
+- Status: File-format policy superseded by [ADR 0059](0059-cdxml-only-working-documents.md);
+  extended by [ADR 0073](0073-native-cdxml-groups.md)
 - Date: 2026-10-22
 - Partly supersedes: [ADR 0030](0030-cdxml-export.md)
 

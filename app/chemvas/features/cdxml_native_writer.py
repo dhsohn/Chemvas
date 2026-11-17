@@ -148,6 +148,7 @@ class _NativeWriter:
         self.changed_nodes: set[str] = set()
         self.stale_stereo: set[ET.Element] = set()
         self.removed_ids: set[str] = set()
+        self.unwrapped_groups: set[str] = set()
         self.edited_notes: set[str] = set()
 
     def fresh(self) -> str:
@@ -665,6 +666,9 @@ class _NativeWriter:
             "BondOrdering",
             "BondCircularOrdering",
         }
+        # An unwrapped group's members still exist, so a step naming the group
+        # is not pruned like one naming a deleted object; it refuses the save.
+        deleted = self.removed_ids - self.unwrapped_groups
         for e in self.root.iter():
             if e.tag == "step":
                 for key in (
@@ -673,14 +677,19 @@ class _NativeWriter:
                     "ReactionStepObjectsBelowArrow",
                 ):
                     references = e.get(key, "").split()
-                    if self.removed_ids.intersection(references):
-                        remaining = [r for r in references if r not in self.removed_ids]
+                    if deleted.intersection(references):
+                        remaining = [r for r in references if r not in deleted]
                         if remaining:
                             e.set(key, " ".join(remaining))
                         else:
                             e.attrib.pop(key)
             for key in reference_keys:
-                if self.removed_ids.intersection(e.get(key, "").split()):
+                broken = self.removed_ids.intersection(e.get(key, "").split())
+                if broken and broken <= self.unwrapped_groups:
+                    raise ValueError(
+                        f"Ungrouping this native group would break native {e.tag}.{key} references; group its members again before saving."
+                    )
+                if broken:
                     raise ValueError(
                         f"Deleting this object would break native {e.tag}.{key} references; undo the deletion before saving."
                     )
@@ -692,6 +701,21 @@ class _NativeWriter:
         self.update_bonds()
         self.update_items()
         self.remove_deleted_fallbacks()
+        self.parents = {
+            child: parent for parent in self.root.iter() for child in parent
+        }
+        from chemvas.features.cdxml_native_groups import sync_native_groups_on_save
+
+        # Unwrapped group IDs are gone from the XML like deleted objects: their
+        # chemical property links detach and other references refuse the save.
+        self.unwrapped_groups = sync_native_groups_on_save(
+            self.page,
+            parents=self.parents,
+            by_id=self.byid,
+            state=self.state,
+            source=self.source,
+        )
+        self.removed_ids |= self.unwrapped_groups
         self.detach_chemical_properties()
         self.validate_references()
         for fragment in self.stale_stereo:

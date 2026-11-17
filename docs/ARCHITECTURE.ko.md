@@ -291,7 +291,14 @@ ID도 직렬화하지 않습니다. `features.cdxml_editable_arrows`는 네이�
 `features.cdxml_editable_shapes`는 채움만 있는 사각형·원과 검은 테두리 Plain
 사각형을 바인딩된 도형 레코드로 가져옵니다. 테두리 사각형은 `transform_native`를
 통한 이동·크기 조절·삭제만 지원하며, 색이 있거나 지원되지 않는 스타일은 래스터
-투영으로 남깁니다([ADR 0072](adr/0072-outlined-black-native-cdxml-rectangles.md)). 준비에
+투영으로 남깁니다([ADR 0072](adr/0072-outlined-black-native-cdxml-rectangles.md)).
+`features.cdxml_native_groups`는 조건을 만족하는 페이지 직속 ChemDraw `<group>`을
+가져올 때 편집기 `state["groups"]`로 만듭니다. 저장 시에는 변경되지 않는 원본 XML과
+기준 상태에서 매핑된 그룹을 다시 계산하고, 남은 바인딩 멤버를 모두 포함하는 편집기
+그룹이 없을 때만 네이티브 `<group>`을 풀어 씁니다. 이때 상속 스타일은 직속 자식에
+옮기고, 지원하지 않는 그룹 메타데이터나 참조가 있으면 저장을 거부합니다. 새로 만든
+Chemvas 그룹과 추가된 멤버는 임베디드 스냅샷에만 남깁니다
+([ADR 0073](adr/0073-native-cdxml-groups.md)). 준비에
 실패하면 입력 상태는 바뀌지 않으며, `xml`·`offset`·원자/결합 바인딩·미지원 네이티브
 XML·저장 스키마는 그대로 유지됩니다. `ui.canvas.canvas_cdxml_source`는 런타임
 `AnnotationCollection` 레코드 ID와 저장 위치 기반 바인딩 사이의 경계를 유지합니다.
@@ -410,3 +417,4 @@ ADR을 언제 쓰는지, 작성 규칙과 템플릿은 [ADR 안내](adr/README.m
 - [ADR 0069: Plain filled native CDXML shapes](adr/0069-plain-filled-native-cdxml-shapes.md)
 - [ADR 0071: Bounded note table grid preflight](adr/0071-bounded-note-table-grid-preflight.md)
 - [ADR 0072: Outlined black native CDXML rectangles](adr/0072-outlined-black-native-cdxml-rectangles.md)
+- [ADR 0073: Native CDXML groups](adr/0073-native-cdxml-groups.md)
