@@ -5,6 +5,7 @@ from copy import deepcopy
 from dataclasses import replace
 
 import pytest
+from PyQt6.QtCore import QPointF
 
 from chemvas.features.cdxml_document import parse_cdxml_document
 from chemvas.features.cdxml_native_writer import update_native_document
@@ -179,7 +180,7 @@ def test_recolor_black_is_not_reinterpreted_as_native_foreground():
     raw = drawing('<arrow id="10" Tail3D="20 50 0" Head3D="100 50 0"/>')
     raw = raw.replace(
         b'<CDXML LineWidth="0.75">',
-        b'<CDXML LineWidth="0.75" fgcolor="2"><colortable><color r="1" g="0" b="0"/></colortable>',
+        b'<CDXML LineWidth="0.75" color="2"><colortable><color r="1" g="0" b="0"/></colortable>',
     )
     state = parse_cdxml_document(raw).state
     assert state["arrows"][0]["color"] == "#ff0000"
@@ -224,7 +225,8 @@ def test_scene_native_strokes_retain_metrics_during_edit_and_kind_change(attrs, 
         context = canvas.render_context
         item = next(iter(context.state.scene_items_state.arrow_items.values()))
         assert item.data(0) == kind
-        assert item.pen().widthF() == 0.75
+        # ChemDraw strokes a Bold line at the inherited BoldWidth (default 2).
+        assert item.pen().widthF() == (2.0 if kind == "line_bold" else 0.75)
         record = context.arrows.record(item)
         context.arrows.set_record(
             item, replace(record, kind="line_dashed", mirrored=False)
@@ -279,9 +281,134 @@ def test_canvas_save_preserves_untouched_native_xml(tmp_path, edit_other):
         service.save_to_file(str(path))
         root = ET.fromstring(path.read_bytes())
         for identity in ("9", "10"):
-            assert (
-                root.find(f'.//*[@id="{identity}"]').attrib
-                == original.find(f'.//*[@id="{identity}"]').attrib
-            )
+            # Saving resolves missing/tied Z at the document boundary while
+            # keeping every native vector attribute, including exact decimals.
+            saved = root.find(f'.//*[@id="{identity}"]')
+            assert {
+                key: value for key, value in saved.attrib.items() if key != "Z"
+            } == original.find(f'.//*[@id="{identity}"]').attrib
+        z = [
+            int(root.find(f'.//*[@id="{identity}"]').get("Z"))
+            for identity in ("9", "10", "11")
+        ]
+        assert len(set(z)) == 3 and min(z) > 0
         if edit_other:
             assert root.find('.//*[@id="11"]').get("Head3D") == "130 90 0"
+
+
+@pytest.mark.parametrize("fill_z,expected", [(1, "#000000"), (3, "#ff0000")])
+def test_untouched_arrow_fill_overlap_and_fallback_keep_native_reopen_pixels(
+    tmp_path, fill_z, expected
+):
+    from PyQt6.QtCore import QRectF, Qt
+    from PyQt6.QtGui import QImage, QPainter
+
+    from chemvas.bootstrap.document_cli_shared import offscreen_canvas
+    from chemvas.features.document_files import read_document
+
+    raw = drawing(
+        f'<graphic id="7" Z="{fill_z}" GraphicType="Rectangle" RectangleType="Filled" '
+        'BoundingBox="40.000 35.000 80.000 65.000" color="2"/>'
+        '<graphic id="8" SupersededBy="9" GraphicType="Line" '
+        'BoundingBox="100.000 50.000 20.000 50.000"/>'
+        '<graphic id="9" SupersededBy="10" GraphicType="Line" '
+        'BoundingBox="100.000 50.000 20.000 50.000"/>'
+        '<arrow id="10" Z="2" Tail3D="20.000 50.000 0.000" '
+        'Head3D="100.000 50.000 0.000" LineWidth="2.000" ArrowheadHead="Full"/>'
+        '<arrow id="11" Tail3D="20 80 0" Head3D="100 80 0"/>'
+    ).replace(
+        b'<CDXML LineWidth="0.75">',
+        b'<CDXML LineWidth="0.75"><colortable><color r="1" g="0" b="0"/><color r="0" g="0" b="0"/></colortable>',
+    )
+    state = parse_cdxml_document(raw).state
+    original = ET.fromstring(state["cdxml_source"]["xml"])
+
+    def render(canvas):
+        image = QImage(800, 600, QImage.Format.Format_ARGB32_Premultiplied)
+        image.fill(Qt.GlobalColor.white)
+        painter = QPainter(image)
+        canvas.scene().render(
+            painter, QRectF(0, 0, 800, 600), QRectF(-200, -150, 400, 300)
+        )
+        painter.end()
+        return image
+
+    with offscreen_canvas(state, command="overlapping-native-arrow") as (
+        canvas,
+        service,
+    ):
+        before = render(canvas)
+        assert before.pixelColor(120, 100).name() == expected
+        path = tmp_path / "overlap.cdxml"
+        service.save_to_file(str(path))
+        saved = path.read_bytes()
+        root = ET.fromstring(saved)
+        for old, new in zip(original.iter(), root.iter(), strict=True):
+            assert old.tag == new.tag and old.text == new.text
+            assert {k: v for k, v in old.attrib.items() if k != "Z"} == {
+                k: v for k, v in new.attrib.items() if k != "Z"
+            }
+        ranks = [
+            int(root.find(f'.//*[@id="{identity}"]').get("Z"))
+            for identity in (7, 8, 9, 10, 11)
+        ]
+        assert len(set(ranks)) == 5 and min(ranks) > 0
+        assert (ranks[0] < ranks[3]) == (fill_z < 2)
+        assert root.find('.//*[@id="8"]').get("SupersededBy") == "9"
+        assert root.find('.//*[@id="9"]').get("SupersededBy") == "10"
+        assert root.find(".//step").get("ReactionStepArrows") == "10"
+        for reopened in (
+            read_document(path).state,
+            parse_cdxml_document(saved.split(b"\n<!--")[0]).state,
+        ):
+            service.apply_state(reopened)
+            assert render(canvas) == before
+            service.save_to_file(str(path))
+            assert path.read_bytes().split(b"\n<!--")[0] == saved.split(b"\n<!--")[0]
+
+
+def test_bold_arrow_thickens_only_its_shaft_like_chemdraw():
+    from chemvas.bootstrap.document_cli_shared import offscreen_canvas
+
+    state = parse_cdxml_document(
+        drawing(
+            '<arrow id="10" Tail3D="20 50 0" Head3D="100 50 0" LineType="Bold" '
+            'ArrowheadHead="Full" HeadSize="1000" ArrowheadWidth="250"/>'
+        ).replace(b'LineWidth="0.75"', b'LineWidth="0.6" BoldWidth="2"')
+    ).state
+    with offscreen_canvas(state, command="test-native-bold-arrow") as (canvas, _):
+        context = canvas.render_context
+        item = next(iter(context.state.scene_items_state.arrow_items.values()))
+        assert item.pen().widthF() == 0.6
+        shape = item.path()
+        # Shaft: BoldWidth wide (outline plus the LineWidth pen).
+        box = shape.boundingRect()
+        x, cy = box.left() + 20, box.center().y()
+        mid = [
+            cy + dy / 1000
+            for dy in range(-2000, 2000)
+            if shape.contains(QPointF(x, cy + dy / 1000))
+        ]
+        assert abs((max(mid) - min(mid)) + 0.6 - 2.0) < 0.05
+        # Head: HeadSize/ArrowheadWidth stay in hundredths of LineWidth.
+        assert abs(shape.boundingRect().height() - 2 * 2.5 * 0.6) < 0.05
+
+
+def test_bold_dashed_line_keeps_line_width_dash_period():
+    from PyQt6.QtCore import Qt
+
+    from chemvas.bootstrap.document_cli_shared import offscreen_canvas
+
+    state = parse_cdxml_document(
+        drawing(
+            '<arrow id="10" Tail3D="20 50 0" Head3D="100 50 0" LineType="Dashed Bold"/>'
+        ).replace(b'LineWidth="0.75"', b'LineWidth="0.6" BoldWidth="2"')
+    ).state
+    with offscreen_canvas(state, command="test-native-bold-dash") as (canvas, _):
+        context = canvas.render_context
+        item = next(iter(context.state.scene_items_state.arrow_items.values()))
+        pen = item.pen()
+        assert pen.widthF() == 2.0
+        assert pen.capStyle() == Qt.PenCapStyle.FlatCap
+        # Dash and gap are each four LineWidths (2.4 pt), not four BoldWidths.
+        assert [round(v * pen.widthF(), 6) for v in pen.dashPattern()] == [2.4, 2.4]

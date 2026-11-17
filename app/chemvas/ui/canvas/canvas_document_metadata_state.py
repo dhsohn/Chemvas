@@ -30,6 +30,11 @@ class CanvasDocumentMetadataState:
     clean_non_notes_digest: str | None = None
     clean_notes: tuple[str, ...] = ()
     note_chrome_session: _NoteChromeSession | None = None
+    # Families the loaded document's text names that this system substitutes.
+    missing_fonts: tuple[str, ...] = ()
+    # Absolute path of a bare external file opened with omitted drawing features.
+    # Saves must not replace that file for the lifetime of this canvas.
+    protected_import_source_path: str | None = None
 
     def set_display_name(self, name: str) -> None:
         self.display_name = name

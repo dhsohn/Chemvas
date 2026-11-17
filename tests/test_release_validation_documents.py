@@ -10,9 +10,12 @@ from pathlib import Path
 
 import pytest
 from PIL import Image
+from PyQt6.QtCore import QRectF, Qt
+from PyQt6.QtGui import QImage, QPainter
 
 from chemvas.bootstrap.document_cli_shared import offscreen_canvas
 from chemvas.features.annotations import LabelRun, parse_arrow_label
+from chemvas.features.cdxml_document import parse_cdxml_document
 from chemvas.features.document_files import read_document
 
 DOCUMENTS = Path(__file__).resolve().parents[1] / "examples/release-validation"
@@ -110,13 +113,49 @@ def test_native_fixture_has_no_snapshot_and_preserves_native_style(tmp_path):
     assert state["model"]["bonds"][1]["order"] == 2
     assert "#1a59a6" in state["notes"][0]["html"]
     assert state["notes"][0]["text"] == "Native sample"
-    with offscreen_canvas(state, command="native-style") as (_, service):
+    with offscreen_canvas(state, command="native-style") as (canvas, service):
+
+        def render():
+            image = QImage(600, 400, QImage.Format.Format_ARGB32_Premultiplied)
+            image.fill(Qt.GlobalColor.white)
+            painter = QPainter(image)
+            try:
+                canvas.scene().render(
+                    painter, QRectF(0, 0, 600, 400), QRectF(-300, -200, 600, 400)
+                )
+            finally:
+                painter.end()
+            return image
+
+        image = render()
         saved = tmp_path / "native-saved.cdxml"
         service.save_to_file(str(saved))
+        first = saved.read_bytes()
+        native = ET.tostring(ET.fromstring(first))
+        # Both the embedded state and bare-native XML must replay the image
+        # and preserve the resolved Z on another save.
+        for reopened in (
+            read_document(saved).state,
+            parse_cdxml_document(native).state,
+        ):
+            service.apply_state(reopened)
+            assert render() == image
+            service.save_to_file(str(saved))
+            assert ET.tostring(ET.fromstring(saved.read_bytes())) == native
     before, after = (
         ET.fromstring(source.read_bytes()),
-        ET.fromstring(saved.read_bytes()),
+        ET.fromstring(first),
     )
+    # ADR 0060 permits only drawable Z normalization here. All other
+    # attributes, nested styles, text and native records remain exact below.
+    z_tags = {"n", "b", "t", "graphic", "arrow", "curve", "embeddedobject"}
+    drawables = [e for e in after.iter() if e.tag in z_tags]
+    z_values = [int(e.attrib["Z"]) for e in drawables]
+    assert len(set(z_values)) == len(z_values)
+    assert all(0 < z <= 32767 for z in z_values)
+    assert not any("Z" in e.attrib for e in after.iter() if e.tag not in z_tags)
+    for element in drawables:
+        element.attrib.pop("Z")
     for xpath in ("./fonttable", "./colortable", "./page/t"):
         assert ET.tostring(after.find(xpath)) == ET.tostring(before.find(xpath))
     old_fragment = before.find("./page/fragment")
@@ -133,3 +172,6 @@ def test_native_fixture_has_no_snapshot_and_preserves_native_style(tmp_path):
     assert new_label.attrib.keys() == old_label.attrib.keys() | {"id"}
     assert new_label.attrib["p"] == old_label.attrib["p"]
     assert ET.tostring(new_label.find("s")) == ET.tostring(old_label.find("s"))
+    label_id = new_label.attrib.pop("id")
+    assert label_id and label_id not in {e.get("id") for e in before.iter()}
+    assert ET.tostring(after) == ET.tostring(before)

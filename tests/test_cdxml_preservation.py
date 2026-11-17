@@ -226,11 +226,122 @@ def test_delete_undo_restores_source_note_identity():
         app.processEvents()
 
 
+@pytest.mark.parametrize("grouped", [False, True])
+def test_delete_undo_recreates_native_arrow_and_caption_presentation(grouped):
+    import gc
+
+    from PyQt6.QtCore import QEvent
+
+    from chemvas.ui.scene.scene_group_operations import group_selection_for
+
+    app = QApplication.instance() or QApplication([])
+    window = build_main_window()
+    canvas = active_canvas_for_window(window)
+    session = canvas.services.canvas_document_session_service
+    history = canvas.services.history_service
+    runtime = canvas.runtime_state
+    raw = NATIVE.replace(b"<CDXML ", b'<CDXML LineWidth="0.75" ').replace(
+        b'<t id="13" p="50 100"', b'<t id="13" p="50 100" Justification="Center"'
+    )
+
+    def projections():
+        return (
+            next(iter(runtime.scene_items_state.arrow_items.values())),
+            runtime.note_items()[0],
+        )
+
+    def presentation():
+        arrow, note = projections()
+        path = arrow.path()
+        return (
+            arrow.pen().widthF(),
+            [
+                (path.elementAt(i).x, path.elementAt(i).y)
+                for i in range(path.elementCount())
+            ],
+            arrow.zValue(),
+            note.transform(),
+            note.zValue(),
+        )
+
+    def delete_and_release():
+        for item in projections():
+            item.setSelected(True)
+        if grouped:
+            assert group_selection_for(canvas)
+            assert len(runtime.group_state.groups) == 1
+        assert canvas.services.scene_delete_controller.delete_selected_items()
+        assert runtime.scene_items_state.arrow_items == {}
+        assert runtime.note_items() == []
+        # Only recreated projections exercise the materialization path.
+        app.sendPostedEvents(None, QEvent.Type.DeferredDelete.value)
+        gc.collect()
+        assert runtime.scene_items_state.projections == {}
+
+    try:
+        session.apply_state(parse_cdxml_document(raw).state)
+        loaded = presentation()
+        assert loaded[0] == 0.75
+        assert (loaded[3].dx(), loaded[3].dy()) != (0.0, 0.0)
+        delete_and_release()
+        deleted = session.snapshot_state()
+        history.undo()
+        restored = session.snapshot_state()
+        assert presentation() == loaded
+        history.redo()
+        assert session.snapshot_state() == deleted
+        history.undo()
+        assert session.snapshot_state() == restored
+        assert presentation() == loaded
+    finally:
+        window.services.canvas_document_service.mark_clean(canvas)
+        window.close()
+        app.processEvents()
+
+
 def test_malformed_baseline_bindings_rejected_before_save():
     state = imported()
     state["cdxml_source"]["baseline_items"]["notes"] = []
     with pytest.raises(ValueError, match="bindings"):
         update_native_document(state)
+
+
+@pytest.mark.parametrize(
+    "corrupt,kind",
+    [
+        # A key the baseline model never had: the writer looked it up blindly.
+        (lambda s: s["atoms"].update({"99": s["atoms"].pop("0")}), "atoms"),
+        # An atom bound to a fragment moved every atom inside it.
+        (lambda s: s["atoms"].update({"0": "3"}), "atoms"),
+        # A nested label atom is part of its contracted node, not an atom.
+        (lambda s: s["atoms"].update({"0": "7"}), "atoms"),
+        # A bond bound to a node wrote bond attributes onto the atom.
+        (lambda s: s["bonds"].update({"0:1": "4"}), "bonds"),
+        (lambda s: s["bonds"].update({"0:1": "10"}), "bonds"),
+        (lambda s: s["bonds"].update({"0:2": s["bonds"].pop("0:1")}), "bonds"),
+        (lambda s: s["bonds"].update({"0:1:2": s["bonds"].pop("0:1")}), "bonds"),
+        # A bond whose native ends are not its atoms' bound nodes.
+        (lambda s: s["atoms"].pop("1"), "bonds"),
+    ],
+)
+def test_structure_bindings_must_match_baseline_and_native_roles(corrupt, kind):
+    state = imported()
+    corrupt(state["cdxml_source"])
+    with pytest.raises(ValueError, match=f"Invalid CDXML {kind} bindings"):
+        update_native_document(state)
+    # A saved snapshot carrying the same bindings is refused on open.
+    with pytest.raises(ValueError, match=f"Invalid CDXML {kind} bindings"):
+        embed_document(NATIVE, state)
+
+
+def test_structure_bindings_stay_valid_after_live_deletions():
+    state = imported()
+    state["model"]["atoms"].pop(1)
+    state["model"]["bonds"].clear()
+    root = native(state)
+    assert root.find('.//*[@id="5"]') is None
+    assert root.find('.//*[@id="12"]') is None
+    assert root.find('.//*[@id="4"]') is not None
 
 
 def test_deleting_native_charge_graphic_does_not_leave_hidden_charge():
@@ -273,6 +384,27 @@ def test_embedded_png_display_and_native_metafile_survive_move():
     assert node.get("BoundingBox") == "15 20 45 40"
     assert node.get("EnhancedMetafile") == "original-metafile"
     assert node.find("annotation").get("Content") == "diagram"
+
+
+def test_image_move_transforms_only_direct_superseded_graphics():
+    root = ET.fromstring(embedded_native())
+    page = root.find("page")
+    for identity, target in (("32", "31"), ("31", "30")):
+        ET.SubElement(
+            page,
+            "graphic",
+            id=identity,
+            GraphicType="Line",
+            BoundingBox="30 20 10 20",
+            SupersededBy=target,
+        )
+    state = parse_cdxml_document(ET.tostring(root)).state
+    index = state["cdxml_source"]["items"]["images"].index("30")
+    state["images"][index]["x"] += 5
+
+    saved = native(state)
+    assert saved.find(".//graphic[@id='31']").get("BoundingBox") == "35 20 15 20"
+    assert saved.find(".//graphic[@id='32']").get("BoundingBox") == "30 20 10 20"
 
 
 def test_invalid_embedded_png_is_refused_without_metafile_execution():
@@ -323,10 +455,8 @@ def test_native_background_fill_stays_below_bonds():
         )
     )
     state = parse_cdxml_document(raw).state
-    # Black Filled rectangles import as bound shapes; Z still lives on the native
-    # graphic. Background stacking for non-editable graphics uses image z.
-    assert state["cdxml_source"]["items"]["shapes"].index("32") == 0
-    assert state["shapes"][0]["fill"] == "#000000"
+    index = state["cdxml_source"]["items"]["shapes"].index("32")
+    assert state["shapes"][index]["z"] < 0
     assert native(state).find('.//graphic[@id="32"]').get("Z") == "10"
 
 
@@ -339,7 +469,7 @@ def test_molecular_area_uses_cdxml_color_mapping(index, expected):
 
     from PIL import Image
 
-    raw = f'''<CDXML><colortable><color r="1" g="0" b="0"/></colortable>
+    raw = f'''<CDXML><colortable><color r="1" g="0" b="0"/><color r="0" g="0" b="0"/></colortable>
     <page id="1" Width="100" Height="100"><fragment id="2">
     <n id="3" p="10 10"/><n id="4" p="80 10"/><n id="5" p="40 80"/>
     </fragment><ColoredMolecularArea id="6" BasisObjects="3 4 5" bgcolor="{index}"/>
@@ -354,7 +484,7 @@ def test_molecular_area_uses_cdxml_color_mapping(index, expected):
         )
 
 
-@pytest.mark.parametrize("index", ["2", "99", "-1"])
+@pytest.mark.parametrize("index", ["4", "99", "-1"])
 def test_missing_molecular_area_color_is_refused(index):
     raw = f'''<CDXML><page id="1" Width="100" Height="100"><fragment id="2">
     <n id="3" p="10 10"/><n id="4" p="80 10"/><n id="5" p="40 80"/>

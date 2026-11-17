@@ -115,7 +115,7 @@ class AtomGeometrySyncTest(unittest.TestCase):
             ),
         )
         view._spatial_dirty_calls = dirty_calls
-        controller = CanvasMoveController(view, hit_testing_service=hit)
+        controller = CanvasMoveController.for_canvas(view, hit_testing_service=hit)
         view.services.move_controller = controller
         if coords_3d is not None:
             set_atom_coords_3d_for(view, dict(coords_3d))

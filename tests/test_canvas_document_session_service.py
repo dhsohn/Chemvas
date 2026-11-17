@@ -3,6 +3,7 @@ import tempfile
 import unittest
 from contextlib import nullcontext
 from copy import deepcopy
+from dataclasses import fields as dataclass_fields
 from pathlib import Path
 from types import SimpleNamespace
 from unittest import mock
@@ -33,6 +34,8 @@ from chemvas.features.export import ExportPlan
 from chemvas.ui.canvas.canvas_calculation_plan_state import CanvasCalculationPlanState
 from chemvas.ui.canvas.canvas_document_metadata_state import CanvasDocumentMetadataState
 from chemvas.ui.canvas.canvas_document_session_service import (
+    _DOCUMENT_MUTATED_RUNTIME_FIELDS,
+    _DOCUMENT_SESSION_RUNTIME_FIELDS,
     CanvasDocumentSessionService,
     _DetachedSceneSnapshot,
 )
@@ -40,7 +43,10 @@ from chemvas.ui.canvas.canvas_group_state import CanvasGroupState
 from chemvas.ui.canvas.canvas_history_service import CanvasHistoryService
 from chemvas.ui.canvas.canvas_history_state import CanvasHistoryState
 from chemvas.ui.canvas.canvas_rotation_state import CanvasRotationState
-from chemvas.ui.canvas.canvas_runtime_state import attach_canvas_runtime_state
+from chemvas.ui.canvas.canvas_runtime_state import (
+    CanvasRuntimeState,
+    attach_canvas_runtime_state,
+)
 from chemvas.ui.canvas.canvas_scene_items_state import CanvasSceneItemsState
 from chemvas.ui.canvas.canvas_scene_reset_service import CanvasSceneResetService
 from chemvas.ui.canvas.molecule_scene_renderer import render_molecule
@@ -119,7 +125,6 @@ def _document_runtime_state(**states):
     every run, so a double carries the states it touches even when the test
     only asserts on history.
     """
-    states.setdefault("history_state", CanvasHistoryState())
     states.setdefault("selection_state", SelectionState())
     states.setdefault("selection_info_state", SelectionInfoState())
     states.setdefault("scene_items_state", CanvasSceneItemsState())
@@ -134,15 +139,14 @@ def _document_runtime_state(**states):
     return canvas_runtime_state(**states)
 
 
-def _attach_history_service(canvas):
+def _attach_history_service(canvas, **history_kwargs):
     operations = CanvasHistoryOperations(canvas)
     runtime_state = getattr(canvas, "runtime_state", None)
     if runtime_state is None:
         runtime_state = _document_runtime_state()
         canvas.runtime_state = runtime_state
-    service = CanvasHistoryService(
-        operations, canvas.runtime_state.history_state, replay_context=nullcontext
-    )
+    state = CanvasHistoryState(**history_kwargs)
+    service = CanvasHistoryService(operations, state, replay_context=nullcontext)
     services = getattr(canvas, "services", None)
     if services is None:
         services = canvas_runtime_services()
@@ -270,8 +274,8 @@ class CanvasDocumentSessionServiceTest(unittest.TestCase):
         )
         _attach_history_service(canvas)
         service = _session_service(canvas)
-        canvas.runtime_state.history_state.history.append(object())
-        canvas.runtime_state.history_state.redo_stack.append(object())
+        canvas.services.history_service.state.history.append(object())
+        canvas.services.history_service.state.redo_stack.append(object())
 
         with (
             mock.patch(
@@ -292,9 +296,9 @@ class CanvasDocumentSessionServiceTest(unittest.TestCase):
             service.apply_state({"model": {"atoms": []}, "last_smiles_input": None})
 
         self.assertEqual(canvas.model, "new-model")
-        self.assertTrue(canvas.runtime_state.history_state.enabled)
-        self.assertEqual(canvas.runtime_state.history_state.history, [])
-        self.assertEqual(canvas.runtime_state.history_state.redo_stack, [])
+        self.assertTrue(canvas.services.history_service.state.enabled)
+        self.assertEqual(canvas.services.history_service.state.history, [])
+        self.assertEqual(canvas.services.history_service.state.redo_stack, [])
         selection_info = canvas.runtime_state.selection_info_state
         self.assertIs(selection_info.callback, selection_callback)
         self.assertEqual(
@@ -326,7 +330,6 @@ class CanvasDocumentSessionServiceTest(unittest.TestCase):
             settings="old-settings",
             scene_items=list(old_state["scene"]),
             runtime_state=_document_runtime_state(
-                history_state=CanvasHistoryState(enabled=False),
                 sheet_setup_state=SheetSetupState(
                     size_name="Letter", orientation="landscape"
                 ),
@@ -348,9 +351,9 @@ class CanvasDocumentSessionServiceTest(unittest.TestCase):
             rebuild_bond_adjacency=mock.Mock(),
             mark_spatial_index_dirty=mock.Mock(),
         )
-        _attach_history_service(canvas)
+        _attach_history_service(canvas, enabled=False)
         service = _session_service(canvas)
-        history_state = canvas.runtime_state.history_state
+        history_state = canvas.services.history_service.state
         undo_command = object()
         redo_command = object()
         history_state.history.append(undo_command)
@@ -418,9 +421,7 @@ class CanvasDocumentSessionServiceTest(unittest.TestCase):
             model="old-model",
             settings="old-settings",
             scene_items=list(old_state["scene"]),
-            runtime_state=_document_runtime_state(
-                history_state=CanvasHistoryState(enabled=False),
-            ),
+            runtime_state=_document_runtime_state(),
         )
 
         def clear_scene() -> None:
@@ -435,9 +436,9 @@ class CanvasDocumentSessionServiceTest(unittest.TestCase):
             rebuild_bond_adjacency=mock.Mock(),
             mark_spatial_index_dirty=mock.Mock(),
         )
-        _attach_history_service(canvas)
+        _attach_history_service(canvas, enabled=False)
         service = _session_service(canvas)
-        history_state = canvas.runtime_state.history_state
+        history_state = canvas.services.history_service.state
         undo_command = object()
         redo_command = object()
         history_state.history.append(undo_command)
@@ -492,11 +493,7 @@ class CanvasDocumentSessionServiceTest(unittest.TestCase):
     ) -> None:
         canvas = SimpleNamespace(
             model="old-model",
-            runtime_state=_document_runtime_state(
-                history_state=CanvasHistoryState(
-                    history=[object()], redo_stack=[object()], enabled=False
-                )
-            ),
+            runtime_state=_document_runtime_state(),
         )
 
         def clear_scene() -> None:
@@ -507,7 +504,12 @@ class CanvasDocumentSessionServiceTest(unittest.TestCase):
             rebuild_bond_adjacency=mock.Mock(),
             mark_spatial_index_dirty=mock.Mock(),
         )
-        _attach_history_service(canvas)
+        _attach_history_service(
+            canvas,
+            history=[object()],
+            redo_stack=[object()],
+            enabled=False,
+        )
         service = _session_service(canvas)
 
         with (
@@ -532,9 +534,9 @@ class CanvasDocumentSessionServiceTest(unittest.TestCase):
                 service.apply_state({"model": {"name": "target-model"}})
 
         self.assertEqual(canvas.model, "empty-model")
-        self.assertEqual(canvas.runtime_state.history_state.history, [])
-        self.assertEqual(canvas.runtime_state.history_state.redo_stack, [])
-        self.assertFalse(canvas.runtime_state.history_state.enabled)
+        self.assertEqual(canvas.services.history_service.state.history, [])
+        self.assertEqual(canvas.services.history_service.state.redo_stack, [])
+        self.assertFalse(canvas.services.history_service.state.enabled)
 
     def test_apply_state_rolls_back_materialization_and_group_failures(self) -> None:
         for failing_phase in ("materialize", "groups"):
@@ -575,7 +577,7 @@ class CanvasDocumentSessionServiceTest(unittest.TestCase):
                 _attach_history_service(canvas)
                 service = _session_service(canvas)
                 command = object()
-                canvas.runtime_state.history_state.history.append(command)
+                canvas.services.history_service.state.history.append(command)
                 old_state = {"model": "old", "scene": ["old-item"]}
                 with (
                     mock.patch(
@@ -604,9 +606,11 @@ class CanvasDocumentSessionServiceTest(unittest.TestCase):
                 self.assertEqual(canvas.model, "old-model")
                 self.assertEqual(canvas.settings, "old-settings")
                 self.assertEqual(canvas.scene_items, ["old-item"])
-                self.assertEqual(canvas.runtime_state.history_state.history, [command])
-                self.assertEqual(canvas.runtime_state.history_state.redo_stack, [])
-                self.assertTrue(canvas.runtime_state.history_state.enabled)
+                self.assertEqual(
+                    canvas.services.history_service.state.history, [command]
+                )
+                self.assertEqual(canvas.services.history_service.state.redo_stack, [])
+                self.assertTrue(canvas.services.history_service.state.enabled)
 
     def test_apply_state_detach_failure_restores_items_and_history_before_raising(
         self,
@@ -634,9 +638,7 @@ class CanvasDocumentSessionServiceTest(unittest.TestCase):
         canvas = SimpleNamespace(
             model="old-model",
             scene=lambda: scene,
-            runtime_state=_document_runtime_state(
-                history_state=CanvasHistoryState(history=[object()])
-            ),
+            runtime_state=_document_runtime_state(),
         )
         clear_scene = mock.Mock()
         canvas.services = _document_services(
@@ -644,9 +646,9 @@ class CanvasDocumentSessionServiceTest(unittest.TestCase):
             rebuild_bond_adjacency=mock.Mock(),
             mark_spatial_index_dirty=mock.Mock(),
         )
-        _attach_history_service(canvas)
+        _attach_history_service(canvas, history=[object()])
         service = _session_service(canvas)
-        original_command = canvas.runtime_state.history_state.history[0]
+        original_command = canvas.services.history_service.state.history[0]
 
         with mock.patch(
             "chemvas.ui.canvas.canvas_document_session_service.snapshot_canvas_document_state",
@@ -660,8 +662,10 @@ class CanvasDocumentSessionServiceTest(unittest.TestCase):
         self.assertEqual(scene.items(), original_items)
         self.assertEqual(scene.selectedItems(), [first])
         self.assertTrue(scene.signalsBlocked())
-        self.assertEqual(canvas.runtime_state.history_state.history, [original_command])
-        self.assertTrue(canvas.runtime_state.history_state.enabled)
+        self.assertEqual(
+            canvas.services.history_service.state.history, [original_command]
+        )
+        self.assertTrue(canvas.services.history_service.state.enabled)
         clear_scene.assert_not_called()
 
     def test_apply_state_rollback_preserves_live_parent_child_item_history_references(
@@ -712,7 +716,7 @@ class CanvasDocumentSessionServiceTest(unittest.TestCase):
             before_state={"x": 2.0},
             after_state={"x": 8.0},
         )
-        canvas.runtime_state.history_state.history.append(command)
+        canvas.services.history_service.state.history.append(command)
         old_state = {"model": {"name": "old-model"}, "scene": "old"}
 
         def populate_target(_context, _state, **_kwargs):
@@ -754,8 +758,8 @@ class CanvasDocumentSessionServiceTest(unittest.TestCase):
             canvas.services.history_service.undo()
 
         self.assertEqual(child_item.x(), 2.0)
-        self.assertEqual(canvas.runtime_state.history_state.history, [])
-        self.assertEqual(canvas.runtime_state.history_state.redo_stack, [command])
+        self.assertEqual(canvas.services.history_service.state.history, [])
+        self.assertEqual(canvas.services.history_service.state.redo_stack, [command])
 
     def test_apply_state_rollback_restores_view_rect(self) -> None:
         app = QApplication.instance() or QApplication([])
@@ -935,6 +939,90 @@ class CanvasDocumentSessionServiceTest(unittest.TestCase):
             original_scene_rect,
         )
         canvas.close()
+
+    def test_replacement_rollback_covers_every_document_runtime_field(self) -> None:
+        names = {field.name for field in dataclass_fields(CanvasRuntimeState)}
+        # A renamed field must not silently drop out of the exclusions.
+        self.assertLessEqual(_DOCUMENT_SESSION_RUNTIME_FIELDS, names)
+        self.assertEqual(
+            set(_DOCUMENT_MUTATED_RUNTIME_FIELDS),
+            names - _DOCUMENT_SESSION_RUNTIME_FIELDS,
+        )
+        self.assertIn("document_metadata_state", _DOCUMENT_MUTATED_RUNTIME_FIELDS)
+        self.assertIn("native_arrow_styles", _DOCUMENT_MUTATED_RUNTIME_FIELDS)
+
+    def test_failed_replacement_restores_native_cdxml_source_and_arrow_styles(
+        self,
+    ) -> None:
+        from chemvas.features.cdxml_document import parse_cdxml_document
+
+        def native(arrow: str) -> dict:
+            return parse_cdxml_document(
+                (
+                    '<CDXML LineWidth="0.75"><page id="1" BoundingBox="0 0 400 300">'
+                    '<fragment id="30"><n id="31" p="40 50"/><n id="32" p="60 50"/>'
+                    '<b id="33" B="31" E="32"/></fragment>'
+                    f"{arrow}</page></CDXML>"
+                ).encode()
+            ).state
+
+        previous = native(
+            '<arrow id="10" Tail3D="20 90 0" Head3D="100 90 0" '
+            'ArrowheadHead="Full" HeadSize="800"/>'
+        )
+        target = native(
+            '<arrow id="70" Tail3D="30 120 0" Head3D="90 140 0" '
+            'ArrowheadHead="Full" HeadSize="1500"/>'
+        )
+        module = "chemvas.ui.canvas.canvas_document_session_service"
+        failure_points = {
+            "materialize": f"{module}.populate_document_scene",
+            "groups": f"{module}.restore_document_groups",
+            "source": "chemvas.ui.canvas.canvas_cdxml_source.restore_cdxml_source",
+            "normalize": (
+                "chemvas.ui.canvas.canvas_cdxml_source."
+                "normalize_initial_cdxml_projection"
+            ),
+            "commit": f"{module}._CanvasRollbackSnapshot.commit_replacement",
+        }
+        for phase, target_name in failure_points.items():
+            with self.subTest(phase=phase):
+                canvas = build_canvas_view()
+                service = canvas.services.canvas_document_session_service
+                service.apply_state(deepcopy(previous))
+                runtime = canvas.runtime_state
+                metadata = runtime.document_metadata_state
+                bindings = metadata.cdxml_item_bindings
+                styles = runtime.native_arrow_styles
+                before = service.snapshot_state()
+                before_source = deepcopy(metadata.cdxml_source)
+                before_bindings = deepcopy(bindings)
+                before_styles = dict(styles)
+                arrow = next(iter(runtime.scene_items_state.arrow_items.values()))
+                before_width = arrow.pen().widthF()
+                history = canvas.services.history_service.state
+                history.history.append(command := object())
+                self.assertIsNotNone(before_source)
+                self.assertEqual(len(before_styles), 1)
+
+                with mock.patch(target_name, side_effect=RuntimeError(phase)):
+                    with self.assertRaisesRegex(RuntimeError, phase) as raised:
+                        service.apply_state(deepcopy(target))
+
+                self.assertFalse(getattr(raised.exception, "__notes__", None))
+                self.assertEqual(service.snapshot_state(), before)
+                self.assertEqual(metadata.cdxml_source, before_source)
+                self.assertIs(metadata.cdxml_item_bindings, bindings)
+                self.assertEqual(bindings, before_bindings)
+                self.assertIs(runtime.native_arrow_styles, styles)
+                self.assertEqual(styles, before_styles)
+                self.assertEqual(len(canvas.model.atoms), 2)
+                self.assertEqual(
+                    list(runtime.scene_items_state.arrow_items.values()), [arrow]
+                )
+                self.assertEqual(arrow.pen().widthF(), before_width)
+                self.assertEqual(history.history, [command])
+                canvas.close()
 
     def test_rolled_back_selected_document_can_be_cleared_without_stale_item_callbacks(
         self,

@@ -13,6 +13,8 @@ from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     import xml.etree.ElementTree as ET
+
+    from chemvas.features.cdxml_preservation import PreservingImporter
 from PIL import Image, ImageDraw
 
 from chemvas.domain.document.images import MAX_IMAGE_BYTES, image_state_from_bytes
@@ -25,15 +27,120 @@ def graphic_image(reader: Any, e: ET.Element) -> dict[str, object] | None:
     return _GraphicProjection(reader, e).render()
 
 
-def native_image_z(reader: Any, e: ET.Element) -> float:
+def native_image_z(
+    reader: Any,
+    e: ET.Element,
+    *,
+    bounds: tuple[float, float, float, float] | None = None,
+) -> float:
+    """Choose an existing paint band, without changing retained native ranks.
+
+    Raster projections supply their actual native-coordinate extent: an oval's
+    BoundingBox, for example, can describe its axis and center, not its extent.
+    Only overlapping chemistry can decide whether that projection is behind
+    bonds. Editable arrows keep their established classification (no bounds).
+    This is not a general cross-layer ordering solver; mixed foreground and
+    background overlaps still use the conservative foreground band and the
+    document writer's existing representability checks.
+    """
     if e.tag == "ColoredMolecularArea":
         return -3.0
-    chemical = reader.nodes + reader.native_bonds
+    chemical = (
+        reader.nodes + reader.native_bonds
+        if bounds is None
+        else _overlapping_chemistry(reader, bounds)
+    )
     if chemical and reader.number(e.get("Z", "0"), e) < min(
         reader.number(node.get("Z", "0"), node) for node in chemical
     ):
         return -3.0
     return 1.0
+
+
+def _segment_in_box(
+    a: tuple[float, float],
+    b: tuple[float, float],
+    bounds: tuple[float, float, float, float],
+    padding: float = 0.0,
+) -> bool:
+    """Clip a segment against a stroke-expanded box, including boundary contact."""
+    start, end = 0.0, 1.0
+    for p, q, low, high in zip(a, b, bounds[:2], bounds[2:], strict=True):
+        low, high = low - padding, high + padding
+        if p == q:
+            if not low <= p <= high:
+                return False
+        else:
+            near, far = sorted(((low - p) / (q - p), (high - p) / (q - p)))
+            start, end = max(start, near), min(end, far)
+            if start > end:
+                return False
+    return True
+
+
+def _overlapping_chemistry(
+    reader: PreservingImporter, bounds: tuple[float, float, float, float]
+) -> list[ET.Element]:
+    """Conservative native geometry, excluding invisible carbon hit targets.
+
+    Bond endpoints outside the graphic can still cross it; conversely a diagonal
+    bond's enclosing rectangle alone does not establish overlap. Text boxes are
+    a conservative guard, not a second font-layout engine. Cached node/bond boxes
+    never replace their authoritative positions/endpoints.
+    """
+    result = []
+    positions = {}
+    for node in reader.nodes:
+        x, y = (reader.number(v, node) for v in node.get("p", "").split())
+        positions[node.get("id")] = (x, y)
+        text = node.find("t")
+        if text is None and node.get("Element", "6") == "6":
+            continue
+        relevant = _segment_in_box((x, y), (x, y), bounds)
+        if text is not None:
+            box = text.get("BoundingBox", "").split()
+            if len(box) == 4:
+                x1, y1, x2, y2 = (reader.number(v, text) for v in box)
+                relevant |= (
+                    max(x1, x2) >= bounds[0]
+                    and min(x1, x2) <= bounds[2]
+                    and max(y1, y2) >= bounds[1]
+                    and min(y1, y2) <= bounds[3]
+                )
+        if relevant:
+            result.append(node)
+    for bond in reader.native_bonds:
+
+        def number(name: str, default: str, element: ET.Element = bond) -> float:
+            return reader.number(reader.inherited(element, name, default), element)
+
+        try:
+            padding = number("LineWidth", "0.6") / 2
+            display = bond.get("Display", "Solid")
+            if display == "Bold":
+                padding = max(padding, number("BoldWidth", "2") / 2)
+            elif display in {"Wavy", "Hash"}:
+                # The native uncertain-bond painter caps its transverse
+                # displacement at 1.4 scene units, in addition to the stroke.
+                padding += 1.4
+            elif display not in {"Solid", "Dash"}:
+                # Wedges and wedged hashes include the transverse width AND
+                # the outline/hash pen, not just the larger of the two.
+                padding += number("BoldWidth", "2") / 2
+            if bond.get("Order", "1") != "1":
+                padding += (
+                    number("BondSpacing", "18") * number("BondLength", "14.4") / 100
+                )
+        except ValueError:
+            # Invalid stroke metrics are rejected by the native presentation
+            # owner on scene creation. Unknown bounds cannot prove separation.
+            result.append(bond)
+            continue
+        if _segment_in_box(
+            positions[bond.get("B")], positions[bond.get("E")], bounds, padding
+        ):
+            result.append(bond)
+    return result
 
 
 def embedded_image(reader: Any, e: ET.Element) -> dict[str, object]:
@@ -55,8 +162,35 @@ def embedded_image(reader: Any, e: ET.Element) -> dict[str, object]:
         y=top - reader.offset[1],
         width=right - left,
         height=bottom - top,
-        z=native_image_z(reader, e),
+        z=native_image_z(reader, e, bounds=(left, top, right, bottom)),
     )
+
+
+def _curve_flags(reader: Any, e: ET.Element) -> int:
+    """CurveType is a decimal bit field, unlike the named graphic types."""
+    try:
+        flags = int(e.get("CurveType", "0"))
+    except ValueError:
+        reader.unsupported(e, "invalid numeric CurveType")
+    if flags < 0 or flags & ~0xFF:
+        # Shaded/doubled curves need a different projection; never silently
+        # draw these (or unknown flags) as ordinary solid outlines.
+        reader.unsupported(e, "unsupported curve flags")
+    return flags
+
+
+def native_stroke_width(reader: Any, e: ET.Element, line_width: float) -> float:
+    """Return the stroke width ChemDraw draws for a native graphic or arrow."""
+    styles = " ".join(
+        e.get(key, "") for key in ("LineType", "RectangleType", "OvalType")
+    )
+    bold_curve = e.tag == "curve" and bool(_curve_flags(reader, e) & 4)
+    if "Bold" not in styles.split() and not bold_curve:
+        return line_width
+    width = float(reader.number(reader.inherited(e, "BoldWidth", "2"), e))
+    if not 0 < width <= 100:
+        reader.unsupported(e, "bold width")
+    return width
 
 
 class _GraphicProjection:
@@ -67,8 +201,17 @@ class _GraphicProjection:
         self.width = self.reader.number(
             self.reader.inherited(self.e, "LineWidth", "0.6"), self.e
         )
-        if not 0 < self.width <= 100:
+        fill_only = self.e.tag == "curve" or (
+            self.e.tag == "graphic"
+            and self.e.get("GraphicType") == "Rectangle"
+            and self.e.get("RectangleType") == "RoundEdge Filled"
+            and self.e.get("LineType", "Solid") == "Solid"
+        )
+        if not 0 <= self.width <= 100 or (self.width == 0 and not fill_only):
             self.reader.unsupported(self.e, "line width")
+        # ChemDraw strokes Bold lines, rectangles and ovals at BoldWidth, while
+        # arrowheads, lips and corners stay proportional to LineWidth.
+        self.stroke = native_stroke_width(reader, e, self.width)
         self.paths: list[tuple[list[tuple[float, float]], bool, str | None]] = []
         self.tag = self.e.tag
         self.kind = self.e.get("GraphicType", "")
@@ -158,19 +301,31 @@ class _GraphicProjection:
                         + t**3 * d[1],
                     )
                 )
-        closed = self.e.get("Closed", "no") == "yes" or "Closed" in self.e.get(
-            "CurveType", ""
+        flags = _curve_flags(self.reader, self.e)
+        closed = self.e.get("Closed", "yes" if flags & 1 else "no") == "yes"
+        fill = self.e.get("FillType", "Solid" if flags & 128 else "None")
+        if fill not in {"None", "Solid"}:
+            self.reader.unsupported(self.e, "unsupported curve fill")
+        head_kind = self.e.get(
+            "ArrowheadHead",
+            "Full" if flags & 8 else "HalfLeft" if flags & 32 else "None",
         )
-        self.paths.append(
-            (
-                curve,
-                closed,
-                self.color if "Filled" in self.e.get("CurveType", "") else None,
-            )
+        tail_kind = self.e.get(
+            "ArrowheadTail",
+            "Full" if flags & 16 else "HalfLeft" if flags & 64 else "None",
         )
-
-        head_kind = self.e.get("ArrowheadHead", "None")
-        tail_kind = self.e.get("ArrowheadTail", "None")
+        # ChemDraw gives arrowheads priority over closure/fill. Dashed curves
+        # cannot be filled either. Modern explicit properties override the
+        # corresponding legacy bits when both are present.
+        if head_kind != "None" or tail_kind != "None":
+            closed, fill = False, "None"
+        if flags & 2 or "Dashed" in self.e.get("LineType", ""):
+            fill = "None"
+        # ChemDraw saves filled polygons with no outline as LineWidth=0.
+        # A zero-width curve still needs a fill after arrow/dash precedence.
+        if self.width == 0 and fill != "Solid":
+            self.reader.unsupported(self.e, "line width")
+        self.paths.append((curve, closed, self.color if fill == "Solid" else None))
         if head_kind != "None":
             self.head(curve[-1], curve[-2], head_kind)
         if tail_kind != "None":
@@ -276,11 +431,17 @@ class _GraphicProjection:
             if "RoundEdge" in self.e.get("RectangleType", ""):
                 left, right = sorted((a[0], b[0]))
                 top, bottom = sorted((a[1], b[1]))
+                # ChemDraw reopens zero-width rounded fills using the document
+                # line width for corner geometry. Zero still suppresses the
+                # outline; it does not make the retained native corners square.
+                corner_width = self.width or self.reader.number(
+                    self.reader.root.get("LineWidth", "0.6"), self.e
+                )
                 radius = min(
                     (right - left) / 2,
                     (bottom - top) / 2,
                     self.reader.number(self.e.get("CornerRadius", "600"), self.e)
-                    * self.width
+                    * corner_width
                     / 100,
                 )
                 rectangle = []
@@ -384,28 +545,42 @@ class _GraphicProjection:
         allpoints = [p for ps, _, _ in self.paths for p in ps]
         if not allpoints:
             self.reader.unsupported(self.e, "empty native graphic")
-        padding = max(self.width, 1.5)
+        padding = max(self.stroke, 1.5)
         left = min(p[0] for p in allpoints) - padding
         top = min(p[1] for p in allpoints) - padding
         right = max(p[0] for p in allpoints) + padding
         bottom = max(p[1] for p in allpoints) + padding
         w, h = (right - left, bottom - top)
-        scale = 4
-        pixels = (max(1, math.ceil(w * scale)), max(1, math.ceil(h * scale)))
-        if pixels[0] * pixels[1] > 8000000:
+        # Raster strokes are whole pixels. Pick the scale so the main stroke is
+        # an exact pixel count near eight per point; a fixed 4 px/pt rounded a
+        # 0.6 pt stroke down to 0.5 pt. Large graphics keep the 4 px/pt budget.
+        scale = max(1, round(self.stroke * 8)) / self.stroke if self.stroke else 8.0
+        for candidate in (scale, 4.0):
+            pixels = (
+                max(1, math.ceil(w * candidate)),
+                max(1, math.ceil(h * candidate)),
+            )
+            if pixels[0] * pixels[1] <= 8000000:
+                scale = candidate
+                break
+        else:
             self.reader.unsupported(self.e, "oversized graphic")
         raster = Image.new("RGBA", pixels, (0, 0, 0, 0))
         draw = ImageDraw.Draw(raster)
         for ps, closed, fill in self.paths:
+            # Filled heads keep their LineWidth outline; Bold widens strokes only.
+            stroke = self.width if fill else self.stroke
             coords = [((x - left) * scale, (y - top) * scale) for x, y in ps]
             if fill:
                 draw.polygon(coords, fill=fill)
             if closed:
                 coords.append(coords[0])
-            if self.tag != "ColoredMolecularArea":
+            if self.tag != "ColoredMolecularArea" and stroke > 0:
                 dashed = "Dashed" in self.e.get(
                     "RectangleType", ""
                 ) or "Dashed" in self.e.get("LineType", "")
+                if self.tag == "curve" and _curve_flags(self.reader, self.e) & 2:
+                    dashed = True
                 if dashed and not fill:
                     phase = 0.0
                     dash = max(1.0, self.width * scale * 4)
@@ -428,7 +603,7 @@ class _GraphicProjection:
                                 draw.line(
                                     endpoints,
                                     fill=self.color,
-                                    width=max(1, round(self.width * scale)),
+                                    width=max(1, round(stroke * scale)),
                                 )
                             position += step
                             phase = (phase + step) % (2 * dash)
@@ -436,12 +611,12 @@ class _GraphicProjection:
                     draw.line(
                         coords,
                         fill=self.color,
-                        width=max(1, round(self.width * scale)),
+                        width=max(1, round(stroke * scale)),
                         joint="curve",
                     )
         output = io.BytesIO()
         raster.save(output, format="PNG")
-        z = native_image_z(self.reader, self.e)
+        z = native_image_z(self.reader, self.e, bounds=(left, top, right, bottom))
         return image_state_from_bytes(
             output.getvalue(),
             x=left - self.reader.offset[0],

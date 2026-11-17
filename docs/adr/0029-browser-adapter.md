@@ -1,6 +1,6 @@
 # ADR 0029: Browser presentation adapter over existing editing owners
 
-- Status: Extended by [ADR 0032](0032-browser-clipboard-and-drafts.md); Partly superseded by [ADR 0055](0055-retire-rdkit-chemistry-provider.md)
+- Status: Superseded by [ADR 0068](0068-retire-browser-adapter.md)
 - Date: 2026-09-28
 - Extends: [ADR 0005](0005-responsibility-based-editor-boundaries.md)
 

@@ -119,28 +119,16 @@ class MainWindowToolStateServiceTest(unittest.TestCase):
         )
 
     def test_sync_tool_actions_from_canvas_follows_active_tool_variants(self) -> None:
-        self._reset_tool_checks()
-        active_canvas_for_window(
-            self.window
-        ).services.tool_controller.active = SimpleNamespace(name="bond")
-        self.service.sync_tool_actions_from_canvas(self.window)
-        self.assertTrue(self.window.ui_references.tool_actions["bond"].isChecked())
-
-        self._reset_tool_checks()
-        active_canvas_for_window(
-            self.window
-        ).services.tool_controller.active = SimpleNamespace(name="mark")
-        self.service.sync_tool_actions_from_canvas(self.window)
-        self.assertTrue(self.window.ui_references.tool_actions["mark"].isChecked())
-
-        self._reset_tool_checks()
-        active_canvas_for_window(
-            self.window
-        ).services.tool_controller.active = SimpleNamespace(name="perspective")
-        self.service.sync_tool_actions_from_canvas(self.window)
-        self.assertTrue(
-            self.window.ui_references.tool_actions["perspective"].isChecked()
-        )
+        tool_controller = active_canvas_for_window(self.window).services.tool_controller
+        for tool_name in ("bond", "mark", "perspective"):
+            self._reset_tool_checks()
+            with mock.patch.object(
+                tool_controller, "active", SimpleNamespace(name=tool_name)
+            ):
+                self.service.sync_tool_actions_from_canvas(self.window)
+            self.assertTrue(
+                self.window.ui_references.tool_actions[tool_name].isChecked()
+            )
         self.assertEqual(self.active_tool_name_for_window.call_count, 3)
         self.assertEqual(self.tool_action_for_key.call_count, 3)
 

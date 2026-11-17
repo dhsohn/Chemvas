@@ -48,7 +48,7 @@ class StructureBuildService:
     ) -> None:
         self.canvas = canvas
         self.graph_service = graph_service
-        self.committer = StructureBuildCommitter(canvas)
+        self.committer = StructureBuildCommitter.for_canvas(canvas)
         self.bond_builder = StructureBondBuildService(
             canvas,
             self.committer,

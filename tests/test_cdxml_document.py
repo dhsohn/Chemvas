@@ -120,7 +120,7 @@ def test_wedge_end_preserves_narrow_end_and_charge():
 def test_native_group_survives_as_source_with_raster_rectangle_and_editable_line():
     raw = b'<CDXML><page Width="400" Height="300"><group id="2"><graphic id="3" GraphicType="Rectangle" BoundingBox="10 10 50 60"/><graphic id="4" GraphicType="Line" BoundingBox="80 80 120 80"/></group></page></CDXML>'
     state = parse_cdxml_document(raw).state
-    # Non-black-editable rectangle stays a raster image; the line is editable.
+    # A plain outlined rectangle stays a raster image; the line is editable.
     # Both are bound, so the page-level native group becomes one editor group.
     assert state["groups"] == [{"atoms": [], "items": [["images", 0], ["arrows", 0]]}]
     assert state["shapes"] == []
@@ -154,8 +154,8 @@ def test_chemical_properties_survive_preserving_import_and_unrelated_edit(
     state = parse_cdxml_document(raw).state
     assert needle in state["cdxml_source"]["xml"]
     edited = deepcopy(state)
-    # Recolor the arrow: an edit outside the fragment. Atom moves and bond edits
-    # deliberately drop computed AS/CIP labels on the touched nodes.
+    # Recolor the arrow: an edit outside the fragment. Structural and geometric
+    # edits drop computed AS/BS/CIP across the touched fragment.
     edited["arrows"][0]["color"] = "#ff0000"
     assert needle in update_native_document(edited).decode()
 

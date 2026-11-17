@@ -222,14 +222,12 @@ class CanvasInputController:
                 self.scene_delete.delete_bond(item_id, record=True)
 
     def _cancel_interaction(self) -> None:
-        if self.insert_state.template_active:
-            self.canvas.services.insert_controller.cancel_template_insert()
-        else:
+        if not self.insert_state.template_active:
             if self._cancel_active_gesture is not None:
                 self._cancel_active_gesture()
-            # Tool deactivation owns gesture rollback and note commits.
-            # Re-enter Select even when already active to cancel its drag.
-            self.tool_mode_controller.set_tool("select")
+        # Tool deactivation owns gesture rollback and note commits.
+        # Re-enter Select even when already active to cancel its drag.
+        self.tool_mode_controller.set_tool("select")
 
     def handle_chemdraw_shortcut(self, event) -> bool:
         if self._is_offsheet_structure_edit(event):

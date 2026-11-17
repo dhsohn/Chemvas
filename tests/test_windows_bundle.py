@@ -149,26 +149,15 @@ def test_other_platform_bundle_shape_is_preserved(monkeypatch, target):
 
 
 @pytest.mark.parametrize("target", ["win32", "darwin", "linux"])
-def test_bundle_leaves_out_source_checkout_browser_editor(monkeypatch, target):
+def test_bundle_analysis_ships_the_desktop_entry_and_its_data(monkeypatch, target):
     calls, _ = _spec(monkeypatch, target=target)
     analysis = next(call for call in calls if call.kind == "Analysis")
-    browser_modules = {
-        f"chemvas.bootstrap.{path.stem}"
-        for path in (ROOT / "app/chemvas/bootstrap").glob("web_*.py")
-    }
-    excludes = analysis.kwargs["excludes"]
-    assert "chemvas.bootstrap.web_adapter" in browser_modules
-    assert set(excludes) == browser_modules
+    assert "excludes" not in analysis.kwargs
     assert analysis.args[0] == [str(ROOT / "app/main.py")]
     assert analysis.kwargs["hiddenimports"] == []
     data = analysis.kwargs["datas"]
     assert (str(ROOT / "LICENSE"), ".") in data
     assert (str(ROOT / "app/chemvas/assets/icon"), "chemvas/assets/icon") in data
-    assert not any(
-        Path(source).is_relative_to(ROOT / "app/chemvas/web")
-        or destination.startswith("chemvas/web")
-        for source, destination in data
-    )
 
 
 def _run_environment_probe(

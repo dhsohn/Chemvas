@@ -27,6 +27,17 @@ def resolve_save_path(current_path: str | None) -> str | None:
     return current_path or None
 
 
+def suggested_partial_import_copy_path(source_path: str) -> str:
+    path = Path(source_path)
+    base = f"{path.stem} (Chemvas copy)"
+    candidate = path.with_name(base + CANONICAL_SAVED_DOCUMENT_SUFFIX)
+    index = 2
+    while candidate.exists() or candidate.is_symlink():
+        candidate = path.with_name(f"{base} {index}{CANONICAL_SAVED_DOCUMENT_SUFFIX}")
+        index += 1
+    return str(candidate)
+
+
 def resolve_save_as_path(dialog_path: str | None) -> str | None:
     if not dialog_path:
         return None

@@ -98,11 +98,17 @@ class _FakeCanvas:
             atom_font=Mock(return_value=QFont()),
         )
         self.history_state = CanvasHistoryState()
+        self.pushed_commands = []
+        self.history_service = SimpleNamespace(
+            state=self.history_state,
+            push=self.push_command,
+            operations=SimpleNamespace(),
+        )
         self.runtime_state = canvas_runtime_state(
             atom_coords_3d_state=CanvasAtomCoords3DState(),
             atom_graphics_state=CanvasAtomGraphicsState(),
             bond_graphics_state=CanvasBondGraphicsState(),
-            history_state=self.history_state,
+            history_service=self.history_service,
             hover_preview_state=HoverState(),
             group_state=CanvasGroupState(),
         )
@@ -113,11 +119,6 @@ class _FakeCanvas:
         self.scene_obj = _FakeScene()
         self.redraw_calls = []
         self.rebuild_bond_adjacency_calls = 0
-        self.pushed_commands = []
-        self.history_service = SimpleNamespace(
-            push=self.push_command,
-            operations=SimpleNamespace(),
-        )
         self.hover_refresh = Mock()
         self.services = canvas_runtime_services(
             history_service=self.history_service,
@@ -197,7 +198,7 @@ def _atom_label_service(canvas: _FakeCanvas) -> AtomLabelService:
         canvas, graph_service=canvas.services.graph_service, hit_testing_service=None
     )
     canvas.services.selection.set_items_selected = selection.set_items_selected
-    return AtomLabelService(
+    return AtomLabelService.for_canvas(
         canvas,
         move_controller=canvas.services.move_controller,
         graph_service=canvas.services.graph_service,

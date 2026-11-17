@@ -31,19 +31,14 @@ from chemvas.domain.json_io import strict_json_loads
 _MARKER = re.compile(
     rb"\n<!-- ChemvasDocument:([0-9a-f]{64}):([A-Za-z0-9+/=]+) -->[ \t\r\n]*\Z"
 )
-_ELEMENTS = (
-    "? H He Li Be B C N O F Ne Na Mg Al Si P S Cl Ar K Ca Sc Ti V Cr Mn Fe Co Ni "
-    "Cu Zn Ga Ge As Se Br Kr Rb Sr Y Zr Nb Mo Tc Ru Rh Pd Ag Cd In Sn Sb Te I Xe "
-    "Cs Ba La Ce Pr Nd Pm Sm Eu Gd Tb Dy Ho Er Tm Yb Lu Hf Ta W Re Os Ir Pt Au Hg "
-    "Tl Pb Bi Po At Rn Fr Ra Ac Th Pa U Np Pu Am Cm Bk Cf Es Fm Md No Lr Rf Db Sg "
-    "Bh Hs Mt Ds Rg Cn Nh Fl Mc Lv Ts Og"
-).split()
 
 
 @dataclass(frozen=True)
 class CdxmlDocument:
     state: dict[str, Any]
     source_sha256: str
+    omitted_decorations: int = 0
+    has_snapshot: bool = False
 
 
 def embed_document(raw: bytes, state: dict[str, Any]) -> bytes:
@@ -68,7 +63,9 @@ def read_cdxml_document(path: str | Path) -> CdxmlDocument:
     return parse_cdxml_document(raw)
 
 
-def parse_cdxml_document(raw: bytes) -> CdxmlDocument:
+def parse_cdxml_document(
+    raw: bytes, *, allow_decorative_omissions: bool = False
+) -> CdxmlDocument:
     if len(raw) > MAX_DOCUMENT_BYTES:
         raise ValueError("CDXML document exceeds the document byte limit")
     digest = hashlib.sha256(raw).hexdigest()
@@ -98,9 +95,13 @@ def parse_cdxml_document(raw: bytes) -> CdxmlDocument:
 
         promote_snapshot_arrows(normalized["state"])
         build_document_payload(normalized["state"], CANVAS_FILE_VERSION)
-        return CdxmlDocument(normalized["state"], digest)
+        return CdxmlDocument(normalized["state"], digest, has_snapshot=True)
     from chemvas.features.cdxml_preservation import PreservingImporter
 
-    state = PreservingImporter(text).state()
-    build_document_payload(state, CANVAS_FILE_VERSION)
-    return CdxmlDocument(state, digest)
+    importer = PreservingImporter(text)
+    omitted = 0
+    if allow_decorative_omissions:
+        from chemvas.features.cdxml_decorative_omissions import omit_decorative_arcs
+
+        omitted = omit_decorative_arcs(importer)
+    return CdxmlDocument(importer.state(), digest, omitted)

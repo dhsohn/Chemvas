@@ -1,6 +1,6 @@
 # ADR 0067: Coupled native CDXML collections
 
-- Status: Accepted
+- Status: Extended by [ADR 0073](0073-native-cdxml-groups.md)
 - Date: 2026-11-02
 
 ## Problem

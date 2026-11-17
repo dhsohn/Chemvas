@@ -56,7 +56,7 @@ def test_live_atom_edit_export_copy_and_undo_preserve_document(
 ):
     atom_id, before = _draw_ring(canvas, app, monkeypatch)
     documents = canvas.services.canvas_document_session_service
-    state = canvas.runtime_state.history_state
+    state = canvas.services.history_service.state
     after = snapshot_canvas_document_state(canvas)
     stacks = list(state.history), list(state.redo_stack)
     plan = documents.plan_figure_export(sizing="col1")

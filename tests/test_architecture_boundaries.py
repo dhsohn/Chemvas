@@ -1929,7 +1929,6 @@ MARK_REGISTRY_BY_ATOM_MUTATORS = frozenset(
     {"clear", "pop", "popitem", "setdefault", "update"}
 )
 MARK_REGISTRY_BY_ATOM_WRITERS = [
-    "app/chemvas/bootstrap/web_adapter.py",
     "app/chemvas/ui/canvas/canvas_mark_registry.py",
     "app/chemvas/ui/transactions/scene_item_attach.py",
     "app/chemvas/ui/transactions/scene_runtime_restore.py",

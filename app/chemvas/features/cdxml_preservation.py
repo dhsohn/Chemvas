@@ -15,7 +15,7 @@ from typing import Any, NoReturn
 
 from chemvas.domain.document import CANVAS_FILE_VERSION, build_document_payload
 from chemvas.domain.document.cdxml_source import parse_native_xml
-from chemvas.features.cdxml_document import _ELEMENTS
+from chemvas.domain.elements import element_symbol
 from chemvas.features.document_composition import compose_document_state
 
 
@@ -66,6 +66,9 @@ class PreservingImporter:
             "ColoredMolecularArea",
             "embeddedobject",
             "annotation",
+            # ChemDraw's computed formula/weight link. Its visible text is an
+            # ordinary caption; the link itself is preserved metadata only.
+            "chemicalproperty",
         }
         for e in root.iter():
             if e.tag not in known:
@@ -101,7 +104,11 @@ class PreservingImporter:
             raise ValueError("Invalid CDXML page size.")
         self.offset = (left + width / 2, top + height / 2)
         self.sheet_mm = [width * 25.4 / 72, height * 25.4 / 72]
-        self.colors = ["#ffffff", "#000000"]
+        # Reserved 0/1 are absolute black/white. Table entries start at 2;
+        # only an absent table supplies the implicit white/black 2/3 pair.
+        self.colors = ["#000000", "#ffffff"]
+        if root.find("colortable") is None:
+            self.colors.extend(["#ffffff", "#000000"])
         for e in root.findall("./colortable/color"):
             rgb = [self.number(e.get(k, ""), e) for k in ("r", "g", "b")]
             if any(not 0 <= v <= 1 for v in rgb):
@@ -143,14 +150,8 @@ class PreservingImporter:
             current = self.parents.get(current)
         return default
 
-    def color(self, e: ET.Element, attribute: str = "color", default: str = "0") -> str:
+    def color(self, e: ET.Element, attribute: str = "color", default: str = "3") -> str:
         index = int(self.inherited(e, attribute, default))
-        if index == 0 and "fgcolor" in self.root.attrib:
-            index = int(self.root.attrib["fgcolor"])
-        if index == 0:
-            return "#000000"
-        if index == 1:
-            return "#ffffff"
         if index >= len(self.colors) or index < 0:
             raise ValueError("CDXML references a missing color")
         return self.colors[index]
@@ -171,9 +172,18 @@ class PreservingImporter:
 
     def atom(self, e: ET.Element, index: int) -> dict[str, Any]:
         text = e.find("t")
-        label = "".join(text.itertext()).strip() if text is not None else ""
+        label = ""
+        if text is not None:
+            runs = text.findall("s")
+            # Only run content belongs to the label; pretty-printing between
+            # runs must not change its identity or disable native typography.
+            # Keep the existing fallback for legacy unstyled text objects.
+            label = "".join(
+                (run.text or "" for run in runs) if runs else text.itertext()
+            ).strip()
         z = int(e.get("Element", "6"))
-        if not 0 < z < len(_ELEMENTS):
+        element = element_symbol(z)
+        if element is None:
             self.unsupported(e, "atomic number")
         kind = e.get("NodeType", "Element")
         if kind not in {
@@ -184,7 +194,7 @@ class PreservingImporter:
             "Unspecified",
         }:
             self.unsupported(e, "unsupported visible node type")
-        symbol = label or _ELEMENTS[z]
+        symbol = label or element
         if kind != "Element" and not label:
             self.unsupported(e, "missing contracted node label")
         x, y = self.point(e.get("p", ""), e)
@@ -266,7 +276,7 @@ class PreservingImporter:
             family = self.fonts.get(run.get("font"), self.caption_font)
             css = [
                 f"font-family: {_css_string_literal(family)}",
-                f"font-size: {size:g}px",
+                f"font-size: {size}px",
                 f"color: {self.color(run)}",
             ]
             if face & 1:
@@ -301,7 +311,10 @@ class PreservingImporter:
 
     def state(self) -> dict[str, Any]:
         from chemvas.features.cdxml_editable_arrows import editable_arrow
-        from chemvas.features.cdxml_editable_rectangles import editable_rectangle
+        from chemvas.features.cdxml_editable_shapes import (
+            editable_outlined_rectangle,
+            editable_shape,
+        )
         from chemvas.features.cdxml_graphics import graphic_image
 
         atoms = [self.atom(e, i) for i, e in enumerate(self.nodes)]
@@ -337,7 +350,11 @@ class PreservingImporter:
             "shapes": [],
         }
         state["images"] = []
-        state["shapes"] = []
+        fallback_targets = {
+            target
+            for graphic in self.page.iter("graphic")
+            if (target := graphic.get("SupersededBy"))
+        }
         for e in self.page.iter():
             if self.has_ancestor(e, "n"):
                 continue
@@ -357,9 +374,14 @@ class PreservingImporter:
                     state["arrows"].append(arrow)
                     bindings["arrows"].append(e.get("id"))
                     continue
-                rectangle = editable_rectangle(self, e)
-                if rectangle is not None:
-                    state["shapes"].append(rectangle)
+                # The image writer also transforms linked fallback graphics.
+                shape = (
+                    editable_shape(self, e) or editable_outlined_rectangle(self, e)
+                    if e.get("id") not in fallback_targets
+                    else None
+                )
+                if shape is not None:
+                    state["shapes"].append(shape)
                     bindings["shapes"].append(e.get("id"))
                     continue
                 image = graphic_image(self, e)

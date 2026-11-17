@@ -1,11 +1,11 @@
 from __future__ import annotations
 
+import io
 import logging
 import os
 import sys
 import threading
 from contextlib import contextmanager
-from importlib.util import find_spec
 from typing import TYPE_CHECKING, NoReturn, cast
 
 from chemvas import __version__
@@ -26,7 +26,6 @@ IGNORED_STDERR_SUBSTRINGS = (
     "This plugin supports grabbing the mouse only for popup windows",
 )
 
-BROWSER_EDITOR_MODULE = "chemvas.bootstrap.web_adapter"
 DOCUMENT_PATCH_COMMANDS = frozenset(("apply-patch", "inspect-document"))
 DOCUMENT_COMPOSITION_COMMANDS = frozenset(("compose-document",))
 DOCUMENT_LAYOUT_COMMANDS = frozenset(("check-layout",))
@@ -34,6 +33,15 @@ SCHEME_LAYOUT_COMMANDS = frozenset(("layout-document",))
 DOCUMENT_TEMPLATE_COMMANDS = frozenset(("insert-template",))
 DOCUMENT_RENDER_COMMANDS = frozenset(("render-document",))
 CDXML_REVIEW_COMMANDS = frozenset(("review-cdxml",))
+HEADLESS_DISPATCH_COMMANDS = frozenset().union(
+    DOCUMENT_PATCH_COMMANDS,
+    DOCUMENT_COMPOSITION_COMMANDS,
+    DOCUMENT_LAYOUT_COMMANDS,
+    SCHEME_LAYOUT_COMMANDS,
+    DOCUMENT_TEMPLATE_COMMANDS,
+    DOCUMENT_RENDER_COMMANDS,
+    CDXML_REVIEW_COMMANDS,
+)
 HEADLESS_SUBCOMMAND_HELP = (
     ("apply-patch", "validate or apply a Chemvas graph patch"),
     ("compose-document", "create a Chemvas document from a strict composition"),
@@ -50,6 +58,12 @@ def _should_filter_stderr(platform: str | None = None) -> bool:
     return (platform or sys.platform) in {"darwin", "linux"}
 
 
+def _configure_headless_stdout_encoding() -> None:
+    """Match frozen builds: JSON CLI reports are UTF-8 on redirected stdout."""
+    if isinstance(sys.stdout, io.TextIOWrapper):
+        sys.stdout.reconfigure(encoding="utf-8")
+
+
 def _startup_document_path(argv: list[str]) -> str | None:
     for argument in argv[1:]:
         if argument.startswith("-"):
@@ -59,28 +73,16 @@ def _startup_document_path(argv: list[str]) -> str | None:
     return None
 
 
-def _browser_editor_available() -> bool:
-    # The experimental browser editor runs from a source checkout only; built
-    # distributions leave out its modules and assets.
-    return find_spec(BROWSER_EDITOR_MODULE) is not None
-
-
 def _root_help() -> str:
     command_help = "\n".join(
         f"  {command:<18} {description}"
         for command, description in HEADLESS_SUBCOMMAND_HELP
-    )
-    adapter_help = (
-        "Select an adapter with --ui qt or --ui web (experimental).\n"
-        if _browser_editor_available()
-        else ""
     )
     return (
         "Usage:\n"
         "  chemvas [document]\n"
         "  chemvas <command> [options]\n\n"
         "Run with no arguments to launch the desktop app.\n"
-        f"{adapter_help}"
         "Pass a .cdxml or .mol document to open it at startup.\n\n"
         "Options:\n"
         "  -h, --help         show this help message and exit\n"
@@ -115,12 +117,10 @@ def _reject_startup_argument(argument: str) -> NoReturn:
     raise SystemExit(2)
 
 
-def _reject_unavailable_browser_editor() -> NoReturn:
+def _reject_retired_browser_editor() -> NoReturn:
     message = (
-        "chemvas: error: the experimental web editor (--ui web) is not included "
-        "in this installation.\n"
-        "It runs from a Chemvas source checkout. Run 'chemvas' for the desktop "
-        "app.\n"
+        "chemvas: error: the browser editor (--ui web) has been retired.\n"
+        "Run 'chemvas' for the desktop app, or open a .cdxml document with it.\n"
     )
     if sys.platform == "win32" and sys.stdout is None:
         _windows_console_notice(message)
@@ -227,16 +227,12 @@ def _filtered_stderr(stderr_fd: int = 2, platform: str | None = None) -> Iterato
 
 
 def main() -> None:
-    # Select the presentation adapter before importing Qt or starting its event loop.
+    # `--ui qt` stays accepted for existing launchers; the browser editor is retired
+    # (ADR 0068). Decide before importing Qt or starting its event loop.
     if len(sys.argv) > 2 and sys.argv[1] == "--ui":
         adapter = sys.argv[2]
         if adapter == "web":
-            if not _browser_editor_available():
-                _reject_unavailable_browser_editor()
-            from chemvas.bootstrap.web_adapter import main as web_main
-
-            web_main(sys.argv[3:])
-            return
+            _reject_retired_browser_editor()
         if adapter == "qt":
             sys.argv = [sys.argv[0], *sys.argv[3:]]
         else:
@@ -259,6 +255,9 @@ def main() -> None:
     if len(sys.argv) > 1 and sys.argv[1] == "--version":
         sys.stdout.write(f"chemvas {__version__}\n")
         raise SystemExit(0)
+
+    if len(sys.argv) > 1 and sys.argv[1] in HEADLESS_DISPATCH_COMMANDS:
+        _configure_headless_stdout_encoding()
 
     if len(sys.argv) > 1 and sys.argv[1] in DOCUMENT_COMPOSITION_COMMANDS:
         from chemvas.bootstrap.document_composition import run

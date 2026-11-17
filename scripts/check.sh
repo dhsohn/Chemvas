@@ -280,8 +280,6 @@ case "$platform" in
       test_session_recovery_integration.py
       test_startup_fresh_workspace.py
       test_ui_audit_regressions.py
-      test_web_adapter.py
-      test_web_adapter_figure_export.py
     )
     ;;
 esac

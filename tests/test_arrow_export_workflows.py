@@ -37,7 +37,7 @@ def test_arrow_fit_export_clipboard_and_history(canvas, app, tmp_path, fmt):
     geometry = [
         (child, child.pos(), child.boundingRect()) for child in arrow.childItems()
     ]
-    history = canvas.runtime_state.history_state
+    history = canvas.services.history_service.state
     stacks = list(history.history), list(history.redo_stack)
     plan = documents.plan_figure_export(sizing="col1")
     output = tmp_path / f"arrow.{fmt}"

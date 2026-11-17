@@ -1,4 +1,4 @@
-"""Native caption and atom colors share fgcolor-aware palette allocation."""
+"""Native caption and atom colors share absolute CDXML palette allocation."""
 
 from __future__ import annotations
 
@@ -15,8 +15,7 @@ from chemvas.ui.export.cdxml_document_writer import serialize_cdxml_document
 
 pytestmark = pytest.mark.usefixtures("qt_application")
 
-# Document foreground is palette index 2 (red). Absolute black must not be
-# written as color 0, or the importer remaps it through fgcolor.
+# The nonstandard fgcolor attribute must not redefine reserved black index 0.
 NATIVE = b"""<?xml version="1.0" encoding="UTF-8"?>
 <CDXML fgcolor="2" bgcolor="3" LabelFont="3" LabelSize="10" CaptionFont="3" CaptionSize="10" BondLength="20">
 <fonttable><font id="3" name="Arial" charset="utf-8"/></fonttable>
@@ -169,7 +168,7 @@ def _caption_native(family: str) -> bytes:
     [
         (None, ["0", "1", "5", "0"], "0", "5"),
         ("0", ["0", "1", "5", "0"], "0", "5"),
-        ("2", ["4", "1", "5", "4"], "4", "5"),
+        ("2", ["0", "1", "5", "0"], "0", "5"),
     ],
 )
 def test_rich_caption_colors_survive_fgcolor_modes(
@@ -238,13 +237,17 @@ def test_apple_system_ui_font_default_keeps_caption_colors_on_native_reopen(
         fonts = {
             font.get("id"): font.get("name") for font in root.findall("fonttable/font")
         }
-        assert ".AppleSystemUIFont" in fonts.values()
         runs = root.find('.//t[@id="6"]').findall("s")
-        assert [run.get("color") for run in runs] == ["4", "1", "5", "4"]
+        assert [run.get("color") for run in runs] == ["0", "1", "5", "0"]
+        # The caption is Arial; the application's UI font is only the toolkit
+        # fallback and must not replace it (dot-prefixed source families are
+        # covered by the reopen cases below).
+        assert {fonts[run.get("font")] for run in runs} == {"Arial"}
+        assert ".AppleSystemUIFont" not in fonts.values()
 
         from_native = parse_cdxml_document(native).state
         html = from_native["notes"][0]["html"]
-        assert "&#x27;.AppleSystemUIFont&#x27;" in html
+        assert "AppleSystemUIFont" not in html
         assert _document_char_colors(html) == EXPECTED_RICH_CHARS
 
         with offscreen_canvas(from_native, command="test-native-apple-font-reopen") as (
@@ -295,8 +298,8 @@ def test_allocate_native_color_index_uppercase_absent_and_reuse():
     again = allocate_native_color_index(custom, "#00aa55")
     black = allocate_native_color_index(custom, "#000000")
     black_again = allocate_native_color_index(custom, "#000000")
-    assert first == again == "2"
-    assert black == black_again == "3"
+    assert first == again == "4"
+    assert black == black_again == "0"
     table = custom.find("colortable")
     assert table is not None
     assert [
@@ -306,7 +309,7 @@ def test_allocate_native_color_index_uppercase_absent_and_reuse():
             round(float(c.get("b")) * 255),
         )
         for c in table
-    ] == [(0, 170, 85), (0, 0, 0)]
+    ] == [(255, 255, 255), (0, 0, 0), (0, 170, 85)]
 
     default_fg = ET.Element("CDXML", fgcolor="0")
     assert allocate_native_color_index(default_fg, "#000000") == "0"
@@ -322,22 +325,13 @@ def test_allocate_native_color_index_expands_short_hex():
     custom = ET.Element("CDXML", fgcolor="2")
     black = allocate_native_color_index(custom, "#000")
     black_again = allocate_native_color_index(custom, "#000000")
-    assert black == black_again == "2"
-    table = custom.find("colortable")
-    assert table is not None
-    assert [
-        (
-            round(float(c.get("r")) * 255),
-            round(float(c.get("g")) * 255),
-            round(float(c.get("b")) * 255),
-        )
-        for c in table
-    ] == [(0, 0, 0)]
+    assert black == black_again == "0"
+    assert custom.find("colortable") is None
 
     red_root = ET.Element("CDXML")
     red = allocate_native_color_index(red_root, "#f00")
     red_again = allocate_native_color_index(red_root, "#ff0000")
-    assert red == red_again == "2"
+    assert red == red_again == "4"
     red_table = red_root.find("colortable")
     assert red_table is not None
     assert [
@@ -347,7 +341,7 @@ def test_allocate_native_color_index_expands_short_hex():
             round(float(c.get("b")) * 255),
         )
         for c in red_table
-    ] == [(255, 0, 0)]
+    ] == [(255, 255, 255), (0, 0, 0), (255, 0, 0)]
 
     for invalid in ("red", "#ff00"):
         with pytest.raises(ValueError, match="#rgb or #rrggbb"):

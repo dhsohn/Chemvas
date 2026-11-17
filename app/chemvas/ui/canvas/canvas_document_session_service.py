@@ -1,14 +1,12 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, fields
 from typing import TYPE_CHECKING, Any
 
 from PyQt6.QtCore import QRectF
 from PyQt6.QtWidgets import QGraphicsItem, QGraphicsScene, QGraphicsView
 
-from chemvas.core.document_io import (
-    atomic_write_text,
-)
+from chemvas.core.document_io import atomic_write_text
 from chemvas.core.molfile import export_molfile_block
 from chemvas.domain.document import (
     deserialize_model_state,
@@ -25,7 +23,7 @@ from chemvas.ui.canvas.canvas_document_state import (
     snapshot_canvas_document_state,
     snapshot_canvas_document_state_with_warnings,
 )
-from chemvas.ui.canvas.canvas_scene_items_state import DOCUMENT_COLLECTION_STATES
+from chemvas.ui.canvas.canvas_runtime_state import CanvasRuntimeState
 from chemvas.ui.canvas.canvas_scene_state import scene_if_present_for
 from chemvas.ui.canvas.canvas_viewport_access import (
     ViewportSnapshot,
@@ -45,6 +43,7 @@ from chemvas.ui.scene.scene_signal_blocking import blocked_scene_signals
 from chemvas.ui.selection.selection_queries import (
     selection_items_for_copy_for,
 )
+from chemvas.ui.session.open_document_lookup import paths_refer_to_same_document
 from chemvas.ui.transactions.document import runtime_state_object_for
 from chemvas.ui.transactions.object_graph_snapshot import (
     ContainerGraphSnapshot as _ContainerGraphSnapshot,
@@ -76,26 +75,26 @@ if TYPE_CHECKING:
     from chemvas.ui.canvas.canvas_view import CanvasView
     from chemvas.ui.export.reviewed_cdxml_snapshot import ReviewedCdxmlSnapshot
 
-_DOCUMENT_MUTATED_RUNTIME_FIELDS = (
-    "sheet_setup_state",
-    "calculation_plan_state",
-    "selection_info_state",
-    "graph_state",
-    "group_state",
-    "insert_state",
-    "atom_coords_3d_state",
-    "atom_graphics_state",
-    "bond_graphics_state",
-    "mark_registry",
-    "spatial_index_state",
-    "rotation_state",
-    "handle_state",
-    "selection_state",
-    "text_style_state",
-    "tool_settings_state",
-    "hover_preview_state",
-    "scene_items_state",
-    *DOCUMENT_COLLECTION_STATES.values(),
+# Runtime fields a document replacement leaves alone: history is restored
+# through its own stack snapshot, and the rest is per-session input, clipboard
+# and callback wiring or a cache that validates itself against the model.
+_DOCUMENT_SESSION_RUNTIME_FIELDS = frozenset(
+    {
+        "history_service",
+        "input_view_state",
+        "callback_state",
+        "scene_clipboard_state",
+        "valence_warnings",
+    }
+)
+# Every other runtime field is rollback authority by default. The scene reset
+# and the replacement build write document state (the native CDXML source and
+# its item bindings, native arrow styles, scene registries), so a new field is
+# captured without a second list that has to remember it.
+_DOCUMENT_MUTATED_RUNTIME_FIELDS = tuple(
+    field.name
+    for field in fields(CanvasRuntimeState)
+    if field.name not in _DOCUMENT_SESSION_RUNTIME_FIELDS
 )
 
 
@@ -515,6 +514,13 @@ class CanvasDocumentSessionService:
             object_states.append(snapshot)
             return snapshot
 
+        # Bind the fields themselves first: plain containers such as the native
+        # arrow styles have no object state of their own, and a rebind during
+        # the replacement must be undone as well as an in-place clear.
+        append_snapshot(
+            getattr(self.canvas, "runtime_state", None),
+            names=_DOCUMENT_MUTATED_RUNTIME_FIELDS,
+        )
         for name in _DOCUMENT_MUTATED_RUNTIME_FIELDS:
             append_snapshot(runtime_state_object_for(self.canvas, name))
 
@@ -561,6 +567,15 @@ class CanvasDocumentSessionService:
 
     def restore_state(self, state: dict) -> None:
         self.apply_state(state)
+        from chemvas.ui.canvas.document_font_availability import (
+            missing_document_fonts,
+        )
+
+        # Checked once per loaded document; the status bar reports it for the
+        # active tab so substituted text is never silently passed off as exact.
+        self.canvas.runtime_state.document_metadata_state.missing_fonts = (
+            missing_document_fonts(state)
+        )
 
     def snapshot_state_with_warnings(self) -> tuple[dict, list[str]]:
         return snapshot_canvas_document_state_with_warnings(self.canvas)
@@ -569,12 +584,22 @@ class CanvasDocumentSessionService:
         if not is_saved_document_path(path):
             msg = "Chemvas documents must use the .cdxml filename extension."
             raise ValueError(msg)
+        metadata = self.canvas.runtime_state.document_metadata_state
+        protected = metadata.protected_import_source_path
+        if protected and paths_refer_to_same_document(protected, path):
+            raise ValueError("Choose a new file name to keep the original CDXML.")
         require_preserved_calculation_plan_for(self.canvas)
         state, warnings = self.snapshot_state_with_warnings()
         from chemvas.ui.export.cdxml_document_writer import save_cdxml_document
 
-        digest = save_cdxml_document(self.canvas, path, state)
-        self.canvas.runtime_state.document_metadata_state.set_source_sha256(digest)
+        if protected and (
+            metadata.file_path is None
+            or not paths_refer_to_same_document(metadata.file_path, path)
+        ):
+            digest = save_cdxml_document(self.canvas, path, state, create_only=True)
+        else:
+            digest = save_cdxml_document(self.canvas, path, state)
+        metadata.set_source_sha256(digest)
         return warnings
 
     def export_mol(self, path: str, *, selected_only: bool = False) -> None:
@@ -588,7 +613,7 @@ class CanvasDocumentSessionService:
             )
         else:
             export_model, atom_annotations = build_mol_export_payload_for(self.canvas)
-        # The one MOL policy the browser export shares: writer and hard limits.
+        # The one MOL policy every export uses: writer and hard limits.
         block = export_molfile_block(export_model, atom_annotations=atom_annotations)
         atomic_write_text(path, block)
 
@@ -606,6 +631,9 @@ class CanvasDocumentSessionService:
         min_font_pt: float | None = None,
         reviewed_cdxml_snapshot: ReviewedCdxmlSnapshot | None = None,
     ) -> ExportPlan:
+        protected = self.canvas.runtime_state.document_metadata_state.protected_import_source_path
+        if protected and paths_refer_to_same_document(protected, path):
+            raise ValueError("Choose a new file name to keep the original CDXML.")
         if reviewed_cdxml_snapshot is not None:
             if fmt.lower() != "cdxml" or scope != reviewed_cdxml_snapshot.scope:
                 raise ValueError(
@@ -619,6 +647,7 @@ class CanvasDocumentSessionService:
                 target_width_mm=target_width_mm,
                 max_height_mm=max_height_mm,
                 min_font_pt=min_font_pt,
+                **({"create_only": True} if protected else {}),
             )
         exporter = FigureExportService(
             self.canvas.render_context,
@@ -639,6 +668,7 @@ class CanvasDocumentSessionService:
             target_width_mm=target_width_mm,
             max_height_mm=max_height_mm,
             min_font_pt=min_font_pt,
+            create_only=bool(protected) and fmt.lower() == "cdxml",
         )
 
     def plan_figure_export(

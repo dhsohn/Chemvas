@@ -74,7 +74,6 @@ chemvas render-document revised.cdxml --output scheme.svg --width-mm 174
 - [그리기 도구와 단축키](https://github.com/dhsohn/Chemvas/blob/main/docs/REFERENCE.ko.md) · [이미지 객체](https://github.com/dhsohn/Chemvas/blob/main/docs/IMAGE_OBJECTS.ko.md)
 - [논문 그림 예제](https://github.com/dhsohn/Chemvas/blob/main/docs/PUBLICATION_SCHEMES.ko.md) · [반응식 배치](https://github.com/dhsohn/Chemvas/blob/main/docs/SCHEME_LAYOUT.ko.md) · [예제 파일](https://github.com/dhsohn/Chemvas/tree/main/examples)
 - [구조 설계](https://github.com/dhsohn/Chemvas/blob/main/docs/ARCHITECTURE.ko.md) · [기여 안내](https://github.com/dhsohn/Chemvas/blob/main/CONTRIBUTING.ko.md) · [보안](https://github.com/dhsohn/Chemvas/blob/main/SECURITY.ko.md) · [변경 이력](https://github.com/dhsohn/Chemvas/blob/main/CHANGELOG.md) · [릴리스](https://github.com/dhsohn/Chemvas/blob/main/RELEASING.ko.md) · [MIT 라이선스](https://github.com/dhsohn/Chemvas/blob/main/LICENSE)
-- [브라우저 어댑터](https://github.com/dhsohn/Chemvas/blob/main/docs/WEB_ADAPTER.ko.md): 소스 체크아웃의 `chemvas --ui web`에서 실행하는 실험 기능입니다. 배포 패키지에는 포함되지 않습니다.
 
 사용 중 불편한 점이나 제안은 [GitHub Issues](https://github.com/dhsohn/Chemvas/issues)에 남겨 주세요.
 

@@ -13,6 +13,11 @@ from .cdxml_label_bindings import (
     parse_cdxml_label_bindings,
     read_cdxml_label_bindings,
 )
+from .cdxml_label_meanings import (
+    LABEL_BINDING_FIELD_NAMES,
+    LABEL_BINDING_MEANING_FIELDS,
+    SIDECAR_V1_LABEL_MEANINGS,
+)
 from .cdxml_roundtrip import inspect_cdxml_roundtrip, recover_native_cdxml_palette
 from .cdxml_text_layout import (
     MAX_CDXML_CONSUMER_BYTES,
@@ -54,9 +59,12 @@ __all__ = [
     "EXPORT_FORMATS",
     "EXPORT_SCOPES",
     "EXPORT_SIZES",
+    "LABEL_BINDING_FIELD_NAMES",
+    "LABEL_BINDING_MEANING_FIELDS",
     "MAX_CDXML_CONSUMER_BYTES",
     "MAX_CDXML_LABEL_BINDINGS_BYTES",
     "POINTS_PER_INCH",
+    "SIDECAR_V1_LABEL_MEANINGS",
     "CaptionGeometry",
     "CdxmlDocumentaryContact",
     "CdxmlLabelBindings",

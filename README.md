@@ -75,7 +75,6 @@ See the [document compatibility policy](https://github.com/dhsohn/Chemvas/blob/m
 - [Drawing tools and shortcuts](https://github.com/dhsohn/Chemvas/blob/main/docs/REFERENCE.md) · [Image objects](https://github.com/dhsohn/Chemvas/blob/main/docs/IMAGE_OBJECTS.md)
 - [Publication examples](https://github.com/dhsohn/Chemvas/blob/main/docs/PUBLICATION_SCHEMES.md) · [Scheme layout](https://github.com/dhsohn/Chemvas/blob/main/docs/SCHEME_LAYOUT.md) · [Example files](https://github.com/dhsohn/Chemvas/tree/main/examples)
 - [Architecture](https://github.com/dhsohn/Chemvas/blob/main/docs/ARCHITECTURE.md) · [Contributing](https://github.com/dhsohn/Chemvas/blob/main/CONTRIBUTING.md) · [Security](https://github.com/dhsohn/Chemvas/blob/main/SECURITY.md) · [Changelog](https://github.com/dhsohn/Chemvas/blob/main/CHANGELOG.md) · [Releasing](https://github.com/dhsohn/Chemvas/blob/main/RELEASING.md) · [MIT license](https://github.com/dhsohn/Chemvas/blob/main/LICENSE)
-- [Browser adapter](https://github.com/dhsohn/Chemvas/blob/main/docs/WEB_ADAPTER.md): an experimental source-checkout feature, launched with `chemvas --ui web`. It is excluded from distribution packages.
 
 Found a rough edge or have an idea? Open a [GitHub issue](https://github.com/dhsohn/Chemvas/issues).
 

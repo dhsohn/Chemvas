@@ -222,12 +222,10 @@ class MainWindowContextBarService:
         target = (
             self._color_buttons.get(tool.current_color) if tool is not None else None
         )
-        self._color_group.setExclusive(False)
         for button in self._color_buttons.values():
             blocked = button.blockSignals(True)
             button.setChecked(button is target)
             button.blockSignals(blocked)
-        self._color_group.setExclusive(True)
 
     def refresh_window(self, window: MainWindowLike) -> None:
         self.refresh(

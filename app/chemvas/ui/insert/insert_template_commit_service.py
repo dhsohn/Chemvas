@@ -54,7 +54,7 @@ def apply_template_commit_resolution(
         return False
 
     points = [QPointF(x, y) for x, y in resolution.points]
-    committer = StructureBuildCommitter(canvas)
+    committer = StructureBuildCommitter.for_canvas(canvas)
     snapshot = committer.begin_recorded_change()
     builder = canvas.services.structure_build_service
     try:
@@ -84,7 +84,7 @@ def _apply_benzene_template_commit(
     canvas: CanvasView, request: TemplateInsertRequest, plan: TemplateInsertPlan
 ) -> bool:
     center = QPointF(*request.cursor_pos)
-    committer = StructureBuildCommitter(canvas)
+    committer = StructureBuildCommitter.for_canvas(canvas)
     snapshot = committer.begin_recorded_change()
     try:
         build_insert_benzene_ring_for(

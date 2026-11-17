@@ -9,6 +9,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from chemvas.domain.document.shapes import inscribed_circle_size
+
 if TYPE_CHECKING:
     from PyQt6.QtCore import QRectF, Qt
     from PyQt6.QtGui import QPainterPath
@@ -70,8 +72,8 @@ def shape_outline(
     kind = normalized_shape_kind(shape_kind)
     radius = 0.0
     if kind == "circle":
-        diameter = min(width, height)
-        x, y = x + width / 2 - diameter / 2, y + height / 2 - diameter / 2
+        diameter, circle_radius = inscribed_circle_size(width, height)
+        x, y = x + width / 2 - circle_radius, y + height / 2 - circle_radius
         width = height = diameter
         kind = "ellipse"
     elif kind == "rounded_rect":

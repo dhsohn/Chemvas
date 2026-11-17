@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import math
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, overload
 
 from chemvas.features.graph import connected_atom_unit_vectors
 from chemvas.ui.insert.ring_occupancy import (
@@ -24,7 +24,11 @@ from chemvas.ui.molecule.template_geometry import (
 )
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from PyQt6.QtCore import QPointF
+
+    from chemvas.domain.points import PointLike
 
 
 def qpoints_from_pairs(
@@ -81,9 +85,22 @@ def default_bond_angle_for_vectors(vectors: list[tuple[float, float]]) -> float:
     return 0.0
 
 
+@overload
 def default_bond_endpoint_for(
-    canvas, start: QPointF, start_atom_id: int | None, *, point_factory=None
-) -> QPointF:
+    canvas, start: PointLike, start_atom_id: int | None
+) -> QPointF: ...
+@overload
+def default_bond_endpoint_for[P: PointLike](
+    canvas,
+    start: PointLike,
+    start_atom_id: int | None,
+    *,
+    point_factory: Callable[[float, float], P],
+) -> P: ...
+def default_bond_endpoint_for(
+    canvas, start: PointLike, start_atom_id: int | None, *, point_factory=None
+) -> PointLike:
+    """The default new-bond end from ``start``, built by ``point_factory``."""
     if point_factory is None:
         from PyQt6.QtCore import QPointF
 

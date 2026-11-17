@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from PyQt6.QtCore import Qt
-from PyQt6.QtGui import QBrush, QColor, QPainterPath, QPen
+from PyQt6.QtGui import QBrush, QColor, QPainterPath, QPainterPathStroker, QPen
 
 if TYPE_CHECKING:
     import xml.etree.ElementTree as ET
@@ -19,6 +19,8 @@ if TYPE_CHECKING:
 class NativeArrowStyle:
     kind: str
     width: float
+    bold_width: float
+    bold: bool
     head_size: float
     head_width: float
     spacing: float
@@ -57,10 +59,13 @@ def native_arrow_styles(state: dict[str, Any]) -> dict[int, NativeArrowStyle]:
 
         line = e.get("LineType", "Solid")
         width = inherited("LineWidth", "0.6")
-        # CDXML arrowhead dimensions are expressed in hundredths of LineWidth.
+        # CDXML arrowhead dimensions are expressed in hundredths of LineWidth;
+        # ChemDraw strokes only the shaft of a Bold line at BoldWidth.
         result[index] = NativeArrowStyle(
             kind=baseline[identity]["kind"],
             width=width,
+            bold_width=float(inherited("BoldWidth", "2")),
+            bold="Bold" in line.split(),
             head_size=float(e.get("HeadSize", "600")) * width / 100,
             head_width=float(e.get("ArrowheadWidth", "200")) * width / 100,
             spacing=max(
@@ -76,6 +81,7 @@ def native_arrow_styles(state: dict[str, Any]) -> dict[int, NativeArrowStyle]:
 def native_arrow_paint(record: Arrow, style: NativeArrowStyle):
     """Rebuild vector geometry from live endpoints using the source's metrics."""
     path = QPainterPath()
+    heads = QPainterPath()
     a, b = record.start, record.end
     length = math.dist(a, b)
     ux, uy = ((b[0] - a[0]) / length, (b[1] - a[1]) / length) if length else (1.0, 0.0)
@@ -95,19 +101,19 @@ def native_arrow_paint(record: Arrow, style: NativeArrowStyle):
         )
         if half:
             wing = right if record.mirrored else left
-            path.moveTo(*tip)
-            path.lineTo(*wing)
+            heads.moveTo(*tip)
+            heads.lineTo(*wing)
             if style.solid:
-                path.lineTo(
+                heads.lineTo(
                     tip[0] - style.head_size * dx, tip[1] - style.head_size * dy
                 )
-                path.closeSubpath()
+                heads.closeSubpath()
         else:
-            path.moveTo(*left)
-            path.lineTo(*tip)
-            path.lineTo(*right)
+            heads.moveTo(*left)
+            heads.lineTo(*tip)
+            heads.lineTo(*right)
             if style.solid:
-                path.closeSubpath()
+                heads.closeSubpath()
 
     if record.kind == "equilibrium":
         side = 1 if record.mirrored else -1
@@ -124,7 +130,6 @@ def native_arrow_paint(record: Arrow, style: NativeArrowStyle):
             head(b, ux, uy)
     color = QColor(record.color or "#000000")
     pen = QPen(color)
-    pen.setWidthF(style.width)
     pen.setCapStyle(Qt.PenCapStyle.RoundCap)
     pen.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
     dashed = (
@@ -132,7 +137,33 @@ def native_arrow_paint(record: Arrow, style: NativeArrowStyle):
         if record.kind == style.kind
         else record.kind in {"line_dashed", "dotted"}
     )
-    if dashed:
-        pen.setStyle(Qt.PenStyle.DashLine)
+    bold = style.bold if record.kind == style.kind else record.kind == "line_bold"
     brush = QBrush(color) if style.solid else QBrush(Qt.BrushStyle.NoBrush)
+    pen.setWidthF(style.width)
+    if bold:
+        if (
+            heads.isEmpty()
+            or dashed
+            or not style.solid
+            or style.bold_width <= style.width
+        ):
+            pen.setWidthF(style.bold_width)
+        else:
+            # Keep a solid head at its LineWidth size: thicken only the shaft
+            # by filling its outline, then stroke the union at LineWidth.
+            stroker = QPainterPathStroker()
+            stroker.setWidth(style.bold_width - style.width)
+            stroker.setCapStyle(Qt.PenCapStyle.RoundCap)
+            stroker.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
+            return stroker.createStroke(path).united(heads), pen, brush
+    if dashed and bold:
+        # ChemDraw keeps a Bold line's dash period at the LineWidth scale, so
+        # its dashes read as short bars rather than stretching with BoldWidth.
+        # Qt dash lengths are in pen widths; flat caps keep the gaps open.
+        dash = 4 * style.width / pen.widthF()
+        pen.setCapStyle(Qt.PenCapStyle.FlatCap)
+        pen.setDashPattern([dash, dash])
+    elif dashed:
+        pen.setStyle(Qt.PenStyle.DashLine)
+    path.addPath(heads)
     return path, pen, brush

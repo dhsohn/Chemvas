@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CDXML LineWidth="0.75">
+  <page id="1" BoundingBox="0 0 120 80">
+    <graphic id="2" Z="1" GraphicType="Rectangle" RectangleType="RoundEdge Filled"
+      BoundingBox="20 20 100 60" LineWidth="0" CornerRadius="1600"/>
+  </page>
+</CDXML>

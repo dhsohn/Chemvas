@@ -7,20 +7,12 @@ from typing import TYPE_CHECKING
 
 from chemvas.domain.atom_aliases import ATOM_ALIAS_DEFINITIONS
 from chemvas.domain.document import Bond, MoleculeModel
+from chemvas.domain.elements import ELEMENT_SYMBOLS
 
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
 
-# Element symbols (Z = 1..118).
-_ELEMENTS = frozenset(
-    """
-    H He Li Be B C N O F Ne Na Mg Al Si P S Cl Ar K Ca Sc Ti V Cr Mn Fe Co Ni
-    Cu Zn Ga Ge As Se Br Kr Rb Sr Y Zr Nb Mo Tc Ru Rh Pd Ag Cd In Sn Sb Te I Xe
-    Cs Ba La Ce Pr Nd Pm Sm Eu Gd Tb Dy Ho Er Tm Yb Lu Hf Ta W Re Os Ir Pt Au Hg
-    Tl Pb Bi Po At Rn Fr Ra Ac Th Pa U Np Pu Am Cm Bk Cf Es Fm Md No Lr Rf Db Sg
-    Bh Hs Mt Ds Rg Cn Nh Fl Mc Lv Ts Og
-    """.split()
-)
+_ELEMENTS = frozenset(ELEMENT_SYMBOLS)
 
 # Two abbreviation labels are also element symbols: "Ts" is tosyl and
 # tennessine, "Ac" is acetyl and actinium. A drawn label of either kind means
@@ -785,8 +777,7 @@ def export_molfile_block(
 
     The V2000 writer's refusals surface as they are: a drawn abbreviation
     label such as Ph or CF3 is not an MDL element, so the export stops instead
-    of inventing the group's atoms. The desktop and browser exports share this
-    one policy.
+    of inventing the group's atoms. Every MOL export shares this one policy.
     """
     if not model.atoms:
         raise ValueError("There is no molecular structure to export.")
