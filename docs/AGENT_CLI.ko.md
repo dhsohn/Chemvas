@@ -241,16 +241,21 @@ chemvas apply-patch ring-added.cdxml patch.json --output revised.cdxml
 
 ### 패치 작성을 위한 원자 ID 조회
 
-문서의 원자 ID와 SHA-256 해시를 빠르게 조회하는 스크립트:
+`.cdxml` 파일은 JSON이 아니라 XML이므로 `json.loads`로 읽지 않습니다.
+`inspect-document` 보고서가 입력 바이트 그대로의 `source_sha256`, 고정된 원자
+`id`, 양 끝 원자 `a`·`b`로 찾는 결합 목록을 제공합니다:
 
 ```bash
+chemvas inspect-document drawing.cdxml > inspection.json
 python - <<'PY'
-import hashlib, json
+import json
 from pathlib import Path
-data = Path("drawing.cdxml").read_bytes()
-model = json.loads(data)["state"]["model"]
-print(json.dumps({"source_sha256": hashlib.sha256(data).hexdigest(),
-                  "atoms": model["atoms"], "bonds": model["bonds"]}, indent=2))
+report = json.loads(Path("inspection.json").read_text(encoding="utf-8"))
+print("source_sha256", report["source_sha256"])
+for atom in report["atoms"]:
+    print("atom", atom["id"], atom["element"], atom["x"], atom["y"])
+for bond in report["bonds"]:
+    print("bond", bond["a"], bond["b"], bond["order"], bond["style"])
 PY
 ```
 
