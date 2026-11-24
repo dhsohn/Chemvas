@@ -138,3 +138,43 @@ def test_composition_diagnostics_name_keys_and_supported_arrow_kinds():
                 "arrows": [{"kind": "dashed", "start": [0, 0], "end": [30, 0]}],
             }
         )
+
+
+@pytest.mark.skipif(os.name == "nt", reason="runs the documented POSIX shell block")
+def test_documented_id_inspection_block_runs_on_cdxml(tmp_path: Path) -> None:
+    # The guide once parsed .cdxml bytes as JSON; agents that copied it failed.
+    guide = (ROOT / "docs" / "AGENT_CLI.md").read_text(encoding="utf-8")
+    section = guide.split("### Inspecting IDs for Patching", 1)[1]
+    block = re.search(r"```bash\n(.*?)\n```", section, re.DOTALL)
+    assert block is not None
+    script = block.group(1)
+    assert "json.loads(data)" not in script
+    source = (ROOT / "examples" / "first-scheme.cdxml").read_bytes()
+    (tmp_path / "drawing.cdxml").write_bytes(source)
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    for name, command in (
+        ("chemvas", f'exec "{sys.executable}" -m chemvas "$@"'),
+        ("python", f'exec "{sys.executable}" "$@"'),
+    ):
+        shim = bin_dir / name
+        shim.write_text(f"#!/bin/sh\n{command}\n", encoding="utf-8")
+        shim.chmod(0o755)
+    env = os.environ.copy()
+    env["PATH"] = f"{bin_dir}{os.pathsep}{env.get('PATH', '')}"
+    env["PYTHONPATH"] = str(ROOT / "app")
+    env["QT_QPA_PLATFORM"] = "offscreen"
+    result = subprocess.run(
+        ["bash", "-c", script],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        check=False,
+        env=env,
+        timeout=60,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    lines = result.stdout.splitlines()
+    assert lines[0] == f"source_sha256 {hashlib.sha256(source).hexdigest()}"
+    assert any(line.startswith("atom 0 ") for line in lines)
+    assert any(line.startswith("bond ") for line in lines)

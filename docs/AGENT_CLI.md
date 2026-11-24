@@ -242,16 +242,22 @@ the CLI does not insert an action into an already open window's history.
 
 ### Inspecting IDs for Patching
 
-To extract atom IDs and compute SHA-256 for a patch request:
+A `.cdxml` file is XML, not JSON; do not parse it with `json.loads`. Use
+`inspect-document`, whose report carries the `source_sha256` of the exact input
+bytes, the stable atom `id`s, and bonds located by their endpoint atoms `a` and
+`b`:
 
 ```bash
+chemvas inspect-document drawing.cdxml > inspection.json
 python - <<'PY'
-import hashlib, json
+import json
 from pathlib import Path
-data = Path("drawing.cdxml").read_bytes()
-model = json.loads(data)["state"]["model"]
-print(json.dumps({"source_sha256": hashlib.sha256(data).hexdigest(),
-                  "atoms": model["atoms"], "bonds": model["bonds"]}, indent=2))
+report = json.loads(Path("inspection.json").read_text(encoding="utf-8"))
+print("source_sha256", report["source_sha256"])
+for atom in report["atoms"]:
+    print("atom", atom["id"], atom["element"], atom["x"], atom["y"])
+for bond in report["bonds"]:
+    print("bond", bond["a"], bond["b"], bond["order"], bond["style"])
 PY
 ```
 
