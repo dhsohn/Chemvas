@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Re-check the saved file immediately before replacing it on Save. Another
+  program's save that lands after the pre-save check, while Chemvas is still
+  building the CDXML, is no longer overwritten: Chemvas leaves the file as is,
+  keeps the drawing unsaved and reports the conflict. The check narrows the
+  window to the final rename and does not lock the file against other programs.
+
 ## [0.30.1] - 2026-11-17
 
 ### Fixed

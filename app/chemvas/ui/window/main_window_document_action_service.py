@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING
 
 from PyQt6.QtWidgets import QFileDialog, QMessageBox
 
+from chemvas.core.document_io import DiskBaseline, DocumentChangedOnDiskError
 from chemvas.core.molfile import fit_molfile_model, read_molfile
 from chemvas.domain.document import MoleculeModel, serialize_model_state
 from chemvas.features.document_files import (
@@ -214,6 +215,7 @@ class MainWindowDocumentActionService:
             # Refuse before the overwrite prompt: this save cannot succeed.
             require_preserved_calculation_plan_for(target)
             current_path = self.current_file_path(window, canvas=target)
+            baseline: DiskBaseline | None = None
             if current_path and paths_refer_to_same_document(current_path, write_path):
                 expected = target.runtime_state.document_metadata_state.source_sha256
                 try:
@@ -237,9 +239,22 @@ class MainWindowDocumentActionService:
                     )
                     if answer != QMessageBox.StandardButton.Yes:
                         return False
+                # Building the CDXML can take a while; the writer re-hashes the
+                # file just before replacing it so an external save that lands
+                # in the meantime is refused instead of overwritten.
+                baseline = DiskBaseline(observed)
             warnings = target.services.canvas_document_session_service.save_to_file(
-                write_path
+                write_path, baseline=baseline
             )
+        except DocumentChangedOnDiskError:
+            message_box.warning(
+                window,
+                "File Changed",
+                "This file changed outside Chemvas while it was being saved.\n"
+                "Chemvas did not replace it, and your drawing is unchanged.\n"
+                "Use Save As to keep both versions, or save again to replace it.",
+            )
+            return False
         except Exception as exc:
             message_box.warning(window, "Save Error", f"Failed to save file:\n{exc}")
             return False

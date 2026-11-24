@@ -141,7 +141,48 @@ ATOMIC_STAGING_PREFIX = ".chemvas-"
 ATOMIC_STAGING_SUFFIX = ".tmp"
 
 
-def atomic_write_via_temp(path: PathType, writer: Callable[[Path], None]) -> None:
+@dataclass(frozen=True)
+class DiskBaseline:
+    """The destination's content as last verified by the caller.
+
+    ``sha256`` is the digest of the bytes then on disk, or ``None`` when the
+    destination did not exist.
+    """
+
+    sha256: str | None
+
+
+class DocumentChangedOnDiskError(Exception):
+    """The destination no longer matches the caller's verified baseline."""
+
+    def __init__(self, path: PathType) -> None:
+        super().__init__(f"{os.fspath(path)} changed outside Chemvas while saving.")
+        self.path = path
+
+
+def _disk_sha256(target: Path) -> str | None:
+    try:
+        with target.open("rb") as source:
+            return hashlib.file_digest(source, "sha256").hexdigest()
+    except FileNotFoundError:
+        return None
+
+
+def atomic_write_via_temp(
+    path: PathType,
+    writer: Callable[[Path], None],
+    *,
+    baseline: DiskBaseline | None = None,
+) -> None:
+    """Stage ``writer``'s output beside ``path`` and atomically replace it.
+
+    With ``baseline``, the destination is re-hashed after the staged bytes are
+    durable and immediately before the replace; a mismatch raises
+    :class:`DocumentChangedOnDiskError` and leaves the destination untouched.
+    This closes the window in which the content is built, not the short gap
+    between that final check and the rename itself, and it does not lock out
+    other programs.
+    """
     with _output_errors(path):
         target = resolved_output_path(path)
         target_mode = _output_mode(target)
@@ -162,6 +203,8 @@ def atomic_write_via_temp(path: PathType, writer: Callable[[Path], None]) -> Non
                 tmp.chmod(target_mode)
             with tmp.open("rb+") as handle:
                 os.fsync(handle.fileno())
+            if baseline is not None and _disk_sha256(target) != baseline.sha256:
+                raise DocumentChangedOnDiskError(path)
             tmp.replace(target)
         except BaseException:
             with contextlib.suppress(OSError):

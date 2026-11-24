@@ -6,7 +6,11 @@ import hashlib
 import xml.etree.ElementTree as ET
 from typing import TYPE_CHECKING, Any
 
-from chemvas.core.document_io import atomic_create_bytes, atomic_write_via_temp
+from chemvas.core.document_io import (
+    DiskBaseline,
+    atomic_create_bytes,
+    atomic_write_via_temp,
+)
 from chemvas.features.cdxml_document import embed_document
 from chemvas.ui.canvas.sheet_setup_access import sheet_rect_for
 
@@ -41,7 +45,12 @@ def serialize_cdxml_document(canvas: CanvasView, state: dict[str, Any]) -> bytes
 
 
 def save_cdxml_document(
-    canvas: CanvasView, path: str, state: dict[str, Any], *, create_only: bool = False
+    canvas: CanvasView,
+    path: str,
+    state: dict[str, Any],
+    *,
+    create_only: bool = False,
+    baseline: DiskBaseline | None = None,
 ) -> str:
     raw = serialize_cdxml_document(canvas, state)
 
@@ -51,5 +60,5 @@ def save_cdxml_document(
     if create_only:
         atomic_create_bytes(path, raw)
     else:
-        atomic_write_via_temp(path, write)
+        atomic_write_via_temp(path, write, baseline=baseline)
     return hashlib.sha256(raw).hexdigest()

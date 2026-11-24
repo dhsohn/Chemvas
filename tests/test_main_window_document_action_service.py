@@ -265,8 +265,8 @@ class MainWindowDocumentActionServiceTest(unittest.TestCase):
             ).services.canvas_document_session_service
             real_save_to_file = session_service.save_to_file
 
-            def write_then_external_change(write_path):
-                warnings = real_save_to_file(write_path)
+            def write_then_external_change(write_path, **kwargs):
+                warnings = real_save_to_file(write_path, **kwargs)
                 path.write_bytes(path.read_bytes() + b"\n")
                 return warnings
 

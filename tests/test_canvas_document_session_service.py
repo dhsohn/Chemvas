@@ -1183,7 +1183,7 @@ class CanvasDocumentSessionServiceTest(unittest.TestCase):
 
         snapshot_state.assert_called_once_with()
         write_document.assert_called_once_with(
-            canvas, "/tmp/example.cdxml", {"state": 1}
+            canvas, "/tmp/example.cdxml", {"state": 1}, baseline=None
         )
         self.assertEqual(warnings, ["adjusted"])
         self.assertEqual(
