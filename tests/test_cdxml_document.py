@@ -104,6 +104,55 @@ def test_save_edit_reopen_and_external_change_protection(tmp_path):
         app.processEvents()
 
 
+def test_save_refuses_external_change_made_after_pre_save_check(tmp_path, monkeypatch):
+    from chemvas.ui.export import cdxml_document_writer
+
+    app = QApplication.instance() or QApplication([])
+    window = build_main_window()
+    service = window.services.document_action_service
+    box = Mock()
+    path = tmp_path / "sample.cdxml"
+    path.write_bytes(NATIVE)
+    external = NATIVE.replace(b">Sample<", b">Edited elsewhere<")
+    serialize = cdxml_document_writer.serialize_cdxml_document
+
+    def serialize_while_another_app_saves(canvas, state):
+        # The pre-save hash check has already passed; another program saves
+        # the same file while Chemvas is still building its CDXML.
+        path.write_bytes(external)
+        return serialize(canvas, state)
+
+    try:
+        assert service.load_canvas_from_path(window, str(path), message_box=box)
+        canvas = active_canvas_for_window(window)
+        documents = window.services.canvas_document_service
+        baseline = canvas.runtime_state.document_metadata_state.source_sha256
+        canvas.services.atom_label_service.apply_atom_label_prompt(1, "N")
+        assert documents.is_dirty(canvas)
+        monkeypatch.setattr(
+            cdxml_document_writer,
+            "serialize_cdxml_document",
+            serialize_while_another_app_saves,
+        )
+
+        assert not service.save_canvas_to_path(window, str(path), message_box=box)
+
+        assert path.read_bytes() == external
+        assert sorted(os.listdir(tmp_path)) == ["sample.cdxml"]
+        assert not box.question.called
+        assert box.warning.call_count == 1
+        assert box.warning.call_args.args[1] == "File Changed"
+        assert documents.is_dirty(canvas)
+        assert canvas.runtime_state.document_metadata_state.source_sha256 == baseline
+        assert canvas.runtime_state.document_metadata_state.file_path == str(path)
+    finally:
+        window.services.canvas_document_service.mark_clean(
+            active_canvas_for_window(window)
+        )
+        window.close()
+        app.processEvents()
+
+
 def test_wedge_end_preserves_narrow_end_and_charge():
     raw = NATIVE.replace(
         b'Order="2" DoublePosition="Center"', b'Display="WedgeEnd"'

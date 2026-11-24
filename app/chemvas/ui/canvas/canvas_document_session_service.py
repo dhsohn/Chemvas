@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING, Any
 from PyQt6.QtCore import QRectF
 from PyQt6.QtWidgets import QGraphicsItem, QGraphicsScene, QGraphicsView
 
-from chemvas.core.document_io import atomic_write_text
+from chemvas.core.document_io import DiskBaseline, atomic_write_text
 from chemvas.core.molfile import export_molfile_block
 from chemvas.domain.document import (
     deserialize_model_state,
@@ -580,7 +580,9 @@ class CanvasDocumentSessionService:
     def snapshot_state_with_warnings(self) -> tuple[dict, list[str]]:
         return snapshot_canvas_document_state_with_warnings(self.canvas)
 
-    def save_to_file(self, path: str) -> list[str]:
+    def save_to_file(
+        self, path: str, *, baseline: DiskBaseline | None = None
+    ) -> list[str]:
         if not is_saved_document_path(path):
             msg = "Chemvas documents must use the .cdxml filename extension."
             raise ValueError(msg)
@@ -598,7 +600,7 @@ class CanvasDocumentSessionService:
         ):
             digest = save_cdxml_document(self.canvas, path, state, create_only=True)
         else:
-            digest = save_cdxml_document(self.canvas, path, state)
+            digest = save_cdxml_document(self.canvas, path, state, baseline=baseline)
         metadata.set_source_sha256(digest)
         return warnings
 

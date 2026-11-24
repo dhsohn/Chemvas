@@ -12,6 +12,8 @@ from unittest import mock
 from chemvas.core import document_io
 from chemvas.core.document_io import (
     ChemvasDocument,
+    DiskBaseline,
+    DocumentChangedOnDiskError,
     atomic_create_bytes,
     atomic_write_text,
     atomic_write_via_temp,
@@ -836,6 +838,51 @@ class DocumentIOTest(unittest.TestCase):
 
             self.assertEqual(stat.S_IMODE(path.stat().st_mode), original_mode)
             self.assertEqual(path.read_text(encoding="utf-8"), "NEW")
+
+    def test_atomic_write_via_temp_refuses_change_made_while_writing(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir) / "shared.cdxml"
+            path.write_bytes(b"ORIGINAL")
+            baseline = DiskBaseline(hashlib.sha256(b"ORIGINAL").hexdigest())
+
+            def writer(tmp: Path) -> None:
+                # Another program saves after the caller's check, while the
+                # staged bytes are still being produced.
+                path.write_bytes(b"EXTERNAL")
+                tmp.write_bytes(b"OURS")
+
+            with self.assertRaises(DocumentChangedOnDiskError):
+                atomic_write_via_temp(path, writer, baseline=baseline)
+
+            self.assertEqual(path.read_bytes(), b"EXTERNAL")
+            self.assertEqual(os.listdir(temp_dir), ["shared.cdxml"])
+
+    def test_atomic_write_via_temp_refuses_file_created_after_absent_baseline(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir) / "new.cdxml"
+
+            def writer(tmp: Path) -> None:
+                path.write_bytes(b"EXTERNAL")
+                tmp.write_bytes(b"OURS")
+
+            with self.assertRaises(DocumentChangedOnDiskError):
+                atomic_write_via_temp(path, writer, baseline=DiskBaseline(None))
+
+            self.assertEqual(path.read_bytes(), b"EXTERNAL")
+
+    def test_atomic_write_via_temp_replaces_when_baseline_still_matches(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir) / "shared.cdxml"
+            path.write_bytes(b"ORIGINAL")
+            baseline = DiskBaseline(hashlib.sha256(b"ORIGINAL").hexdigest())
+
+            atomic_write_via_temp(
+                path, lambda tmp: tmp.write_bytes(b"OURS"), baseline=baseline
+            )
+
+            self.assertEqual(path.read_bytes(), b"OURS")
 
 
 class DocumentNumberBoundsTest(unittest.TestCase):

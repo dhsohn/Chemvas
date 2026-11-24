@@ -13,6 +13,7 @@ from PyQt6.QtTest import QTest
 from PyQt6.QtWidgets import QApplication, QMessageBox, QToolButton
 
 from chemvas.bootstrap.main_window import build_main_window
+from chemvas.core.document_io import DiskBaseline
 from chemvas.ui.canvas.canvas_mark_registry import mark_registry_for
 from chemvas.ui.canvas.canvas_text_style_state import set_text_style_for
 from chemvas.ui.canvas.canvas_tool_settings_state import set_tool_setting_for
@@ -523,7 +524,10 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
             )
             self._document_actions().save_canvas(self.window)
 
-        save_mock.assert_called_once_with(os.path.realpath(expected_path))
+        # The bound path did not exist when the user consented to replace it.
+        save_mock.assert_called_once_with(
+            os.path.realpath(expected_path), baseline=DiskBaseline(None)
+        )
         dialog_mock.assert_not_called()
         overwrite_question.assert_called_once()
         self.assertEqual(overwrite_question.call_args.args[1], "File Changed")
@@ -597,7 +601,7 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
             )
             self._document_actions().save_canvas_as(self.window)
 
-        save_mock.assert_called_once_with(attempted_path)
+        save_mock.assert_called_once_with(attempted_path, baseline=None)
         warning.assert_called_once_with(
             self.window,
             "Save Error",
@@ -645,7 +649,7 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
             )
             self._document_actions().save_canvas(self.window)
 
-        save_mock.assert_called_once_with(attempted_path)
+        save_mock.assert_called_once_with(attempted_path, baseline=DiskBaseline(None))
         overwrite_question.assert_called_once()
         self.assertEqual(overwrite_question.call_args.args[1], "File Changed")
         self.assertIn(
