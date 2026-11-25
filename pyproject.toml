@@ -34,6 +34,7 @@ classifiers = [
 dependencies = [
     "Pillow>=10",
     "PyQt6>=6.7",
+    "rdkit>=2024.3",
 ]
 
 [project.optional-dependencies]

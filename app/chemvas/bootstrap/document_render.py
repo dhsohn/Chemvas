@@ -174,7 +174,11 @@ def _render_document(
         raise ValueError("--cdxml-layout-reference supports CDXML output only")
     # One read: the digest, the label-binding check and the rendered state all
     # come from these bytes, so a file replaced mid-command is never re-read.
-    document = read_exact_document(source, max_bytes=MAX_DOCUMENT_BYTES).document
+    document = read_exact_document(
+        source,
+        max_bytes=MAX_DOCUMENT_BYTES,
+        preprocess_for_render=output_format != "cdxml",
+    ).document
     bindings: CdxmlLabelBindings | None = None
     if label_bindings is not None:
         bindings = _read_label_bindings(label_bindings, document.source_sha256)

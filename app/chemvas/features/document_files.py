@@ -38,13 +38,16 @@ def read_exact_document(
     *,
     max_bytes: int = MAX_DOCUMENT_BYTES,
     allow_decorative_omissions: bool = False,
+    preprocess_for_render: bool = False,
 ) -> ExactDocumentRead:
     with Path(path).open("rb") as stream:
         raw = stream.read(max_bytes + 1)
     if len(raw) > max_bytes:
         raise ValueError(f"input document exceeds the {max_bytes}-byte limit")
     parsed = parse_cdxml_document(
-        raw, allow_decorative_omissions=allow_decorative_omissions
+        raw,
+        allow_decorative_omissions=allow_decorative_omissions,
+        preprocess_for_render=preprocess_for_render,
     )
     return ExactDocumentRead(
         raw,

@@ -16,6 +16,7 @@ a code source of truth, it does not belong here.
 from __future__ import annotations
 
 import re
+import tomllib
 from pathlib import Path
 from types import SimpleNamespace
 from unittest import mock
@@ -182,7 +183,7 @@ _REMOVED_CHEMISTRY_TEXT = (
 def test_current_guides_do_not_document_removed_chemistry() -> None:
     """User and packaging guides follow the current extras and CLI."""
     pyproject = _read(ROOT / "pyproject.toml")
-    assert "rdkit" not in pyproject
+    assert "rdkit" not in tomllib.loads(pyproject)["project"]["optional-dependencies"]
     commands = _read(APP / "chemvas" / "bootstrap" / "application.py")
     for command in ("pack-step", "inspect-plan", "attach-plan"):
         assert f'"{command}"' not in commands

@@ -166,8 +166,10 @@ def test_no_module_depends_on_retired_operations() -> None:
             edge.dependency == retired or edge.dependency.startswith(retired + ".")
             for retired in RETIRED_OPERATION_MODULES
         )
-        or edge.dependency == "rdkit"
-        or edge.dependency.startswith("rdkit.")
+        or (
+            edge.source != "chemvas.features.cdxml_standard_depiction"
+            and (edge.dependency == "rdkit" or edge.dependency.startswith("rdkit."))
+        )
     ]
 
 
@@ -207,7 +209,13 @@ def test_features_are_qt_and_adapter_free() -> None:
         _formatted(edge)
         for edge in _import_edges()
         if _layer(edge.source) == "features"
-        and edge.dependency.startswith(("PyQt6", "rdkit", "chemvas.adapters"))
+        and (
+            edge.dependency.startswith(("PyQt6", "chemvas.adapters"))
+            or (
+                edge.dependency.startswith("rdkit")
+                and edge.source != "chemvas.features.cdxml_standard_depiction"
+            )
+        )
     ]
 
     assert violations == []

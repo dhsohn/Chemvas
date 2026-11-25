@@ -26,7 +26,7 @@ executable_icon = str(PACKAGING_ICONS / ("chemvas.ico" if sys.platform == "win32
 bundle_data = [(str(ICON_DIR), "chemvas/assets/icon"), (str(REPO_ROOT / "LICENSE"), ".")]
 # Include wheel-supplied notices on every platform, including transitive Qt/sip.
 # This preserves upstream texts; release licensing review remains separate.
-for distribution in ("PyQt6", "Pillow"):
+for distribution in ("PyQt6", "Pillow", "rdkit"):
     bundle_data.extend(copy_metadata(distribution, recursive=True))
 
 windows_version = {}
