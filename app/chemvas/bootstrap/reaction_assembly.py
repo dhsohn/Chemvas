@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import math
 import stat
 import sys
 from pathlib import Path
@@ -23,7 +24,19 @@ def run(argv: list[str]) -> int:
         _validate_source(source)
         _validate_output(output)
         raw = _read_source(source)
+        max_width_pt = args.max_width_pt
         assembled = assemble_reaction_cdxml(raw)
+        if max_width_pt is not None:
+            if not math.isfinite(max_width_pt) or max_width_pt <= 0:
+                raise ValueError("--max-width-pt must be positive and finite")
+            width = _svg_width(assembled)
+            if width > max_width_pt:
+                assembled = assemble_reaction_cdxml(raw, max_width_pt=max_width_pt)
+                width = _svg_width(assembled)
+            if width > max_width_pt:
+                raise ValueError(
+                    f"assembled SVG width {width:.2f} pt exceeds {max_width_pt:g} pt"
+                )
         atomic_create_bytes(output, assembled)
         report = {
             "format": "chemvas-assemble-reaction-report",
@@ -34,11 +47,24 @@ def run(argv: list[str]) -> int:
             "output_sha256": hashlib.sha256(assembled).hexdigest(),
             "written": True,
         }
+        if max_width_pt is not None:
+            report["max_width_pt"] = max_width_pt
+            report["svg_width_pt"] = width
         sys.stdout.write(json_text(report))
         return 0
     except (OSError, ValueError) as exc:
         parser.exit(2, f"chemvas: error: {exc}\n")
     return 2
+
+
+def _svg_width(raw: bytes) -> float:
+    from chemvas.bootstrap.document_cli_shared import offscreen_document_scene
+    from chemvas.features.cdxml_document import parse_cdxml_document
+    from chemvas.ui.export.figure_export_service import FigureExportService
+
+    state = parse_cdxml_document(raw).state
+    with offscreen_document_scene(state, command="assemble-reaction") as context:
+        return float(FigureExportService(context).plan_figure_export().out_w_pt)
 
 
 def _argument_parser() -> argparse.ArgumentParser:
@@ -53,6 +79,15 @@ def _argument_parser() -> argparse.ArgumentParser:
     )
     command.add_argument("input", help="normalized reaction .cdxml input")
     command.add_argument("--output", required=True, help="assembled .cdxml output path")
+    command.add_argument(
+        "--max-width-pt",
+        type=float,
+        default=None,
+        help=(
+            "pack the reaction row to fit within a painted SVG width (points); "
+            "reject the layout when contour clearance cannot reach the limit"
+        ),
+    )
     return parser
 
 

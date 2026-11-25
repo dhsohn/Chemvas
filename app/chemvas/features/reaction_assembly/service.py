@@ -8,12 +8,13 @@ from chemvas.domain.document.cdxml_source import (
     reject_unsafe_cdxml_declarations,
 )
 from chemvas.features.reaction_assembly.layout import apply_layout, compute_placements
+from chemvas.features.reaction_assembly.packing import pack_placements
 from chemvas.features.reaction_assembly.validate import validate_normalized_reaction
 
 MAX_ASSEMBLE_REACTION_BYTES = MAX_CDXML_SOURCE_BYTES
 
 
-def assemble_reaction_cdxml(raw: bytes) -> bytes:
+def assemble_reaction_cdxml(raw: bytes, *, max_width_pt: float | None = None) -> bytes:
     if len(raw) > MAX_ASSEMBLE_REACTION_BYTES:
         raise ValueError("reaction input exceeds the byte limit")
     text = raw.decode("utf-8")
@@ -21,6 +22,10 @@ def assemble_reaction_cdxml(raw: bytes) -> bytes:
     root = parse_native_xml(text)
     reaction = validate_normalized_reaction(root)
     placements = compute_placements(reaction)
+    if max_width_pt is not None:
+        placements, _painted_width = pack_placements(
+            reaction, placements, max_width_pt=max_width_pt
+        )
     apply_layout(reaction, placements)
     payload = bytes(
         ET.tostring(root, encoding="utf-8", xml_declaration=True),

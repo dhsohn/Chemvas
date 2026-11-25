@@ -35,6 +35,16 @@ class Placement:
     size: Size
 
 
+@dataclass(frozen=True)
+class ReactionLayoutContext:
+    body: list[ET.Element]
+    counterion: ET.Element | None
+    first_reactant: ET.Element
+    arrow: ET.Element
+    above_arrow: list[ET.Element]
+    below_arrow: list[ET.Element]
+
+
 def _size(e: ET.Element) -> Size:
     if e.tag == "fragment":
         return fragment_drawable_size(e)
@@ -54,14 +64,10 @@ def _molecules(refs: list[str], reaction: NormalizedReaction) -> list[ET.Element
     return mols
 
 
-def compute_placements(reaction: NormalizedReaction) -> list[Placement]:
-    unit = float(reaction.root.get("BondLength", "14.4"))
-    if not math.isfinite(unit) or unit <= 0:
-        raise ValueError("invalid reaction bond length")
+def reaction_layout_context(reaction: NormalizedReaction) -> ReactionLayoutContext:
     arrow = resolve_arrow_identity(reaction.by_id, reaction.arrow_refs[0])
     reactants = _molecules(reaction.reactant_ids, reaction)
     products = _molecules(reaction.product_ids, reaction)
-    # Associate an isolated oppositely charged ion only when its partner is unambiguous.
     counterion = None
     if (
         len(reactants) == 2
@@ -72,11 +78,13 @@ def compute_placements(reaction: NormalizedReaction) -> list[Placement]:
         if len(single) == 1:
             counterion = single[0]
             reactants.remove(counterion)
-    above = [reaction.by_id[i] for i in reaction.above_arrow]
-    below = [reaction.by_id[i] for i in reaction.below_arrow]
-    gap = 0.58 * unit
-    # A plus sign can be an independent page note or a referenced object.
-    pluses = [e for e in reaction.page if is_plus_text(e) and e not in above + below]
+    pluses = [
+        e
+        for e in reaction.page
+        if is_plus_text(e)
+        and e
+        not in [reaction.by_id[i] for i in reaction.above_arrow + reaction.below_arrow]
+    ]
     if len(pluses) != len(reactants) + len(products) - 2:
         raise ValueError("reaction requires one plus note between adjacent molecules")
     named = set(reaction.reactant_ids + reaction.product_ids)
@@ -107,6 +115,27 @@ def compute_placements(reaction: NormalizedReaction) -> list[Placement]:
         + [arrow]
         + separated(products, reaction.product_ids)
     )
+    return ReactionLayoutContext(
+        body=body,
+        counterion=counterion,
+        first_reactant=reactants[0],
+        arrow=arrow,
+        above_arrow=[reaction.by_id[i] for i in reaction.above_arrow],
+        below_arrow=[reaction.by_id[i] for i in reaction.below_arrow],
+    )
+
+
+def compute_placements(reaction: NormalizedReaction) -> list[Placement]:
+    unit = float(reaction.root.get("BondLength", "14.4"))
+    if not math.isfinite(unit) or unit <= 0:
+        raise ValueError("invalid reaction bond length")
+    layout = reaction_layout_context(reaction)
+    body = layout.body
+    counterion = layout.counterion
+    above = layout.above_arrow
+    below = layout.below_arrow
+    arrow = layout.arrow
+    gap = 0.58 * unit
     width = max([3 * unit] + [_size(e).width + 0.35 * unit for e in above + below])
     placements = []
     x = 2 * unit
@@ -123,7 +152,7 @@ def compute_placements(reaction: NormalizedReaction) -> list[Placement]:
                         Placement(item, x + (width - box.width) / 2, y, box)
                     )
                     distance += box.height + 0.28 * unit
-        if counterion is not None and e is reactants[0]:
+        if counterion is not None and e is layout.first_reactant:
             ion = _size(counterion)
             placements.append(
                 Placement(

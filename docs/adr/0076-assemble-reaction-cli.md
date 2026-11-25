@@ -44,3 +44,14 @@ and `render-document` on assembled output. Run `bash scripts/check.sh tests/test
 Only one reaction step and one arrow are supported. Layout uses conservative
 measurements rather than a full caption engine. The command does not invent plus
 notes or alter chemistry beyond translation.
+
+### Width-constrained rows
+
+An optional width in points activates the offscreen export planner in the CLI.
+Only rows that exceed the requested width are repacked. Horizontal bands use
+direct atom labels and bond strokes. Hidden nickname definitions do not
+contribute visible ink. The arrow and its conditions translate together,
+as do the substrate and its counterion. All bands share a vertical coordinate
+system. Horizontal moves account for vertically separated strokes inside the
+clearance radius. A conservative margin covers stroke and glyph differences.
+The CLI checks the final SVG plan before publishing the editable file.

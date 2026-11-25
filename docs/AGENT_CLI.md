@@ -327,3 +327,5 @@ settings are retained by document editing and shared desktop/headless rendering.
 single reaction step from participant and condition references. Supply local
 molecular coordinates, existing plus signs and an arrow without global positions.
 Render the resulting editable CDXML with `render-document`. See [ADR 0076](adr/0076-assemble-reaction-cli.md).
+
+Add `--max-width-pt 468` to keep a fitting reaction unchanged or pack the components horizontally. The command checks the natural-size SVG export width before writing CDXML. Molecule coordinates within each fragment, font sizes, and bond lengths keep their original scale.

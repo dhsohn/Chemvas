@@ -216,3 +216,41 @@ def test_application_help_includes_assemble_reaction(
     )
     assert result.returncode == 0, result.stderr
     assert "assemble-reaction" in result.stdout
+
+
+def test_requested_width_preserves_a_fitting_layout_and_refuses_impossible_output(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "reaction.cdxml"
+    source.write_bytes(_normalized_input())
+    output = tmp_path / "wide.cdxml"
+    result = _run(
+        "assemble-reaction",
+        str(source),
+        "--output",
+        str(output),
+        "--max-width-pt",
+        "1000",
+    )
+    assert result.returncode == 0, result.stderr
+    assert json.loads(result.stdout)["svg_width_pt"] < 1000
+    assert output.read_bytes() == assemble_reaction_cdxml(source.read_bytes())
+    tiny = tmp_path / "tiny.cdxml"
+    result = _run(
+        "assemble-reaction", str(source), "--output", str(tiny), "--max-width-pt", "5"
+    )
+    assert result.returncode != 0
+    assert not tiny.exists()
+
+
+def test_packing_reserves_diagonal_clearance() -> None:
+    from chemvas.features.reaction_assembly.contours import ContourBand
+    from chemvas.features.reaction_assembly.packing import _minimum_origin
+
+    # With vertical separation of 3 and radial clearance 5, the horizontal
+    # separation must still be 4. Looking only for intersecting bands gives 0.
+    assert _minimum_origin(
+        local_bands=(ContourBand(13, 20, 1, 5),),
+        prior_world_bands=[ContourBand(0, 10, 5, 17)],
+        clearance=5,
+    ) == pytest.approx(20)
