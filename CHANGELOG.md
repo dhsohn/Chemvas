@@ -7,7 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.31.0] - 2026-11-25
+
 ### Added
+
+- Assemble one-step reaction diagrams from local molecule geometry and reaction roles. Use `--max-width-pt` to pack components by their painted contours.
 
 - **`render-document` graph-only preprocessing**: eligible external standard
   CDXML is laid out with RDKit and neutral phenolic ``OH`` labels are added
@@ -17,6 +21,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   ([ADR 0075](docs/adr/0075-standard-cdxml-graph-depiction.md)).
 
 ### Fixed
+
+- Preserve nonpainting native ring curve records when rendering and assembling reaction diagrams.
 
 - Re-check the saved file immediately before replacing it on Save. Another
   program's save that lands after the pre-save check, while Chemvas is still
@@ -3410,7 +3416,8 @@ housekeeping.
   `.chemvas` document type (double-clicking a file opens it in Chemvas), and a
   Linux `.desktop` entry with an `application/x-chemvas` MIME type.
 
-[Unreleased]: https://github.com/dhsohn/Chemvas/compare/v0.30.1...HEAD
+[Unreleased]: https://github.com/dhsohn/Chemvas/compare/v0.31.0...HEAD
+[0.31.0]: https://github.com/dhsohn/Chemvas/compare/v0.30.1...v0.31.0
 [0.30.1]: https://github.com/dhsohn/Chemvas/compare/v0.30.0...v0.30.1
 [0.30.0]: https://github.com/dhsohn/Chemvas/compare/v0.29.1...v0.30.0
 [0.29.1]: https://github.com/dhsohn/Chemvas/compare/v0.29.0...v0.29.1
