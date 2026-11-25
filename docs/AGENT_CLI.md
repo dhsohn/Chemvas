@@ -320,3 +320,10 @@ For example, a 600 × 400 mm page spans approximately ±850.39 × ±566.93 units
 Leave space for labels and strokes, then run `check-layout --sheet-only`.
 Changing paper dimensions does not translate or scale drawing objects. These
 settings are retained by document editing and shared desktop/headless rendering.
+
+### Assemble a reaction from molecule coordinates
+
+`chemvas assemble-reaction input.cdxml --output assembled.cdxml` lays out a
+single reaction step from participant and condition references. Supply local
+molecular coordinates, existing plus signs and an arrow without global positions.
+Render the resulting editable CDXML with `render-document`. See [ADR 0076](adr/0076-assemble-reaction-cli.md).

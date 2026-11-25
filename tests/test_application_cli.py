@@ -120,6 +120,7 @@ def test_root_help_inventory_matches_dispatched_headless_commands(
         | application.DOCUMENT_TEMPLATE_COMMANDS
         | application.DOCUMENT_RENDER_COMMANDS
         | application.CDXML_REVIEW_COMMANDS
+        | application.REACTION_ASSEMBLY_COMMANDS
     )
 
 

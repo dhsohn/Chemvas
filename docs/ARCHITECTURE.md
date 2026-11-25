@@ -448,3 +448,4 @@ Qt scene contract rather than alternate test-only scene representations.
 - [ADR 0073: Native CDXML groups](adr/0073-native-cdxml-groups.md)
 - [ADR 0074: Preserve detached native caption layout](adr/0074-preserve-detached-native-caption-layout.md)
 - [ADR 0075: Standard CDXML graph-only depiction](adr/0075-standard-cdxml-graph-depiction.md)
+- [ADR 0076: Assemble one-step reaction CDXML](adr/0076-assemble-reaction-cli.md)

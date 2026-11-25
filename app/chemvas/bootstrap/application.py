@@ -33,6 +33,7 @@ SCHEME_LAYOUT_COMMANDS = frozenset(("layout-document",))
 DOCUMENT_TEMPLATE_COMMANDS = frozenset(("insert-template",))
 DOCUMENT_RENDER_COMMANDS = frozenset(("render-document",))
 CDXML_REVIEW_COMMANDS = frozenset(("review-cdxml",))
+REACTION_ASSEMBLY_COMMANDS = frozenset(("assemble-reaction",))
 HEADLESS_DISPATCH_COMMANDS = frozenset().union(
     DOCUMENT_PATCH_COMMANDS,
     DOCUMENT_COMPOSITION_COMMANDS,
@@ -41,6 +42,7 @@ HEADLESS_DISPATCH_COMMANDS = frozenset().union(
     DOCUMENT_TEMPLATE_COMMANDS,
     DOCUMENT_RENDER_COMMANDS,
     CDXML_REVIEW_COMMANDS,
+    REACTION_ASSEMBLY_COMMANDS,
 )
 HEADLESS_SUBCOMMAND_HELP = (
     ("apply-patch", "validate or apply a Chemvas graph patch"),
@@ -51,6 +53,7 @@ HEADLESS_SUBCOMMAND_HELP = (
     ("layout-document", "align structure blocks and captions in a new document"),
     ("render-document", "render a document to SVG, PNG or PDF"),
     ("review-cdxml", "inspect native font changes and palette stability"),
+    ("assemble-reaction", "layout a normalized one-step reaction to native CDXML"),
 )
 
 
@@ -299,6 +302,11 @@ def main() -> None:
 
     if len(sys.argv) > 1 and sys.argv[1] in CDXML_REVIEW_COMMANDS:
         from chemvas.bootstrap.cdxml_roundtrip import run
+
+        raise SystemExit(run(sys.argv[1:]))
+
+    if len(sys.argv) > 1 and sys.argv[1] in REACTION_ASSEMBLY_COMMANDS:
+        from chemvas.bootstrap.reaction_assembly import run
 
         raise SystemExit(run(sys.argv[1:]))
 

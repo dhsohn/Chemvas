@@ -315,3 +315,10 @@ PY
 좌표 원점은 용지 중앙이며 1인치는 72 drawing units입니다. 600 × 400 mm 용지는
 약 ±850.39 × ±566.93 범위입니다. 라벨과 선 여백을 남기고
 `check-layout --sheet-only`로 확인합니다. 크기를 바꿔도 그림 좌표는 유지됩니다.
+
+### 분자 좌표로 반응식 조립
+
+`chemvas assemble-reaction input.cdxml --output assembled.cdxml`은 분자 내부 좌표와
+반응 단계의 역할 참조로 단일 단계 반응식을 조립한다. 위치를 지운 화살표, 기존 더하기
+기호와 조건 문구를 입력에 포함한다. 출력 CDXML은 `render-document`로 그릴 수 있다.
+[설계 기록](adr/0076-assemble-reaction-cli.md)
