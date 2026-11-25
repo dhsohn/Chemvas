@@ -143,6 +143,7 @@ Supported styles: `regular` (sizes 3–12), `benzene`, `chair`, `chair_flip`, an
 Render publication-ready figures directly to SVG, PDF, PNG, or experimental CDXML without launching the desktop GUI:
 
 ```bash
+chemvas render-document graph.cdxml --output layout.svg
 chemvas render-document scheme.cdxml --output scheme.svg
 chemvas render-document scheme.cdxml --output scheme.pdf --width-mm 174
 chemvas render-document scheme.cdxml --output scheme.png --dpi 600
@@ -152,6 +153,11 @@ chemvas render-document scheme.cdxml --output scheme-transparent.png \
   --background transparent
 chemvas render-document scheme.cdxml --output scheme.cdxml --cdxml-label-bindings labels.json
 ```
+
+For SVG, PDF and PNG, single-fragment external molecular CDXML without atom coordinates is laid out through
+RDKit during ``render-document``. Coordinates are preserved when every atom
+already has ``p``; neutral phenolic oxygens gain literal ``OH`` labels without
+moving atoms. See [ADR 0075](adr/0075-standard-cdxml-graph-depiction.md).
 
 - `--width-mm`: Scales the figure to fit specific column widths (e.g., 84 mm for single column, 174 mm for double column).
 - `--min-font-pt`: Ensures rendered font sizes (including subscripts) remain readable.
@@ -278,7 +284,7 @@ Adjust terminal substituent orientation programmatically:
 
 ## Stored calculation plans
 
-Chemvas does not install a chemistry backend and does not write `machine.json`.
+RDKit supplies 2D coordinates for the graph-only render path. Chemvas does not write `machine.json`.
 A calculation plan already stored in a `.cdxml` file is kept when it still
 matches the drawing. Save refuses when the current drawing would drop that plan.
 There is no reaction-mapping panel and no command that creates or exports a plan.

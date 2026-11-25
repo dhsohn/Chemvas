@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **`render-document` graph-only preprocessing**: eligible external standard
+  CDXML is laid out with RDKit and neutral phenolic ``OH`` labels are added
+  without a separate prepass command. Runtime dependency on RDKit is declared;
+  coordinates are preserved when every atom already has ``p``; partial geometry,
+  unsupported stereo/query nodes, and dangling references are rejected
+  ([ADR 0075](docs/adr/0075-standard-cdxml-graph-depiction.md)).
+
 ### Fixed
 
 - Re-check the saved file immediately before replacing it on Save. Another

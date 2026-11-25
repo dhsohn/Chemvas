@@ -102,7 +102,7 @@ def test_windows_executables_share_one_analysis_archive_and_dependency_tree(
     assert collections[0].kwargs["name"] == "chemvas"
     assert all(item.kwargs["exclude_binaries"] for item in executables)
     assert all(item.kwargs["upx"] is False for item in executables)
-    assert metadata == [("PyQt6", True), ("Pillow", True)]
+    assert metadata == [("PyQt6", True), ("Pillow", True), ("rdkit", True)]
     data = analyses[0].kwargs["datas"]
     assert (str(ROOT / "LICENSE"), ".") in data
     assert (str(ROOT / "app/chemvas/assets/icon"), "chemvas/assets/icon") in data
@@ -138,7 +138,7 @@ def test_other_platform_bundle_shape_is_preserved(monkeypatch, target):
     assert executables[0].kwargs["name"] == "chemvas"
     assert executables[0].args[2] == []
     assert "version" not in executables[0].kwargs
-    assert metadata == [("PyQt6", True), ("Pillow", True)]
+    assert metadata == [("PyQt6", True), ("Pillow", True), ("rdkit", True)]
     analysis = next(call for call in calls if call.kind == "Analysis")
     assert ("/PyQt6.dist-info", "PyQt6.dist-info") in analysis.kwargs["datas"]
     assert ("/Pillow.dist-info", "Pillow.dist-info") in analysis.kwargs["datas"]

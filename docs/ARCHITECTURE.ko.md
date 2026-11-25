@@ -419,3 +419,4 @@ ADR을 언제 쓰는지, 작성 규칙과 템플릿은 [ADR 안내](adr/README.m
 - [ADR 0072: Outlined black native CDXML rectangles](adr/0072-outlined-black-native-cdxml-rectangles.md)
 - [ADR 0073: Native CDXML groups](adr/0073-native-cdxml-groups.md)
 - [ADR 0074: Preserve detached native caption layout](adr/0074-preserve-detached-native-caption-layout.md)
+- [ADR 0075: Standard CDXML graph-only depiction](adr/0075-standard-cdxml-graph-depiction.md)

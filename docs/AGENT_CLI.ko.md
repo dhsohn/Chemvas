@@ -143,6 +143,7 @@ chemvas insert-template scheme.cdxml --request ring.json --output ring-added.cdx
 GUI 창을 실행하지 않고 터미널에서 고해상도 SVG, PDF, PNG 또는 실험적 CDXML을 바로 생성합니다:
 
 ```bash
+chemvas render-document graph.cdxml --output layout.svg
 chemvas render-document scheme.cdxml --output scheme.svg
 chemvas render-document scheme.cdxml --output scheme.pdf --width-mm 174
 chemvas render-document scheme.cdxml --output scheme.png --dpi 600
@@ -152,6 +153,10 @@ chemvas render-document scheme.cdxml --output scheme-transparent.png \
   --background transparent
 chemvas render-document scheme.cdxml --output scheme.cdxml --cdxml-label-bindings labels.json
 ```
+
+조건에 맞는 외부 그래프 전용 CDXML은 ``render-document``에서 RDKit으로 배치됩니다.
+모든 원자에 ``p``가 있으면 좌표를 유지하고, 중성 페놀 OH에 ``OH`` 표시만
+추가합니다. [ADR 0075](adr/0075-standard-cdxml-graph-depiction.md)를 참고하세요.
 
 - `--width-mm`: 논문 단 너비(1단 84 mm, 2단 174 mm 등)에 맞춰 전체 그림을 비율에 맞게 확대/축소 렌더링합니다.
 - `--min-font-pt`: 출력 크기 축소 시 첨자를 포함한 텍스트가 지정한 pt 미만으로 작아지면 출력을 방지합니다.
@@ -276,7 +281,7 @@ PY
 
 ## 저장된 계산 계획
 
-Chemvas는 화학 백엔드를 설치하지 않으며 `machine.json`을 쓰지 않습니다.
+좌표 없는 단일 분자의 2D 배치에 RDKit을 사용하며 `machine.json`을 쓰지 않습니다.
 `.cdxml`에 이미 저장된 계산 계획은 현재 그림과 맞을 때 유지됩니다.
 현재 그림을 저장하면 그 계획이 빠지는 경우 저장은 거부됩니다.
 반응 매핑 패널과, 계획을 만들거나 내보내는 명령은 없습니다.

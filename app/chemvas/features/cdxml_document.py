@@ -64,7 +64,10 @@ def read_cdxml_document(path: str | Path) -> CdxmlDocument:
 
 
 def parse_cdxml_document(
-    raw: bytes, *, allow_decorative_omissions: bool = False
+    raw: bytes,
+    *,
+    allow_decorative_omissions: bool = False,
+    preprocess_for_render: bool = False,
 ) -> CdxmlDocument:
     if len(raw) > MAX_DOCUMENT_BYTES:
         raise ValueError("CDXML document exceeds the document byte limit")
@@ -98,6 +101,12 @@ def parse_cdxml_document(
         return CdxmlDocument(normalized["state"], digest, has_snapshot=True)
     from chemvas.features.cdxml_preservation import PreservingImporter
 
+    if preprocess_for_render and not match:
+        from chemvas.features.cdxml_render_preprocessing import (
+            maybe_preprocess_external_cdxml,
+        )
+
+        text = maybe_preprocess_external_cdxml(text, root)
     importer = PreservingImporter(text)
     omitted = 0
     if allow_decorative_omissions:
