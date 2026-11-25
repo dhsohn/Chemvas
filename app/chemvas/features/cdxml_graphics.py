@@ -20,8 +20,40 @@ from PIL import Image, ImageDraw
 from chemvas.domain.document.images import MAX_IMAGE_BYTES, image_state_from_bytes
 
 
+def _native_incomplete_ring_curve(reader: Any, e: ET.Element) -> bool:
+    """ChemDraw retains these incomplete closed ring paths without painting them."""
+    if (
+        e.get("CurveType") != "129"
+        or e.get("Closed") != "yes"
+        or e.get("FillType") != "Solid"
+        or set(e.attrib)
+        - {
+            "id",
+            "Z",
+            "color",
+            "FillType",
+            "CurveType",
+            "ArrowheadType",
+            "Closed",
+            "CurvePoints",
+        }
+        or len(e)
+    ):
+        return False
+    words = e.get("CurvePoints", "").split()
+    if len(words) != 40:
+        return False
+    coords = [reader.number(value, e) for value in words]
+    points = list(zip(coords[::2], coords[1::2], strict=True))
+    return points[:2] == points[-2:] and all(
+        points[i] == points[i + 1] == points[i + 2] for i in range(0, 18, 3)
+    )
+
+
 def graphic_image(reader: Any, e: ET.Element) -> dict[str, object] | None:
-    if e.tag == "curve" and not e.get("CurvePoints", "").strip():
+    if e.tag == "curve" and (
+        not e.get("CurvePoints", "").strip() or _native_incomplete_ring_curve(reader, e)
+    ):
         # Native files can retain empty drawing records; keep their XML without ink.
         return None
     return _GraphicProjection(reader, e).render()

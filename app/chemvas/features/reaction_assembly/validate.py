@@ -49,7 +49,6 @@ _UNSUPPORTED_DECORATIONS = frozenset(
         "embeddedobject",
         "annotation",
         "chemicalproperty",
-        "curve",
     }
 )
 _ROLE_REFERENCE_KEYS = frozenset(
@@ -103,9 +102,28 @@ def validate_normalized_reaction(root: ET.Element) -> NormalizedReaction:
 def _validate_root_tree(root: ET.Element) -> None:
     if root.tag != "CDXML":
         raise ValueError("input root must be CDXML")
+    page = root.find("page")
+    page_curves = set(page.findall("curve")) if page is not None else set()
     for element in root.iter():
         if element.tag not in _KNOWN_TAGS:
             raise ValueError(f"unsupported native object {element.tag}")
+        if element.tag == "curve" and (
+            element not in page_curves
+            or len(element)
+            or (element.text or "").strip()
+            or set(element.attrib)
+            - {
+                "id",
+                "Z",
+                "color",
+                "FillType",
+                "CurveType",
+                "ArrowheadType",
+                "Closed",
+                "Visible",
+            }
+        ):
+            raise ValueError("unsupported decoration curve")
         if element.tag in _UNSUPPORTED_DECORATIONS:
             raise ValueError(f"unsupported decoration {element.tag}")
     if root.get("BoundingBox") or root.get("Position"):
@@ -171,7 +189,8 @@ def _validate_normalized_geometry(
     page: ET.Element, by_id: dict[str, ET.Element], arrow_ref: str
 ) -> None:
     if any(
-        e.tag not in {"fragment", "scheme", "t", "arrow", "graphic"} or not e.get("id")
+        e.tag not in {"fragment", "scheme", "t", "arrow", "graphic", "curve"}
+        or not e.get("id")
         for e in page
     ):
         raise ValueError("unsupported or unidentified page-level reaction object")

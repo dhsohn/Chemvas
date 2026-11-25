@@ -254,3 +254,31 @@ def test_packing_reserves_diagonal_clearance() -> None:
         prior_world_bands=[ContourBand(0, 10, 5, 17)],
         clearance=5,
     ) == pytest.approx(20)
+
+
+def test_empty_curve_survives_assembly_but_positioned_curve_requires_layout() -> None:
+    curve = b'<curve id="1001" Z="216" color="4" FillType="Solid" CurveType="129" Closed="yes"/>'
+    raw = _normalized_input().replace(b"</page>", curve + b"</page>")
+    retained = ET.fromstring(assemble_reaction_cdxml(raw)).find(".//curve")
+    assert retained is not None and retained.attrib == ET.fromstring(curve).attrib
+    with pytest.raises(ValueError, match="unsupported decoration curve"):
+        assemble_reaction_cdxml(raw.replace(b'Z="216"', b'CurvePoints="0 0 5 5"'))
+
+
+def test_native_incomplete_ring_curve_and_drawable_control() -> None:
+    root = ET.fromstring(assemble_reaction_cdxml(_normalized_input()))
+    page = root.find("page")
+    assert page is not None
+    baseline = parse_cdxml_document(ET.tostring(root)).state["images"]
+    vertices = ["0 0", "0 10", "10 20", "20 10", "20 0", "10 -10"]
+    points = [p for p in vertices for _ in range(3)] + ["0 0", "0 0"]
+    curve = ET.SubElement(
+        page, "curve", id="1001", Closed="yes", CurveType="129", FillType="Solid"
+    )
+    curve.set("CurvePoints", " ".join(points))
+    assert parse_cdxml_document(ET.tostring(root)).state["images"] == baseline
+    curve.set("CurvePoints", " ".join(points + ["0 0"]))
+    assert (
+        len(parse_cdxml_document(ET.tostring(root)).state["images"])
+        == len(baseline) + 1
+    )
